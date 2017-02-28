@@ -3,7 +3,7 @@ namespace App\Controller;
 
 use App\Controller\AppController;
 use Cake\ORM\TableRegistry;
-
+use Cake\Utility\Security;
 /**
  * Users Controller
  */
@@ -117,7 +117,25 @@ class UsersController extends AppController{
         ]);
     }
 
-
+    /*U5 Service to update or set user’s password and return Boolean status. */
+    public function setUserPassword($id) {
+      $message = FALSE;
+      $user = $this->Users->get($id);
+      if ($this->request->is(['post', 'put'])) {
+        if (isset($this->request->data['password'])) {
+          $user->password = Security::hash($this->request->data['password']);
+          if ($this->Users->save($user)) {
+            $message = TRUE;
+          }
+        } else {
+          $message = 'Password is not Set';
+        }
+      }
+      $this->set([
+        'response' => $message,
+        '_serialize' => ['response']
+      ]);
+    }
 
 
     /* 
@@ -263,7 +281,7 @@ class UsersController extends AppController{
     public function isUserLoggedin() {
       $this->set('loggedIn', $this->Auth->loggedIn());
     }
-
+    
 
 
 
