@@ -20,7 +20,7 @@ class UsersController extends AppController{
     /** Index method    */
     public function index(){
               
-        $user = $this->Users->find('all')->contain(['UserDetails']);        
+        $user = $this->Users->find('all')->contain(['UserDetails']);
         $this->set(array(
             'data' => $user,
             '_serialize' => ['data']
@@ -118,27 +118,33 @@ class UsersController extends AppController{
     }
 
     /*U5 Service to update or set user’s password and return Boolean status. */
-    public function setUserPassword($id) {
-      $message = FALSE;
-      $user = $this->Users->get($id);
-      if ($this->request->is(['post', 'put'])) {
+  public function setUserPassword($id) {
+    $message = FALSE;
+    if ($this->request->is(['post', 'put'])) {
+      $old_password = Security::hash($this->request->data['old_password']);
+      $user_count = $this->Users->find()->where(['Users.id' => $id, 'Users.password' => $old_password])->count();
+      if ($user_count) {
         if (isset($this->request->data['password'])) {
-          $user->password = Security::hash($this->request->data['password']);
+          $password = Security::hash($this->request->data['password']);
+          $user = $this->Users->get($id);
+          $user->password = $password;
           if ($this->Users->save($user)) {
             $message = TRUE;
           }
         } else {
           $message = 'Password is not Set';
         }
+      } else {
+        $message = 'User does not exist';
       }
       $this->set([
         'response' => $message,
         '_serialize' => ['response']
       ]);
     }
+  }
 
-
-    /* 
+  /* 
         ** U6- setUserMobile
         ** Request – Int &lt;UUID&gt; , Int &lt;mobileNumber&gt;
      */
@@ -282,7 +288,7 @@ class UsersController extends AppController{
       $this->set('loggedIn', $this->Auth->loggedIn());
     }
     
-
+    
 
 
 
