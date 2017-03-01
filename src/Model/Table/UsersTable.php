@@ -44,6 +44,22 @@ class UsersTable extends Table{
             'foreignKey' => 'user_id',
             'dependent' => true
         ]);
+
+    $this->hasMany('UserMenus', [
+            'foreignKey' => 'user_id',
+            'dependent' => true
+        ]); 
+
+    $this->hasMany('UserOrders', [
+            'foreignKey' => 'user_id',
+            'dependent' => true
+        ]);
+
+    $this->hasMany('UserCourses', [
+            'foreignKey' => 'user_id',
+            'dependent' => true
+        ]);
+    
 }
 
     /**

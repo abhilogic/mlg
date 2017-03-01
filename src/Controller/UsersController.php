@@ -3,6 +3,8 @@ namespace App\Controller;
 
 use App\Controller\AppController;
 use Cake\ORM\TableRegistry;
+use Cake\I18n\Time;
+//use Cake\Datasource\ConnectionManager;
 
 /**
  * Users Controller
@@ -12,8 +14,10 @@ class UsersController extends AppController{
 
     public function initialize(){
         parent::initialize();
+       // $conn = ConnectionManager::get('default');
         $this->loadComponent('RequestHandler');
          $this->RequestHandler->renderAs($this, 'json');
+
     }
 
 
@@ -62,12 +66,25 @@ class UsersController extends AppController{
         *  Request – Int <UUID>;
     */
     public function getUserDetails($id = null){
-        $user = $this->Users->get($id);
+        
+        $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
+        if($user_record>0){
+              $data['user'] = $this->Users->get($id);
+              $this->set([
+                'data' => $data,
+                '_serialize' => ['data']
+              ]);          
 
-        $this->set([
-            'user' => $user,
-            '_serialize' => ['user']
-        ]);
+        }
+        else{
+            $data['response'] = "Record is not found";
+            $this->set([
+              'data' => $data,
+              '_serialize' => ['data']
+          ]);
+
+
+        }       
     }
 
 /*
@@ -76,17 +93,22 @@ class UsersController extends AppController{
 */
     public function getUserProfilesByUUID($id = null){
         //$user = $this->Users->get($id);
-        $data['user'] = $this->Users->find('all')
-                        ->contain(['UserDetails'])
-                        ->where([
-                            'Users.id' => $id                            
-                         ]);      
+        $record=$this->Users->find('all')->contain(['UserDetails'])->where(['Users.id' => $id])->count();
 
-
-        $this->set([
-            'data' => $data,
-            '_serialize' => ['data']
-        ]);
+         if($record>0){
+            $data['user'] = $this->Users->find('all')->contain(['UserDetails'])->where(['Users.id' => $id]);
+            $this->set([
+                  'data' => $data,
+                  '_serialize' => ['data']
+              ]);
+          }
+          else{
+              $data['message']='Record is not found';
+              $this->set([
+                    'data' => $data,
+                    '_serialize' => ['data']
+                ]);
+            }        
     }
 
 
@@ -97,19 +119,36 @@ class UsersController extends AppController{
 
     */
     public function setUserProfileByUUID($id = null){
-        $user = $this->Users->find()->where(['Users.id'=>$id])->contain('UserDetails')->first();
 
+        $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
 
             if ($this->request->is(['post', 'put'])) {
-                 $this->Users->patchEntity($user, $this->request->data(), ['associated'=>['UserDetails']]);
-        
-            if ($result = $this->Users->save($user, ['associated'=>['UserDetails']])) {
-                 $message = 'Saved';
-            }
-            else{
-                 $message = 'Unable to save';
-            }
-    }
+                if($user_record>0){
+
+                    $user = $this->Users->get($id);
+                    $user=$this->Users->patchEntity($user, $this->request->data);
+                    if($this->Users->save($user)){
+                        $userdetails = TableRegistry::get('UserDetails');
+                        $userdetail=$userdetails->find('all')->where(['user_id' => $id])->toArray();
+                       // $userdetail = $userdetails->get($id);
+                        
+                        $userdetail= $userdetails->patchEntity($userdetail, $this->request->data());
+                        if($userdetails->save($userdetail)){
+                          die('kkk');
+                        }
+
+                        
+                    }
+                      else{
+                          $data['message'] = 'Unable to update the records';
+                      }
+
+                }
+                else{
+                    $data['response'] ='Record is not found';
+                }
+               
+      }
 
         $this->set([
             'response' => $message,
@@ -185,17 +224,245 @@ class UsersController extends AppController{
     }
 
 
-/*
+    /** U8-registerUser
+     * Request –  Strting <firstName>, String <lastName>, (Int <mobile / Null> , String <EmailID / Null>) , Int <roleID>
+     */
+    public function registerUser() {
+      try {
+        $message = 'Error during adding user, ';
+        $data['response'] = FALSE;
+        if ($this->request->is(['post', 'put'])) {
+          $user = $this->Users->newEntity($this->request->data);
+          if (!preg_match('/^[A-Za-z]+$/', $user['username'])) {
+            $message = 'Userame name is not valid';
+            throw new Exception('Pregmatch not matched for Username');
+          }
+          $username_exist = $this->isUserExists($user['username']);
+          if ($username_exist['response']) {
+            $message = 'Username already exist';
+            throw new Exception($message);
+          }
+          if (!preg_match('/^[A-Za-z]+$/', $user['first_name'])) {
+            $message = 'First name is not valid';
+            throw new Exception('Pregmatch not matched for first name');
+          }
+          if (!preg_match('/^[A-Za-z]+$/', $user['last_name'])) {
+            $message = 'Last name is not valid';
+            throw new Exception('Pregmatch not matched for last name');
+          }
+          if (!filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {
+            $message = 'Email is not valid';
+            throw new Exception($message);
+          }
+          if (!preg_match('/^[0-9]{10}$/', $user['mobile'])) {
+            $message = 'Mobile number is not valid';
+            throw new Exception($message);
+          }
+          $user['status'] = 0;
+          $user['created'] = $user['modfied'] = time();
+          if ($this->Users->save($user)) {
+            $message = 'User registered successfuly';
+            $data['response'] = TRUE;
+          }
+        }
+      } catch (Exception $e) {
+        $this->log($e->getMessage() .'(' . __METHOD__ . ')', 'error');
+      }
+      $this->set([
+        'message' => $message,
+        'data' => $data,
+        '_serialize' => ['message', 'data']
+      ]);
+    }
+
+
+    /**U9-Service to update status of user to Active or Inactive  */
+    public function setUserStatus($id = null, $status) {
+      try {
+        $message = 'Error Occured while changing status';
+        $data['response'] = FALSE;
+        $user = $this->Users->get($id);
+        $user = $this->Users->patchEntity($user, array('id' => $id, 'status' => $status));
+        if ($this->Users->save($user)) {
+            $message = 'Status Changed';
+            $data['response'] = TRUE;
+        }
+      } catch (Exceptio $e) {
+        $this->log($e->getMessage() .'(' . __METHOD__ . ')', 'error');
+      }
+      $this->set([
+        'message' => $message,
+        'data' => $data,
+        '_serialize' => ['message', 'data']
+      ]);
+    }
+
+    /**U11 – Service to check that user still logged in or not.
+     * basically to check his active session  */
+    public function isUserLoggedin() {
+      $this->set('loggedIn', $this->Auth->loggedIn());
+    }
+
+
+
+
+    /** UB10 – getUserCourses  */
+    public function getUserCourses($id = null) {
+
+       $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
+
+      if($user_record>0){
+          $usercourses = TableRegistry::get('UserCourses');
+          //$menus = TableRegistry::get('Menus');
+          $usercourse_records=$usercourses->find('all')->where(['user_id' => $id])->contain('Courses')->count();
+
+            if($usercourse_records>0){
+              $usercourse=$usercourses->find('all')->where(['user_id' => $id])->contain('Courses')->toArray();
+              foreach($usercourse as $uc){ 
+                  $ucourse['courseID']    =  $uc['course']['id'];
+                  $ucourse['courseName']  = $uc['course']['course_name'];
+                  $ucourse['level']       = $uc['course']['level_id'];
+                  $ucourse['role']        = $uc['course']['author'];
+                
+                    $data['courses'][] = $ucourse;
+                 } 
+            }
+            else{
+              $data['message']= "No Courses available for this user";
+            }          
+      }
+      else{ 
+         $data['message'] = "No user exist on this id";       
+      }
+
+        $this->set([
+               'data' => $data,
+              '_serialize' => ['data']
+            ]);       
+
+
+    }
+
+
+
+
+
+    /*
+        U12 – getUserRoles ( or profile you can say )
+        Request – Int <UUID>
+   */
+
      public function getUserRoles($id=null) { 
+      $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
 
-        $user = $this->Users->find('all')
-                        ->contain(['UserDetails'])
-                        ->where([
-                            'Users.id' => $id                            
-                         ]); 
+      if($user_record>0){
+          $userroles = TableRegistry::get('UserRoles');
+          //$roles = TableRegistry::get('Roles');
+          $userrole_records=$userroles->find('all')->where(['user_id' => $id])->contain('Roles')->count();
 
-     }*/
+            if($userrole_records>0){
+                $userrole=$userroles->find('all')->where(['user_id' => $id])->contain('Roles')->toArray();
+                foreach($userrole as $ur){ $data['roles'][] = $ur->role;  }
+            }
+            else{
+              $data['message']='No Roles is assigned to the user';
+            }
+           
+      }
+      else{ 
+         $data['message'] = "Record is not found";       
+      }
 
+      $this->set([
+             'data' => $data,
+            '_serialize' => ['data']
+          ]);
+
+     }
+
+
+
+      /*
+        UB13 -  getUserServices ( may be few other services he availed )
+        Request – Int <UUID>
+   */
+
+     public function getUserServices($id=null) { 
+      $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
+
+      if($user_record>0){
+          $usermenus = TableRegistry::get('UserMenus');
+          //$menus = TableRegistry::get('Menus');
+          $menu_records=$usermenus->find('all')->where(['user_id' => $id])->contain('Menus')->count();
+
+            if($menu_records>0){
+              $usermenu=$usermenus->find('all')->where(['user_id' => $id])->contain('Menus')->toArray();
+              foreach($usermenu as $um){ 
+                  $menu['id']= $um->menu['id'];
+                  $menu['name']= $um->menu['name'];
+                  $menu['validity']=  $um['validity'] ;
+
+                  $data['services'][] = $menu;
+
+
+                 } 
+            }
+            else{
+              $data['message']= "No Service available for this user";
+            }          
+      }
+      else{ 
+         $data['message'] = "Record is not found";       
+      }
+
+        $this->set([
+               'data' => $data,
+              '_serialize' => ['data']
+            ]);
+
+     }
+
+
+      /*
+        UB14 – getUserPurchaseHistory ( user_orders) order_date
+        Request -  Int<UUID> , String<startDate / Null> , String <endDate / Null>
+   */
+
+     public function getUserPurchaseHistory($id=null) { 
+
+          $userorder_records=$this->Users->find('all')->where(['id' => $id])->contain('UserOrders')->count();
+          $userorders=$this->Users->find('all')->where(['id' => $id])->contain('UserOrders')->toArray();
+          $startdate = $this->request->data['start_date'];
+         $enddate = $this->request->data['end_date'];
+        if($userorder_records>0){
+              foreach ($userorders as $userorder) {
+                  $orders=$userorder->user_orders;
+
+                  foreach ($orders as $order) {
+                     $orderdate = (new Time($order->order_date))->format('Y-m-d');
+                      $odt=strtotime(date($orderdate));  
+                      $start_date = strtotime(date($startdate)); 
+                     $end_date = strtotime(date($enddate));             
+
+                     if($start_date >= $odt || $end_date < $odt){
+                        //$data['purchases'][]= $userorder->user_orders;
+                      $data['purchases'][]= $order;
+                     }
+                     else{
+                        $data['message'] = "Records are not available for selected date";
+                     }                      
+                  }                                   
+              }
+
+         }
+         else{
+            $data['message'] = "No Purchase Record is found";
+         }
+         $this->set([
+               'data' => $data,
+              '_serialize' => ['data']
+            ]);
+     }
 
     
 
