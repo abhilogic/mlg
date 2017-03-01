@@ -4,6 +4,8 @@ namespace App\Controller;
 use App\Controller\AppController;
 use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
+use Cake\Core\Exception\Exception;
+
 //use Cake\Datasource\ConnectionManager;
 
 /**
@@ -157,9 +159,34 @@ class UsersController extends AppController{
     }
 
 
+    /*U5 Service to update or set user’s password and return Boolean status. */
+    public function setUserPassword($id) {
+      $message = FALSE;
+      if ($this->request->is(['post', 'put'])) {
+        $old_password = Security::hash($this->request->data['old_password']);
+        $user_count = $this->Users->find()->where(['Users.id' => $id, 'Users.password' => $old_password])->count();
+        if ($user_count) {
+          if (isset($this->request->data['password'])) {
+            $password = Security::hash($this->request->data['password']);
+            $user = $this->Users->get($id);
+            $user->password = $password;
+            if ($this->Users->save($user)) {
+              $message = TRUE;
+            }
+          } else {
+            $message = 'Password is not Set';
+          }
+        } else {
+          $message = 'You have entered either wrong username or password';
+        }
+        $this->set([
+          'response' => $message,
+          '_serialize' => ['response']
+        ]);
+      }
+    }
 
-
-    /* 
+  /* 
         ** U6- setUserMobile
         ** Request – Int &lt;UUID&gt; , Int &lt;mobileNumber&gt;
      */
@@ -237,8 +264,8 @@ class UsersController extends AppController{
             $message = 'Userame name is not valid';
             throw new Exception('Pregmatch not matched for Username');
           }
-          $username_exist = $this->isUserExists($user['username']);
-          if ($username_exist['response']) {
+          $username_exist = $this->Users->find()->where(['Users.username' => $user['username']])->count();
+          if ($username_exist) {
             $message = 'Username already exist';
             throw new Exception($message);
           }
@@ -297,13 +324,6 @@ class UsersController extends AppController{
       ]);
     }
 
-    /**U11 – Service to check that user still logged in or not.
-     * basically to check his active session  */
-    public function isUserLoggedin() {
-      $this->set('loggedIn', $this->Auth->loggedIn());
-    }
-
-
 
 
     /** UB10 – getUserCourses  */
@@ -343,7 +363,57 @@ class UsersController extends AppController{
 
     }
 
-
+    /**U11 – Service to check that user still logged in or not.
+     * basically to check his active session  */
+    public function isUserLoggedin() {
+      $response = $status = FALSE;
+      $isUserLoggedin = $this->request->session()->id();
+      if (!empty($isUserLoggedin)) {
+        $response = $status = TRUE;
+      }
+      $this->set([
+         'status' => $status,
+         'response' => $response,
+         '_serialize' => ['status', 'response']
+      ]);
+    }
+    
+    /**U11 – login User
+     * loadComponent is defiened in this function for a time being. */
+    public function login() {
+      $this->loadComponent('Auth', [
+        'authenticate' => [
+           'Form' => [
+             'fields' => [
+               'username' => 'username',
+               'password' => 'password',
+             ]
+           ]
+         ],
+//          'loginAction' => [
+//            'controller' => 'Users',
+//            'action' => 'login'
+//          ]
+        ]);
+      $status = 'false';
+      $token = $message = '';
+      if ($this->request->is('post')) {
+        $user = $this->Auth->identify();
+        if ($user) {
+          $this->Auth->setUser($user);
+          $token = $this->request->session()->id();
+          $status = 'success';
+        } else {
+          $message = 'You entered either wrong email id or password';
+        }
+      }
+      $this->set([
+        'status' => $status,
+        'response' => ['secure_token' => $token],
+        'message' => $message,
+        '_serialize' => ['status', 'response', 'message']
+      ]);
+    }
 
 
 
