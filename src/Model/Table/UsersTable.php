@@ -44,6 +44,7 @@ class UsersTable extends Table{
             'foreignKey' => 'user_id',
             'dependent' => true
         ]);
+<<<<<<< HEAD
 
     $this->hasMany('UserMenus', [
             'foreignKey' => 'user_id',
@@ -60,6 +61,8 @@ class UsersTable extends Table{
             'dependent' => true
         ]);
     
+=======
+>>>>>>> eac9e503b68e09d892be18a093354debfc443f5b
 }
 
     /**
