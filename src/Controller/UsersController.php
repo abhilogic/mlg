@@ -4,8 +4,6 @@ namespace App\Controller;
 use App\Controller\AppController;
 use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
-use Cake\Core\Exception\Exception;
-
 //use Cake\Datasource\ConnectionManager;
 
 /**
@@ -126,20 +124,19 @@ class UsersController extends AppController{
 
             if ($this->request->is(['post', 'put'])) {
                 if($user_record>0){
-
                     $user = $this->Users->get($id);
                     $user=$this->Users->patchEntity($user, $this->request->data);
                     if($this->Users->save($user)){
-                        $userdetails = TableRegistry::get('UserDetails');
-                        $userdetail=$userdetails->find('all')->where(['user_id' => $id])->toArray();
+                        //$userdetails = TableRegistry::get('UserDetails');
+                        $this->loadModel('UserDetails');
+                        $userdetail=$this->UserDetails->find('all')->where(['user_id' => $id])->first();
                        // $userdetail = $userdetails->get($id);
                         
-                        $userdetail= $userdetails->patchEntity($userdetail, $this->request->data());
-                        if($userdetails->save($userdetail)){
-                          die('kkk');
-                        }
-
-                        
+                        $userdetail= $this->UserDetails->patchEntity($userdetail, $this->request->data());
+                        //if($userdetails->save($userdetail)){
+                        if ($this->UserDetails->save($userdetail)) {
+                              $data['message'] ="User record has been update on this id $id";
+                        }                        
                     }
                       else{
                           $data['message'] = 'Unable to update the records';
@@ -147,72 +144,48 @@ class UsersController extends AppController{
 
                 }
                 else{
-                    $data['response'] ='Record is not found';
-                }
-               
+                    $data['message'] ="Record is not found at this id $id.";
+                }               
+      }
+      else{
+           $data['message'] ='not data is set to add';
       }
 
         $this->set([
-            'response' => $message,
+            'response' => $data,
             '_serialize' => ['response']
         ]);
     }
 
 
-    /*U5 Service to update or set user’s password and return Boolean status. */
-    public function setUserPassword($id) {
-      $message = FALSE;
-      if ($this->request->is(['post', 'put'])) {
-        $old_password = Security::hash($this->request->data['old_password']);
-        $user_count = $this->Users->find()->where(['Users.id' => $id, 'Users.password' => $old_password])->count();
-        if ($user_count) {
-          if (isset($this->request->data['password'])) {
-            $password = Security::hash($this->request->data['password']);
-            $user = $this->Users->get($id);
-            $user->password = $password;
-            if ($this->Users->save($user)) {
-              $message = TRUE;
-            }
-          } else {
-            $message = 'Password is not Set';
-          }
-        } else {
-          $message = 'You have entered either wrong username or password';
-        }
-        $this->set([
-          'response' => $message,
-          '_serialize' => ['response']
-        ]);
-      }
-    }
 
-  /* 
+
+    /* 
         ** U6- setUserMobile
         ** Request – Int &lt;UUID&gt; , Int &lt;mobileNumber&gt;
      */
-    public function setUserMobile($id=null) {
-        $user = $this->Users->get($id);
-        
-        if ($this->request->is(['post', 'put'])) {
-           // $user = $this->Users->patchEntity($user, $this->request->data);
-            if(isset($this->request->data['mobile']) ){
-                $user->mobile = $this->request->data['mobile'];
-                 if ($this->Users->save($user)) {
-                $message = 'True';
-            } else {
-                $message = 'False';
+    public function setUserMobile($id=null,$mobile=null) {
+        if($id!=null && $mobile!=null ){
+              $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
+            if($user_record>0){
+                $user = $this->Users->get($id);
+                if(preg_match('/^[0-9]{10}$/', $mobile) ){
+                    $user->mobile = $mobile;
+                    if ($this->Users->save($user))
+                         $data['message'] = 'True';
+                    else 
+                        $data['message'] = 'False';
+                }else{
+                     $data['message'] = 'Mobile Number is not valid';
+                  }
+            }else{
+                $data['message'] = "No user exist on this UID";
             }
-            }
-            else{
-                $message = 'Mobile is not Set';
-
-            }
-            
-           
-        }
-        
+        }else{
+              $data['message'] = 'User ID and mobile may be null ';
+        }       
         $this->set([
-            'response' => $message,
+            'response' => $data,
             '_serialize' => ['response']
         ]);
 
@@ -221,30 +194,34 @@ class UsersController extends AppController{
 
     /* 
         ** U7- setUserEmail 
-        ** Request – Int &lt;UUID&gt; , Int &lt;email&gt;
+        ** Request – Int <UUID> , Int <email>;
     */
-    public function setUserEmail($id=null) {
-        $user = $this->Users->get($id);
-        
-        if ($this->request->is(['post', 'put'])) {
-           // $user = $this->Users->patchEntity($user, $this->request->data);
-            if(isset($this->request->data['email']) ){
-                $user->email = $this->request->data['email'];
-                if ($this->Users->save($user)) {
-                $message = 'True';
-            } else {
-                $message = 'False';
-            }
-
-            }
-            else{
-                $message = 'Email is not set';
-            }
-            
-        }
-        
+    public function setUserEmail($id=null,$email=null) {              
+       
+       if($id!=null && $email!=null ){
+            $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
+            if($user_record>0){
+                $user = $this->Users->get($id);
+                $email = filter_var($email, FILTER_SANITIZE_EMAIL);
+                // Validate e-mail
+                    if (!filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+                        $user->email = $email;
+                        if ($this->Users->save($user)) 
+                              $data['message'] = 'True';
+                        else
+                              $data['message'] = 'False';                        
+                    } else {
+                              $data['message']="$email is not a valid email address";
+                         }
+            }else{
+                $data['message'] = "No user exist on this UID";
+              } 
+      }else{
+            $data['message'] = 'User ID and Email may be null ';
+      }           
+               
         $this->set([
-            'response' => $message,
+            'response' => $data,
             '_serialize' => ['response']
         ]);
 
@@ -264,14 +241,9 @@ class UsersController extends AppController{
             $message = 'Userame name is not valid';
             throw new Exception('Pregmatch not matched for Username');
           }
-          $username_exist = $this->Users->find()->where(['Users.username' => $user['username']])->count();
-          if ($username_exist) {
+          $username_exist = $this->isUserExists($user['username']);
+          if ($username_exist['response']) {
             $message = 'Username already exist';
-            throw new Exception($message);
-          }
-          $username_email = $this->Users->find()->where(['Users.email' => $user['email']])->count();
-          if ($username_email) {
-            $message = 'Email already exist';
             throw new Exception($message);
           }
           if (!preg_match('/^[A-Za-z]+$/', $user['first_name'])) {
@@ -329,6 +301,13 @@ class UsersController extends AppController{
       ]);
     }
 
+    /**U11 – Service to check that user still logged in or not.
+     * basically to check his active session  */
+    public function isUserLoggedin() {
+      $this->set('loggedIn', $this->Auth->loggedIn());
+    }
+
+
 
 
     /** UB10 – getUserCourses  */
@@ -363,70 +342,14 @@ class UsersController extends AppController{
         $this->set([
                'data' => $data,
               '_serialize' => ['data']
-            ]);       
-
-
-    }
-
-    /**U11 – Service to check that user still logged in or not.
-     * basically to check his active session  */
-    public function isUserLoggedin() {
-      $response = $status = FALSE;
-      $isUserLoggedin = $this->request->session()->id();
-      if (!empty($isUserLoggedin)) {
-        $response = $status = TRUE;
-      }
-      $this->set([
-         'status' => $status,
-         'response' => $response,
-         '_serialize' => ['status', 'response']
-      ]);
-    }
-    
-    /**U11 – login User
-     * loadComponent is defiened in this function for a time being. */
-    public function login() {
-      $this->loadComponent('Auth', [
-        'authenticate' => [
-           'Form' => [
-             'fields' => [
-               'username' => 'username',
-               'password' => 'password',
-             ]
-           ]
-         ],
-//          'loginAction' => [
-//            'controller' => 'Users',
-//            'action' => 'login'
-//          ]
-        ]);
-      $status = 'false';
-      $token = $message = '';
-      if ($this->request->is('post')) {
-        $user = $this->Auth->identify();
-        if ($user) {
-          $this->Auth->setUser($user);
-          $token = $this->request->session()->id();
-          $status = 'success';
-        } else {
-          $message = 'You entered either wrong email id or password';
+            ]);
         }
-      }
-      $this->set([
-        'status' => $status,
-        'response' => ['secure_token' => $token],
-        'message' => $message,
-        '_serialize' => ['status', 'response', 'message']
-      ]);
-    }
-
 
 
     /*
         U12 – getUserRoles ( or profile you can say )
         Request – Int <UUID>
    */
-
      public function getUserRoles($id=null) { 
       $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
 
@@ -461,7 +384,6 @@ class UsersController extends AppController{
         UB13 -  getUserServices ( may be few other services he availed )
         Request – Int <UUID>
    */
-
      public function getUserServices($id=null) { 
       $user_record = $this->Users->find()->where(['Users.id'=>$id])->count();
 
@@ -502,31 +424,41 @@ class UsersController extends AppController{
         UB14 – getUserPurchaseHistory ( user_orders) order_date
         Request -  Int<UUID> , String<startDate / Null> , String <endDate / Null>
    */
-
      public function getUserPurchaseHistory($id=null) { 
 
           $userorder_records=$this->Users->find('all')->where(['id' => $id])->contain('UserOrders')->count();
           $userorders=$this->Users->find('all')->where(['id' => $id])->contain('UserOrders')->toArray();
-          $startdate = $this->request->data['start_date'];
-         $enddate = $this->request->data['end_date'];
+          
         if($userorder_records>0){
               foreach ($userorders as $userorder) {
                   $orders=$userorder->user_orders;
+                  if( isset($this->request->data['start_date']) && isset($this->request->data['end_date']) ){
+                        $startdate = $this->request->data['start_date'];
+                        $enddate = $this->request->data['end_date'];
 
-                  foreach ($orders as $order) {
-                     $orderdate = (new Time($order->order_date))->format('Y-m-d');
-                      $odt=strtotime(date($orderdate));  
-                      $start_date = strtotime(date($startdate)); 
-                     $end_date = strtotime(date($enddate));             
+                        foreach ($orders as $order) {
+                            $orderdate = (new Time($order->order_date))->format('Y-m-d');
+                            $odt=strtotime(date($orderdate));  
+                            $start_date = strtotime(date($startdate)); 
+                            $end_date = strtotime(date($enddate));             
 
-                     if($start_date >= $odt || $end_date < $odt){
-                        //$data['purchases'][]= $userorder->user_orders;
-                      $data['purchases'][]= $order;
-                     }
-                     else{
-                        $data['message'] = "Records are not available for selected date";
-                     }                      
-                  }                                   
+                             if($start_date >= $odt || $end_date < $odt){
+                                //$data['purchases'][]= $userorder->user_orders;
+                              $data['message']= "All Recors of between dates are shown";
+                              $data['purchases'][]= $order;
+                             }
+                             else{
+                                $data['message'] = "Records are not available for selected date";
+                             }                      
+                      } 
+
+                      }
+                      else{
+                            $data['message']= "All Recors are shown";
+                            $data['purchases'][]= $userorder->user_orders;
+
+                      }
+
               }
 
          }
@@ -538,32 +470,94 @@ class UsersController extends AppController{
               '_serialize' => ['data']
             ]);
      }
-     
-     /*U17 Request – String <CourseCode>, String<username> , Int <roleID> */
-     public function setUserRoleByuserName() {
-       $status = $response = FALSE;
-       if ($this->request->is('post')) {
-         $user_id = '';
-//         $course_code = $this->request->data['course_code'];
-         $username = $this->request->data['username'];
-         $role_id = $this->request->data['role_id'];
-         $user = $this->Users->find()->select('Users.id')->where(['Users.username' => $username])->limit(1);
-         foreach ($user as $row) {
-           $user_id = $row->id;
-         }
-         $userroles = TableRegistry::get('UserRoles');
-         $new_user_role = $userroles->newEntity(array('role_id' => $role_id , 'user_id' => $user_id));
-         if ($userroles->save($new_user_role)) {
-           $status = 'success';
-           $response = TRUE;
-         }
-       }
-       $this->set([
-         'status' => $status,
-         'response' => $response,
-         '_serialize' => ['status', 'response']
-       ]);
 
-     }
+        
+     /**
+        * UB15 – setUsercourse
+        * Request –  String<CourseCode>
+     **/
+         public function setUsercourse($uid=null,$currentcourseid=null,$newcourseid=null) { 
+           //$currentcourseid= $this->request->data('current_course_id');
+           //$newcourseid= $this->request->data('new_course_id');
+            if($uid!=null && $currentcourseid!=null && $newcourseid!=null){
 
+                $this->loadModel('UserCourses');
+                $ucourse_count = $this->UserCourses->find()->where([
+                    'UserCourses.user_id' => $uid,
+                    'UserCourses.course_id' => $currentcourseid
+                   ])->count();
+                if($ucourse_count>0){
+                      $ucourse = $this->UserCourses->find()->where([
+                        'UserCourses.user_id' => $uid,
+                        'UserCourses.course_id' => $currentcourseid
+                       ])
+                      ->first();
+                      $ucourse->course_id = $newcourseid;                    
+                      if ($this->UserCourses->save($ucourse)) {
+                          $data['message'] = 'saved';
+                      }
+                      else{
+                          $data['message'] = 'not saved';
+                      }
+                }else{
+                    $data['message'] = "No user course record exist in table";
+                }
+
+            }else{
+              $data['message'] = "uid,current course id or new course id cannot be null ";
+            }             
+
+              $this->set([
+               'data' => $data,
+              '_serialize' => ['data']
+            ]);
+
+            }
+
+
+
+     /**
+        * UB19 – getMaxUserCountbyCourseCode
+        * Request –  String<CourseCode>
+     **/
+      public function getMaxUserCountbyCourseCode($coursecode=null) {
+        $usercourses = TableRegistry::get('UserCourses');
+        if($coursecode!=null){             
+            $usercourses = TableRegistry::get('UserCourses');
+            $uc_records=$usercourses->find('all')
+                         ->contain('Courses')
+                         ->select(['course_id', 'registeredUsers' => 'count(*)' ])
+                         ->where(['course_code' => $coursecode])
+                         ->group('course_id');
+
+                    foreach ($uc_records as $row) {
+                       $data['course'][]=$row;
+                    }
+                    if(empty($data['course'])){
+                              $data['message'] = "No Record found for this course code";
+                          }
+
+        }
+        else{            
+            $uc_records=$usercourses->find('all')
+                         ->contain('Courses')
+                         ->select(['course_id', 'registeredUsers' => 'count(*)' ])                         
+                         ->group('course_id');
+
+                         foreach ($uc_records as $row) {
+                              $data['course'][]=$row;
+                          }                          
+
+        }
+          $this->set([
+               'data' => $data,
+              '_serialize' => ['data']
+            ]);
+
+      }
+
+
+    
+
+   
 }
