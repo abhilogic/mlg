@@ -4,6 +4,7 @@ namespace App\Controller;
 use App\Controller\AppController;
 use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
+use Cake\Core\Exception\Exception;
 //use Cake\Datasource\ConnectionManager;
 
 /**
@@ -34,7 +35,33 @@ class CoursesController extends AppController{
     }
 
 
-    /** 
+    /**
+     * Desc – Service to check for course exists or not.
+     */
+    public function isCourseExists() {
+      $response = FALSE;
+      try {
+        if ($this->request->is(['post'])) {
+          $course_code = isset($this->request->data['course_code']) ? $this->request->data['course_code'] : '';
+          $course_name = isset($this->request->data['course_name']) ? $this->request->data['course_name'] : '';
+          if (!empty($course_code) || !empty($course_name)) {
+            $isCourseExists = $this->Courses->find()->Where(['OR' => ['course_code' => $course_code, 'course_name' => $course_name]])->count();
+            if (!empty($isCourseExists)) {
+              $response = TRUE;
+            }
+          }
+        }
+      } catch (Exception $e) {
+        $this->log($e->getMessage() . '(' . __METHOD__ . ')', 'error');
+      }
+
+      $this->set(array(
+        'response' => $response,
+        '_serialize' => ['response']
+      ));
+    }
+
+  /**
         *S2 – getCourses
         * Request -  String <CourseCode / Null>
     */ 
