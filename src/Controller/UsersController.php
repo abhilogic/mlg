@@ -246,6 +246,11 @@ class UsersController extends AppController{
             $message = 'Username already exist';
             throw new Exception($message);
           }
+          $username_email = $this->Users->find()->where(['Users.email' => $user['email']])->count();
+          if ($username_email) {
+            $message = 'Email already exist';
+            throw new Exception($message);
+          }
           if (!preg_match('/^[A-Za-z]+$/', $user['first_name'])) {
             $message = 'First name is not valid';
             throw new Exception('Pregmatch not matched for first name');
@@ -556,8 +561,32 @@ class UsersController extends AppController{
 
       }
 
+      /*U17 Request – String <CourseCode>, String<username> , Int <roleID> */
+       public function setUserRoleByuserName() {
+         $status = $response = FALSE;
+         if ($this->request->is('post')) {
+           $user_id = '';
+           $username = $this->request->data['username'];
+           $role_id = $this->request->data['role_id'];
+           $user = $this->Users->find()->select('Users.id')->where(['Users.username' => $username])->limit(1);
+           foreach ($user as $row) {
+             $user_id = $row->id;
+           }
+           $userroles = TableRegistry::get('UserRoles');
+           $new_user_role = $userroles->newEntity(array('role_id' => $role_id , 'user_id' => $user_id));
+           if ($userroles->save($new_user_role)) {
+             $status = 'success';
+             $response = TRUE;
+           }
+         }
+         $this->set([
+           'status' => $status,
+           'response' => $response,
+           '_serialize' => ['status', 'response']
+         ]);
 
-    
+       }
 
    
+
 }
