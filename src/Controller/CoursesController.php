@@ -22,7 +22,8 @@ class CoursesController extends AppController{
 
 
     /** Index method    */
-    public function index(){              
+
+    public function index() {
         $courses = $this->Courses->find('all')->toArray();
         foreach($courses as $course){
             $data['courses'][]= $course;
@@ -40,6 +41,7 @@ class CoursesController extends AppController{
      */
     public function isCourseExists() {
       $response = FALSE;
+      $data['message'] = '';
       try {
         if ($this->request->is(['post'])) {
           $course_code = isset($this->request->data['course_code']) ? $this->request->data['course_code'] : '';
@@ -48,7 +50,11 @@ class CoursesController extends AppController{
             $isCourseExists = $this->Courses->find()->Where(['OR' => ['course_code' => $course_code, 'course_name' => $course_name]])->count();
             if (!empty($isCourseExists)) {
               $response = TRUE;
+            } else {
+              $data['message'] = 'Course code or course name does not exist';
             }
+          } else {
+            $data['message'] = 'Either course code or course name is required';
           }
         }
       } catch (Exception $e) {
@@ -57,7 +63,8 @@ class CoursesController extends AppController{
 
       $this->set(array(
         'response' => $response,
-        '_serialize' => ['response']
+        'data' => $data,
+        '_serialize' => ['response', 'data']
       ));
     }
 
@@ -185,30 +192,40 @@ class CoursesController extends AppController{
 
 
     /*
-     * Desc – Service to update course logo to Amazons3 and return cdn url.
+     * S8 Desc – Service to update course logo to Amazons3 and return cdn url.
      */
     public function setCourseLogo() {
       $response = FALSE;
-      $url = '';
+      $url = $data['message'] = '';
       try {
         if ($this->request->is(['post'])) {
-          $file = $this->request->data['logo'];
-          $course_code = $this->request->data['course_code'];
-          if (!empty($file['name']) && !empty($course_code)) {
-            $file_name = time() . '_' .$file['name'];
-            $upload_path = 'img/logo/';
-            $upload_file = $upload_path.$file_name;
-            if (move_uploaded_file($file['tmp_name'], WWW_ROOT . $upload_file)) {
-              $course = $this->Courses->find()->where(['course_code' => $course_code]);
-              $fields = array();
-              foreach ($course as $fields) {
-                $fields->logo = $upload_file;
+          $file = isset($this->request->data['logo']) ? $this->request->data['logo'] : '';
+          $course_code = isset($this->request->data['course_code']) ? $this->request->data['course_code'] : '';
+          if (!empty($course_code)) {
+            if (!empty($file['name'])) {
+              $file_name = time() . '_' .$file['name'];
+              $upload_path = 'img/logo/';
+              $upload_file = $upload_path.$file_name;
+              if (move_uploaded_file($file['tmp_name'], WWW_ROOT . $upload_file)) {
+                $course = $this->Courses->find()->where(['course_code' => $course_code]);
+                $fields = array();
+                foreach ($course as $fields) {
+                  $fields->logo = $upload_file;
+                }
+                if (!empty($fields) && $this->Courses->save($fields)) {
+                  $response = TRUE;
+                  $url = Router::url('/', true) . $upload_file;
+                } else {
+                  $data['message'] = 'Unable to save file to database';
+                }
+              } else {
+                $data['message'] = 'unable to upload file due to some error';
               }
-              if (!empty($fields) && $this->Courses->save($fields)) {
-                $response = TRUE;
-                $url = Router::url('/', true) . $upload_file;
-              }
+            } else {
+              $data['message'] = 'File is required';
             }
+          } else {
+            $data['message'] = 'Course code is required';
           }
         }
       } catch (Exception $e) {
@@ -216,10 +233,55 @@ class CoursesController extends AppController{
       }
       $this->set(array(
         'response' => $response,
+        'data' => $data,
         'url' => $url,
-        '_serialize' => ['response', 'url']
+        '_serialize' => ['response', 'url', 'data']
       ));
     }
 
    
+    /*
+     * S17 - Desc – Service to update or set course’s status to Active or Inactive.
+     */
+    public function setCourseStatus() {
+    $response = FALSE;
+    $data['message'] = '';
+    try {
+      if ($this->request->is(['post'])) {
+        $course_id = isset($this->request->data['course_id']) ? $this->request->data['course_id'] : '';
+        $status = isset($this->request->data['status']) ? $this->request->data['status'] : '';
+        if (!empty($course_id)) {
+          if ($status != '') {
+            $course_details_table = TableRegistry::get('CourseDetails');
+            $course_details = $course_details_table->find()->where(['course_id' => $course_id]);
+            if (!empty($course_details->count())) {
+              $course = array();
+              foreach ($course_details as $course) {
+                $course->status = $status;
+              }
+              if ($course_details_table->save($course)) {
+                $response = TRUE;
+              } else {
+                $data['message'] = 'Error while saving into database';
+              }
+            } else {
+              $data['message'] = 'No record found regarding entered course id';
+            }
+          } else {
+            $data['message'] = 'Value of status is required';
+          }
+        } else {
+          $data['message'] = 'Course id is required';
+        }
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')', 'error');
+    }
+
+    $this->set(array(
+        'response' => $response,
+        'data' => $data,
+        '_serialize' => ['response', 'data']
+      ));
+    }
 }
