@@ -101,7 +101,50 @@ class CoursesController extends AppController{
             'data' => $data,
             '_serialize' => ['data']
         ));
-    } 
+    }
+
+    /*
+     * S5- Desc – Service to update course details or meta information.
+     */
+    public function setCourseDetails() {
+      $response = FALSE;
+      $data['message'] = '';
+      try {
+        if ($this->request->is(['post'])) {
+          $course_id = isset($this->request->data['course_id']) ? $this->request->data['course_id'] : '';
+          $name = isset($this->request->data['name']) ? $this->request->data['name'] : '';
+          $meta_tags = isset($this->request->data['meta_tags']) ? $this->request->data['meta_tags'] : '';
+          $descriptions = isset($this->request->data['descriptions']) ? $this->request->data['descriptions'] : '';
+          if (!empty($course_id)) {
+            $courses_table = $this->Courses->find()->where(['id' => $course_id]);
+            foreach ($courses_table as $courses) {
+              $courses->course_name = !empty($name) ? $name : $courses->course_name;
+              $courses->meta_tags = !empty($meta_tags) ? $meta_tags : $courses->meta_tags;
+              $courses->descriptions = !empty($descriptions) ? $descriptions : $courses->descriptions;
+            }
+            $course_details_table = TableRegistry::get('CourseDetails');
+            $course_details = $course_details_table->find()->where(['course_id' => $course_id]);
+            foreach ($course_details as $course_detail) {
+              $course_detail->name = !empty($name) ? $name : $course_detail->name;
+              $course_detail->meta_tags = !empty($meta_tags) ? $meta_tags : $course_detail->meta_tags;
+              $course_detail->descriptions = !empty($descriptions) ? $descriptions : $course_detail->descriptions;
+            }
+            if ($this->Courses->save($courses) && $course_details_table->save($course_detail)) {
+              $response = TRUE;
+            }
+          } else {
+            $data['message'] = 'Course id could not be empty';
+          }
+        }
+      } catch (Exception $ex) {
+        $this->log($ex->getMessage() . '(' . __METHOD__ . ')',  'error');
+      }
+      $this->set(array(
+        'response' => $response,
+        'data' => $data,
+        '_serialize' => ['response', 'data']
+      ));
+    }
 
     /*
      * S8 Desc – Service to update course logo to Amazons3 and return cdn url.
@@ -114,34 +157,27 @@ class CoursesController extends AppController{
           $file = isset($this->request->data['logo']) ? $this->request->data['logo'] : '';
           $course_code = isset($this->request->data['course_code']) ? $this->request->data['course_code'] : '';
           if (!empty($course_code)) {
-            if (!empty($file['name'])) {
-              $file_name = time() . '_' .$file['name'];
-              $upload_path = 'img/logo/';
-              $upload_file = $upload_path.$file_name;
-              if (move_uploaded_file($file['tmp_name'], WWW_ROOT . $upload_file)) {
-                $course = $this->Courses->find()->where(['course_code' => $course_code]);
-                $fields = array();
-                foreach ($course as $fields) {
-                  $fields->logo = $upload_file;
-                }
-                if (!empty($fields) && $this->Courses->save($fields)) {
-                  $response = TRUE;
-                  $url = Router::url('/', true) . $upload_file;
-                } else {
-                  $data['message'] = 'Unable to save file to database';
-                }
+            $allowded_extension = array('png', 'jpg', 'jpeg');
+            $file_extension = @end(explode('/', $file['type']));
+            if (in_array($file_extension, $allowded_extension)) {
+              if (!empty($file['name'])) {
+                $upload_path = 'img/logo/';
+                $resp_msg = $this->_uploadFiles($file, $upload_path, $course_code);
+                $response = $resp_msg['success'];
+                $url = $resp_msg['url'];
+                $data['message'] = $resp_msg['message'];
               } else {
-                $data['message'] = 'unable to upload file due to some error';
+                $data['message'] = 'File is required';
               }
             } else {
-              $data['message'] = 'File is required';
+              $data['message'] = 'Invalid file format. Allowded files are: ' . implode(',', $allowded_extension);
             }
           } else {
             $data['message'] = 'Course code is required';
           }
         }
       } catch (Exception $e) {
-        $this->log($e->getMessage() . '('. __METHOD__.')','error');
+        $this->log($e->getMessage() . '(' . __METHOD__ . ')', 'error');
       }
       $this->set(array(
         'response' => $response,
@@ -150,7 +186,50 @@ class CoursesController extends AppController{
         '_serialize' => ['response', 'url', 'data']
       ));
     }
-   
+
+    /**
+     * function _uploadFiles().
+     *
+     * @param Array $file
+     *   contains $_FILES values.
+     * @param String $upload_file
+     *   location of file to be uploaded.
+     * @param String $condition
+     *   condition to match entity to be updated on db.
+     * @return Array
+     *   return response.
+     */
+    private function _uploadFiles($file, $upload_path, $condition) {
+      $response = array('success' => FALSE, 'url' => '', 'message' => '');
+      $file_name = time() . '_' . $file['name'];
+      $file_path = $upload_path . $file_name;
+      if (is_dir(WWW_ROOT . $upload_path)) {
+        if (is_writable(WWW_ROOT . $upload_path)) {
+          if (move_uploaded_file($file['tmp_name'], WWW_ROOT . $file_path)) {
+            $course = $this->Courses->find()->where(['course_code' => $condition]);
+            $fields = array();
+            foreach ($course as $fields) {
+              $fields->logo = $file_path;
+            }
+            if (!empty($fields) && $this->Courses->save($fields)) {
+              $response['success'] = TRUE;
+              $response['url'] = Router::url('/', true) . $file_path;
+            } else {
+              $response['message'] = 'Unable to save file to database';
+            }
+          } else {
+            $response['message'] = 'Unable to upload file due to some error';
+          }
+        } else {
+          $response['message'] = 'Upload path is not writable';
+        }
+      } else {
+        $response['message'] = 'No such directory exist.';
+      }
+
+      return $response;
+    }
+
     /*
      * S17 - Desc – Service to update or set course’s status to Active or Inactive.
      */
