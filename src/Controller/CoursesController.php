@@ -227,6 +227,54 @@ class CoursesController extends AppController{
 
     }
 
+    /**
+     * S7 - CourseContentTable
+     */
+    public function assetUpload() {
+      $response = FALSE;
+      $data['message'] =  '';
+      try {
+        $course_id = isset($this->request->data['course_id']) ? $this->request->data['course_id'] : '';
+        $file = isset($this->request->data['asset']) ? $this->request->data['asset'] : '';
+        if (!empty($course_id)) {
+          if (!empty($file['name'])) {
+            $course_contents_table = TableRegistry::get('CourseContents');
+            $upload_path = 'img/assets/';
+            $resp_msg = $this->_uploadFiles($file, $upload_path, $course_contents_table);
+            if ($resp_msg['success'] == TRUE) {
+              $course_details_table = TableRegistry::get('CourseDetails');
+              $course_details = $course_details_table->find()->where(['course_id' => $course_id]);
+              if ($course_details->count()) {
+                foreach ($course_details as $course_details_fields) {
+                  $course_details_fields->node_id = $resp_msg['node_id'];
+                }
+                if ($course_details_table->save($course_details_fields)) {
+                  $response = TRUE;
+                } else {
+                  $data['message'] = 'Unable to save course details';
+                }
+              } else {
+                $data['message'] = 'No record found regarding course id';
+              }
+            } else {
+              $data['message'] = $resp_msg['message'];
+            }
+          } else {
+            $data['message'] = 'File is missing';
+          }
+        } else {
+          $data['message'] = 'Course id missing';
+        }
+      } catch (Exception $ex) {
+        $this->log($ex->getMessage() , 'error');
+      }
+
+      $this->set([
+        'data' => $data,
+        'response' => $response,
+        '_serialize' => ['data', 'response']
+      ]);
+    }
     /*
      * S8 Desc – Service to update course logo to Amazons3 and return cdn url.
      */
@@ -243,7 +291,7 @@ class CoursesController extends AppController{
             if (in_array($file_extension, $allowded_extension)) {
               if (!empty($file['name'])) {
                 $upload_path = 'img/logo/';
-                $resp_msg = $this->_uploadFiles($file, $upload_path, $course_code);
+                $resp_msg = $this->_uploadFiles($file, $upload_path, 'default_table', ['course_code' => $course_code]);
                 $response = $resp_msg['success'];
                 $url = $resp_msg['url'];
                 $data['message'] = $resp_msg['message'];
@@ -275,28 +323,42 @@ class CoursesController extends AppController{
      *   contains $_FILES values.
      * @param String $upload_file
      *   location of file to be uploaded.
-     * @param String $condition
+     * @param $table
+     *   table details on which operation need to be processed.
+     * @param Array $condition
      *   condition to match entity to be updated on db.
      * @return Array
      *   return response.
      */
-    private function _uploadFiles($file, $upload_path, $condition) {
+    private function _uploadFiles($file, $upload_path, $table = 'default_table', $condition = array()) {
       $response = array('success' => FALSE, 'url' => '', 'message' => '');
       $file_name = time() . '_' . $file['name'];
       $file_path = $upload_path . $file_name;
       if (is_dir(WWW_ROOT . $upload_path)) {
         if (is_writable(WWW_ROOT . $upload_path)) {
           if (move_uploaded_file($file['tmp_name'], WWW_ROOT . $file_path)) {
-            $course = $this->Courses->find()->where(['course_code' => $condition]);
-            $fields = array();
-            foreach ($course as $fields) {
-              $fields->logo = $file_path;
-            }
-            if (!empty($fields) && $this->Courses->save($fields)) {
-              $response['success'] = TRUE;
-              $response['url'] = Router::url('/', true) . $file_path;
+            if ($table == 'default_table') {
+              $course = $this->Courses->find()->where($condition);
+              $fields = array();
+              foreach ($course as $fields) {
+                $fields->logo = $file_path;
+              }
+              if (!empty($fields) && $this->Courses->save($fields)) {
+                $response['success'] = TRUE;
+                $response['url'] = Router::url('/', true) . $file_path;
+              } else {
+                $response['message'] = 'Unable to save url to courses';
+              }
             } else {
-              $response['message'] = 'Unable to save file to database';
+              $new_entry = $table->newEntity();
+              $new_entry->url = $file_path;
+              if ($table->save($new_entry)) {
+                $response['success'] = TRUE;
+                $response['node_id'] = $new_entry->id;
+                $response['url'] = Router::url('/', true) . $file_path;
+              } else {
+                $response['message'] = 'Unable to save url to table';
+              }
             }
           } else {
             $response['message'] = 'Unable to upload file due to some error';
