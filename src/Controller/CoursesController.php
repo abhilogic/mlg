@@ -232,7 +232,7 @@ class CoursesController extends AppController{
      */
     public function assetUpload() {
       $response = FALSE;
-      $data['message'] =  '';
+      $data['message'] = $data['url']=  '';
       try {
         $course_id = isset($this->request->data['course_id']) ? $this->request->data['course_id'] : '';
         $file = isset($this->request->data['asset']) ? $this->request->data['asset'] : '';
@@ -250,6 +250,7 @@ class CoursesController extends AppController{
                 }
                 if ($course_details_table->save($course_details_fields)) {
                   $response = TRUE;
+                  $data['url'] = $resp_msg['url'];
                 } else {
                   $data['message'] = 'Unable to save course details';
                 }
