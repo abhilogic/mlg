@@ -9,7 +9,7 @@ use Cake\Routing\Router;
 //use Cake\Datasource\ConnectionManager;
 
 /**
- * Users Controller
+ * Courses Controller
  */
 class CoursesController extends AppController{
 
