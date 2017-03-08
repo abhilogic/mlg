@@ -270,15 +270,118 @@ class CoursesController extends AppController{
 
     }
 
-      /** 
+       /** 
         *G3 - blockUsersFromCourse
-        * Request - Int<courseID> , Array<UUIDs>, Bool<status> 
+        * Request - Int<courseID> , Array<UUIDs>, Bool<status>  BlockUserCourses
     */ 
-    public function blockUsersFromCourse($courseid=null){
+    public function blockUsersFromCourse($courseid=null){     
+        
+      $usercourses= TableRegistry::get('BlockUserCourses');
+      if ($this->request->is(['post', 'put'])) {
 
+                if($this->request->data){
+                   if($this->request->data['user_id']!=null ){
+                      //$user_ids = ["1", "2", "3"];
+                       $uids[]= $this->request->data['user_id'];
+                        //$uids=$user_ids;   
+                    foreach ($uids as $uid) {
+                        $uc_records=$usercourses->find('all')->where(['course_id'=>$courseid,'user_id'=> $uid])->count();
+ 
+                          if($uc_records>0){                            
+                              $usercourse=$usercourses->patchEntity($this->request->data);
+                                  if ($usercourses->save($usercourse))
+                                      $data['message'] = "The Record is updated";                                  
+                                  else
+                                      $data['message'] = "The Record is not updated";
+                                  
+                          }
+                          else{ 
+                                  $usercourse=$usercourses->newEntity($this->request->data);
+                                  if ($usercourses->save($usercourse))
+                                    $data['message'] = "The Record was not exist. New Record is saved";                                  
+                                  else
+                                    $data['message'] = "The Record was not exist. New Record is also not saved";
+                          }
+                        
+                    }
+                  }
+                  else{
+                      $data['message'] = "UsserId is not set. Please set for response";
+                  }
+                }
+                else{
+                     $data['message'] = "No data is set. Please check again";
+             }
+      }
+      else{
+          $data['message'] = "No data is set. Please check again";
+      }
+
+      $this->set([
+            'data' => $data,
+            '_serialize' => ['data']
+        ]);   
     }
 
-     /** 
+
+/** 
+        *S12 – isCourseAdmin
+        *Request -   Int <courseID> , Int<UUID>
+    */
+        public function isCourseAdmin($uid=null, $courseid=null){
+            if($uid!=null && $courseid!=null){
+                  $connection = ConnectionManager::get('default');
+                  $str="SELECT ur.role_id FROM courses as cr INNER JOIN user_roles as ur ON cr.created_by=ur.user_id where created_by=$uid AND cr.id=$courseid";
+                  $results = $connection->execute($str)->fetchAll('assoc');
+                  $count=0;
+                  foreach ($results as $row) {
+                      if($row['role_id']==3){
+                          $count++;
+                      }
+                  }
+                  if($count>0)
+                      $data['response']="True";
+                    else
+                      $data['response']="False";
+            }
+              else{
+                $data['message']="Either Course ID or User ID is null";
+              }
+              
+      
+              $this->set([
+                'data' => $data,
+                '_serialize' => ['data']
+              ]);
+
+
+            }
+
+
+        /** 
+      S31 - getHomeWorksbyUUID
+    */
+      public function getHomeWorksbyUUID($uid=null){
+          $homework_records=TableRegistry::get('HomeWorks')->find('all')->where(['user_id'=>$uid])->count();
+          $homeworks=TableRegistry::get('HomeWorks')->find('all')->where(['HomeWorks.user_id'=>$uid])->contain(['Users','Courses','CourseContents']);
+          if($homework_records>0){
+              foreach ($homeworks as $homework) {
+                $data['message'] = 'Home works List';
+                $data['HomeWorks'][] = $homework;
+              }
+            
+          }
+          else{
+            $data['message'] = 'No Home works List for this user';
+          }
+          $this->set(['data' => $data, '_serialize' => ['data'] ]); 
+
+
+      }
+
+
+
+    /** 
         *S32 -  createHomework
         *Request –  Int<courseID> , Int<UUID>,String<desc>,String<title>,Int<lesson / nodeID>
     */
@@ -288,6 +391,7 @@ class CoursesController extends AppController{
         if ($this->request->is(['post', 'put'])) {
 
                 if($this->request->data){
+                    if($this->request->data['course_id']!=null && $this->request->data['user_id']!=null ){
                     $usercourses=TableRegistry::get('UserCourses')->find('all')
                         ->where([
                             'course_id'=>$this->request->data['course_id'],
@@ -305,6 +409,11 @@ class CoursesController extends AppController{
                     }else{
                         $data['message'] = 'No such course alloted to this user  '; 
                     }
+
+                  }
+                  else{
+                      $data['message'] = 'Either user_id and course_id is not set '; 
+                  }
                 }                
         }else{
             $data['message'] = "No relvant content to store home work details ";
@@ -316,6 +425,58 @@ class CoursesController extends AppController{
         ]); 
 
     }
+
+
+
+    
+        /** 
+        *S33 – getExamsByCourse
+        *Request –  String<CourseCode>
+    */
+        public function getExamsByCourse($coursecode=null){
+          if($coursecode!=null){
+            
+            /*
+            $examcourses = TableRegistry::get('ExamCourses');
+                $query = $examcourses->find('all')
+                //->fields('ExamCourses.*', 'course_details.*', 'courses.*')
+
+                 ->join([
+            'course_details' => [
+                'table' => 'course_details',
+                'type' => 'INNER',
+                'conditions' => 'course_details.id = ExamCourses.course_detail_id'
+            ],
+            'courses' => [
+                'table' => 'courses',
+                'type' => 'INNER',
+                'conditions' => 'courses.id = course_details.course_id'
+            ]
+        ]);
+        */
+
+         $connection = ConnectionManager::get('default');
+         $str="SELECT exams.* FROM exams INNER JOIN exam_courses on exams.id=exam_courses.exam_id  INNER JOIN course_details ON course_details.id=exam_courses.course_detail_id INNER JOIN courses ON courses.id=course_details.course_id where course_code='$coursecode'";
+          $results = $connection->execute($str)->fetchAll('assoc');
+
+          foreach ($results as $result) {
+                $exams[] = $result;
+          }
+           $data['message'] []= $exams;
+
+          }
+          else{
+             $data['message'] = "No exams for course code null";
+          }
+
+            $this->set(['data' => $data, '_serialize' => ['data'] ]); 
+
+        }
+
+
+
+
+
 
     /**
      * S7 - CourseContentTable
