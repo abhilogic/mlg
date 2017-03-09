@@ -5,6 +5,7 @@ use App\Controller\AppController;
 use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
 use Cake\Core\Exception\Exception;
+use Cake\Auth\DefaultPasswordHasher;
 //use Cake\Datasource\ConnectionManager;
 
 /**
@@ -162,13 +163,21 @@ class UsersController extends AppController{
     public function setUserPassword($id) {
       $message = FALSE;
       if ($this->request->is(['post', 'put'])) {
-        $old_password = Security::hash($this->request->data['old_password']);
-        $user_count = $this->Users->find()->where(['Users.id' => $id, 'Users.password' => $old_password])->count();
-        if ($user_count) {
+        $user_validated = FALSE;
+        $current_password = '';
+        $default_hasher = new DefaultPasswordHasher();
+        $old_password = $this->request->data['old_password'];
+        $user_fields = $this->Users->find('all')->where(['Users.id' => $id])->toArray();
+        foreach($user_fields as $field) {
+          $current_password = $field->password;
+        }
+        if (!empty($current_password)) {
+          $user_validated = !empty($default_hasher->check($old_password, $current_password)) ? TRUE : FALSE;
+        }
+        if ($user_validated) {
           if (isset($this->request->data['password'])) {
-            $password = Security::hash($this->request->data['password']);
             $user = $this->Users->get($id);
-            $user->password = $password;
+            $user->password = $default_hasher->hash($this->request->data['password']);
             if ($this->Users->save($user)) {
               $message = TRUE;
             }
@@ -176,7 +185,7 @@ class UsersController extends AppController{
             $message = 'Password is not Set';
           }
         } else {
-          $message = 'You have entered either wrong username or password';
+          $message = 'You have entered either wrong Id or password';
         }
         $this->set([
           'response' => $message,
