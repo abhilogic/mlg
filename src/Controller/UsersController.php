@@ -14,8 +14,12 @@ use Cake\Auth\DefaultPasswordHasher;
 class UsersController extends AppController{
 
 
+    
+
+
     public function initialize(){
         parent::initialize();
+
        // $conn = ConnectionManager::get('default');
         $this->loadComponent('RequestHandler');
          $this->RequestHandler->renderAs($this, 'json');
@@ -270,10 +274,20 @@ class UsersController extends AppController{
       try {
         $message = 'Error during adding user, ';
         $data['response'] = FALSE;
+        header("HTTP/1.1 500 ERROR");
         if ($this->request->is(['post', 'put'])) {
           $user = $this->Users->newEntity($this->request->data);
-          if (!preg_match('/^[A-Za-z]+$/', $user['username'])) {
-            $message = 'Userame name is not valid';
+         
+          if (!preg_match('/^[A-Za-z]+$/', $user['first_name'])) {
+            $message = 'First name required';
+            throw new Exception('Pregmatch not matched for first name');
+          }
+          if (!preg_match('/^[A-Za-z]+$/', $user['last_name'])) {
+            $message = 'Last name required';
+            throw new Exception('Pregmatch not matched for last name');
+          }
+           if (empty($user['username'])) {
+            $message = 'Userame required';
             throw new Exception('Pregmatch not matched for Username');
           }
           $username_exist = $this->Users->find()->where(['Users.username' => $user['username']])->count();
@@ -286,25 +300,31 @@ class UsersController extends AppController{
             $message = 'Email already exist';
             throw new Exception($message);
           }
-          if (!preg_match('/^[A-Za-z]+$/', $user['first_name'])) {
-            $message = 'First name is not valid';
-            throw new Exception('Pregmatch not matched for first name');
-          }
-          if (!preg_match('/^[A-Za-z]+$/', $user['last_name'])) {
-            $message = 'Last name is not valid';
-            throw new Exception('Pregmatch not matched for last name');
-          }
           if (!filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {
             $message = 'Email is not valid';
             throw new Exception($message);
           }
-          if (!preg_match('/^[0-9]{10}$/', $user['mobile'])) {
-            $message = 'Mobile number is not valid';
-            throw new Exception($message);
+          if (empty($user['password'])) {
+            $message = 'password required';
+            throw new Exception('Pregmatch not matched for Username');
           }
+          if (empty($user['repass'])) {
+            $message = 'Enter re-password';
+            throw new Exception('Pregmatch not matched for Username');
+          }
+        //  echo $pass_recheck=(new DefaultPasswordHasher)->check($user['repass'], $user['password']);die;
+          if ((new DefaultPasswordHasher)->check($user['repass'], $user['password'])!=1) {
+            $message = 'password not match';
+            throw new Exception('Pregmatch not matched for Username');
+          }
+          // if (!preg_match('/^[0-9]{10}$/', $user['mobile'])) {
+          //   $message = 'Mobile number is not valid';
+          //   throw new Exception($message);
+          // }
           $user['status'] = 0;
           $user['created'] = $user['modfied'] = time();
           if ($this->Users->save($user)) {
+            header("HTTP/1.1 200 OK");
             $message = 'User registered successfuly';
             $data['response'] = TRUE;
           }

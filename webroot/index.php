@@ -14,6 +14,12 @@
  * @since         0.2.9
  * @license       MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
+header("Access-Control-Allow-Origin: *");
+header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
+if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+   header('Access-Control-Allow-Headers: api_key, api-key, auth_key, content-type');
+   exit;
+}
 // for built-in server
 if (php_sapi_name() === 'cli-server') {
     $_SERVER['PHP_SELF'] = '/' . basename(__FILE__);
