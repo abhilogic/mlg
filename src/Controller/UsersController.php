@@ -177,7 +177,7 @@ class UsersController extends AppController{
         if ($user_validated) {
           if (isset($this->request->data['password'])) {
             $user = $this->Users->get($id);
-            $user->password = $default_hasher->hash($this->request->data['password']);
+            $user->password = $this->request->data['password'];
             if ($this->Users->save($user)) {
               $message = TRUE;
             }
