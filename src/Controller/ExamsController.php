@@ -112,4 +112,100 @@ class ExamsController extends AppController{
         '_serialize' => ['data']
       ));
     }
+
+
+/** 
+        *A1 – getQuestionsBySectionID
+        *Request –  String<CourseCode>
+    */
+  public function getQuestionsBySectionID($examid=null, $examsectionid=null) {
+    if($examid!=null){
+        $data['message'] ="Questions of the Exam ID=$examid";
+          $quizitems = TableRegistry::get('QuizItems');
+          $quizs=$quizitems->find()->contain(['Items','ExamSections'])->where(['ExamSections.exam_id'=>$examid, 'ExamSections.id'=>$examsectionid]); 
+
+      
+          foreach($quizs as $quiz){   
+              $questions['exam_item_id']=$quiz['id'];
+              $questions['item_id']=$quiz['item_id'];
+              
+              $questions['exam_section_id']=$quiz->exam_section['id'];
+              $questions['exam_id']=$quiz->exam_section['exam_id'];
+              $questions['exam_section_name']=$quiz->exam_section['name'];
+              $questions['no_of_questions']=$quiz->exam_section['no_of_questions'];
+              $questions['exam_section_description']=$quiz->exam_section['description']; 
+              
+              $questions['item_type']=$quiz->items['type'];
+              $questions['time_dependent']=$quiz->items['time_dependent'];
+              $questions['item_title']=$quiz->items['item_body'];
+              $questions['item_title']=$quiz->items['marks'];
+              $data['response'][]=$questions;              
+             // pr($quiz); die;                    
+          }           
+    }
+    else{
+        $data['message']= "Exam ID is null";
+    }
+
+    $this->set(array(
+            'data' => $data,
+            '_serialize' => ['data']
+        ));
+
+  }
+
+
+  /** 
+        *A2 – getSectionsByQuizID
+        *Request –  String<CourseCode>, Int<quizID/exam_id>
+    */
+  public function getSectionsByQuizID($examid=null, $courseid=null) {
+        if($examid!=null && $courseid!=null ){
+          $data['message']= "Section ID for ExamID=$examid and CourseCode=$courseid";
+          $exam_courses = TableRegistry::get('ExamCourses');
+          $sections_records=$exam_courses->find()->contain(['CourseDetails'=>['Courses'],'ExamSections' ])->where(['Courses.course_code'=> $courseid, 'ExamSections.exam_id'=>$examid])->count();
+
+          $sections=$exam_courses->find()->contain(['CourseDetails'=>['Courses'],'ExamSections' ])->where(['Courses.course_code'=> $courseid, 'ExamSections.exam_id'=>$examid]);
+          //debug($sections); 
+          
+            if($sections_records>0){
+                foreach($sections as $examsection){
+                    $section['section_id']    =  $examsection->exam_section['id'];
+                    $section['exam_id'] = $examsection->exam_section['exam_id'];
+                    $section['course_id'] = $examsection->course['id'];
+                    $section['course_code'] = $examsection->course['course_code'];
+                    
+                    $section['name']  =  $examsection->exam_section['name'];
+                    $section['description'] = $examsection->exam_section['description'];
+                    $section['no_of_questions'] = $examsection->exam_section['no_of_questions'];
+
+                    $data['section'][] = $section;
+                }
+            }
+            else{
+                $data['message']= "No Record for ExamID=$examid and CourseCode=$courseid";
+            }
+
+        }
+        else{
+            $data['message']= "Either ExamID or CourseCode is null";
+        }
+
+        $this->set(array(
+            'data' => $data,
+            '_serialize' => ['data']
+        ));
+
+  }
+
+
+   
+}// end of class
+
+
+
+
+
+
+
 }
