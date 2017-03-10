@@ -20,10 +20,11 @@ class ItemsTable extends Table{
 
         $this->addBehavior('Timestamp');
 
-        $this->belongsTo('QuizItems', [
-            'foreignKey' => 'items_id',
-            'joinType'  =>  'INNER'
-        ]);          
+        $this->hasMany('QuizItems', [
+            'foreignKey' => 'item_id',
+            'dependent' => true
+        ]); 
+                 
     }
 
   

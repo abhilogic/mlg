@@ -9,7 +9,6 @@ use Cake\Validation\Validator;
 
 class ExamCoursesTable extends Table{
 
-
     /**
      * Initialize method
      *
@@ -30,6 +29,12 @@ class ExamCoursesTable extends Table{
             'foreignKey' => 'course_detail_id',
             'joinType'  =>  'INNER'
         ]); 
+
+        $this->belongsTo('ExamSections', [
+            'bindingKey' => ['exam_id'],
+            'foreignKey' => ['exam_id'],
+            'joinType'  =>  'INNER'
+]);
 
 
 

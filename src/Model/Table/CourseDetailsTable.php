@@ -7,7 +7,7 @@ use Cake\ORM\Table;
 use Cake\Validation\Validator;
 
 
-class UserDetailsTable extends Table{
+class CourseDetailsTable extends Table{
 
     /**
      * Initialize method
