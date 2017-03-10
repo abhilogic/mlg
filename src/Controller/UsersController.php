@@ -324,6 +324,35 @@ class UsersController extends AppController{
           $user['status'] = 0;
           $user['created'] = $user['modfied'] = time();
           if ($this->Users->save($user)) {
+            //save into user role table
+              $userinfo = $this->Users->find()->select('Users.id')->where(['Users.username' => $user['username']])->limit(1);
+             foreach ($userinfo as $row) {
+               $user_id = $row->id;
+             }
+             $userroles = TableRegistry::get('UserRoles');
+             $new_user_role = $userroles->newEntity(array('role_id' => $user['role_id'] , 'user_id' => $user_id));
+             if ($userroles->save($new_user_role)) {
+               
+             }
+             //send mail
+             $to = $user['email'];
+$subject = "Signup: mylearinguru.com";
+
+$message = "Dear ".$user['first_name'].' '.$user['last_name'].'<br>';
+$message.='Your username is: '.$user['username'].' and password is: '.$user['password'].'<br>';
+
+// Always set content-type when sending HTML email
+$headers = "MIME-Version: 1.0" . "\r\n";
+$headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+
+// More headers
+$headers .= 'From: <admin@elearinguru.com>' . "\r\n";
+
+
+mail($to,$subject,$message,$headers);
+
+             ///end of sending mail
+
             header("HTTP/1.1 200 OK");
             $message = 'User registered successfuly';
             $data['response'] = TRUE;
