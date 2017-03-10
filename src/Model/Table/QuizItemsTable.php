@@ -14,21 +14,20 @@ class QuizItemsTable extends Table{
      */
     public function initialize(array $config){
         
-        $this->table('items');
+       $this->table('quiz_items');
         $this->displayField('id');
         $this->primaryKey('id');
 
         $this->addBehavior('Timestamp');
 
-       $this->hasMany('Items', [
+        $this->belongsTo('Items', [
             'foreignKey' => 'item_id',
-            'dependent' => true
+            'joinType'  =>  'INNER'
         ]);
 
-
-        $this->hasMany('ExamSections', [
+       $this->belongsTo('ExamSections', [
             'foreignKey' => 'exam_section_id',
-            'dependent' => true
+            'joinType'  =>  'INNER'
         ]);
 
 
