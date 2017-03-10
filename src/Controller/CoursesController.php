@@ -473,9 +473,39 @@ class CoursesController extends AppController{
 
         }
 
+        /**
+         * mapContentToCourse
+         */
+        public function mapContentToCourse() {
+          try {
+            $response = FALSE;
+            if ($this->request->is('post')) {
+              $data = $this->request->data;
+              $course_id = isset($data['course_id']) ? $data['course_id'] : '';
+              $course_code = isset($data['course_code']) ? $data['course_code'] : '';
+              $resource_id = $data['resource_id'];
+              $connection = ConnectionManager::get('default');
+              $sql = "SELECT course_contents.url, course.course_code, course.course_id"
+                . " FROM course_contents"
+                . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_content_id"
+                . " INNER JOIN course ON course_details.parent_id = course.id WHERE course_contents.id ='$resource_id'"
+                . " AND (course.course_code='$course_code' OR course.course_id='$course_id')";
+            }
+            $results = $connection->execute($sql)->fetchAll('assoc');
+            foreach ($results as $result) {
+              if (file_exists(WWW_ROOT . $result['url'])) {
+                $response = TRUE;
+              }
+            }
+          } catch (Exception $ex) {
+            $this->log($ex->getMessage()); 
+          }
 
-
-
+          $this->set([
+            'response' => $response,
+            '_serialize' => ['response']
+          ]);
+        }
 
 
     /**
