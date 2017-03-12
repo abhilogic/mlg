@@ -247,18 +247,18 @@ public function mapItemsToQuiz($examid=null, $sectionid=null) {
   $examItems = TableRegistry::get('QuizItems');
   if($examid!=null && $sectionid!=null){
         $data['message']= "Items for examId $examid and sectionId $sectionid";      
-        $examitems=$examItems->find()->contain(['ExamSections'])->where(['ExamSections.exam_id'=>$examid,'exam_section_id'=>$sectionid]);
+        $examitems=$examItems->find()->contain(['ExamSections','Items'])->where(['ExamSections.exam_id'=>$examid,'exam_section_id'=>$sectionid]);
 
         foreach ($examitems as $examitem) {
-          $data['items'][]=$examitem;
+          $data['quiz_items'][]=$examitem;
         }
     }
     elseif($examid!=null){
         $data['message']= "Items for examId $examid";
-        $examitems= $examItems->find()->contain(['ExamSections'])->where(['ExamSections.exam_id'=>$examid]);
+        $examitems= $examItems->find()->contain(['ExamSections','Items'])->where(['ExamSections.exam_id'=>$examid]);
         
         foreach ($examitems as $examitem) {
-          $data['items'][]=$examitem;
+          $data['quiz_items'][]=$examitem;
         }
     }
       else{
