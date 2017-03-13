@@ -27,7 +27,15 @@ class CoursesTable extends Table{
         $this->belongsTo('UserCourses', [
             'foreignKey' => 'course_id',
             'joinType'  =>  'INNER'
-        ]);          
+        ]);  
+
+        $this->belongsTo('Users', [
+            'bindingKey' => ['id'],
+            'foreignKey' => ['created_by'],
+            'joinType'  =>  'INNER'
+]);
+
+
     }
 
   
