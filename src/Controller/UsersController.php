@@ -6,7 +6,9 @@ use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
 use Cake\Core\Exception\Exception;
 use Cake\Auth\DefaultPasswordHasher;
-//use Cake\Datasource\ConnectionManager;
+use Cake\Mailer\Email;
+use Cake\Routing\Router;
+use Cake\Datasource\ConnectionManager;
 
 /**
  * Users Controller
@@ -277,11 +279,12 @@ class UsersController extends AppController{
         header("HTTP/1.1 500 ERROR");
         if ($this->request->is(['post', 'put'])) {
           $user = $this->Users->newEntity($this->request->data);
-         
+
           if (!preg_match('/^[A-Za-z]+$/', $user['first_name'])) {
             $message = 'First name required';
             throw new Exception('Pregmatch not matched for first name');
           }
+
           if (!preg_match('/^[A-Za-z]+$/', $user['last_name'])) {
             $message = 'Last name required';
             throw new Exception('Pregmatch not matched for last name');
@@ -290,30 +293,37 @@ class UsersController extends AppController{
             $message = 'Userame required';
             throw new Exception('Pregmatch not matched for Username');
           }
+
           $username_exist = $this->Users->find()->where(['Users.username' => $user['username']])->count();
           if ($username_exist) {
             $message = 'Username already exist';
             throw new Exception($message);
           }
+
           $username_email = $this->Users->find()->where(['Users.email' => $user['email']])->count();
           if ($username_email) {
             $message = 'Email already exist';
             throw new Exception($message);
           }
+
           if (!filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {
             $message = 'Email is not valid';
             throw new Exception($message);
           }
+
           if (empty($user['password'])) {
             $message = 'password required';
             throw new Exception('Pregmatch not matched for Username');
           }
+
           if (empty($user['repass'])) {
             $message = 'Enter re-password';
             throw new Exception('Pregmatch not matched for Username');
           }
-        //  echo $pass_recheck=(new DefaultPasswordHasher)->check($user['repass'], $user['password']);die;
-          if ((new DefaultPasswordHasher)->check($user['repass'], $user['password'])!=1) {
+
+          $password_hasher = new DefaultPasswordHasher();
+
+          if ($password_hasher->check($user['repass'], $user['password'])!=1) {
             $message = 'password not match';
             throw new Exception('Pregmatch not matched for Username');
           }
@@ -323,39 +333,41 @@ class UsersController extends AppController{
           // }
           $user['status'] = 0;
           $user['created'] = $user['modfied'] = time();
-          if ($this->Users->save($user)) {
+          $userroles = TableRegistry::get('UserRoles');
+
+          if ($new_user = $this->Users->save($user)) {
             //save into user role table
-              $userinfo = $this->Users->find()->select('Users.id')->where(['Users.username' => $user['username']])->limit(1);
-             foreach ($userinfo as $row) {
-               $user_id = $row->id;
-             }
-             $userroles = TableRegistry::get('UserRoles');
-             $new_user_role = $userroles->newEntity(array('role_id' => $user['role_id'] , 'user_id' => $user_id));
-             if ($userroles->save($new_user_role)) {
-               
-             }
-             //send mail
-             $to = $user['email'];
-$subject = "Signup: mylearinguru.com";
+            $userinfo = $this->Users->find()->select('Users.id')->where(['Users.username' => $user['username']])->limit(1);
+            foreach ($userinfo as $row) {
+              $user_id = $row->id;
+            }
+            $new_user_role = $userroles->newEntity(array('role_id' => $user['role_id'] , 'user_id' => $user_id));
+            if ($userroles->save($new_user_role)) {
+              //send mail
+              $email = new Email();
+              $email->subject('Signup: mylearinguru.com');
+              $email->to($user['email'])->from('logicdeveloper7@gmail.com');
+              // Always set content-type when sending HTML email
+//              $headers = "MIME-Version: 1.0" . "\r\n";
+//              $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
 
-$message = "Dear ".$user['first_name'].' '.$user['last_name'].'<br>';
-$message.='Your username is: '.$user['username'].' and password is: '.$user['password'].'<br>';
+              // More headers
+//              $headers .= 'From: <admin@elearinguru.com>' . "\r\n";
+//              $email->headerCharset($headers);
+              $email_message = 'Dear ' . $user['first_name'] . ' ' . $user['last_name'] . "\n";
+              $email_message.= 'Your username is: ' . $user['username'] . "\n";
+              $email_message.= "\n Please login using following url \n" . Router::url('/', true). $user_id;
+              $email->send($email_message);
+              ///end of sending mail
 
-// Always set content-type when sending HTML email
-$headers = "MIME-Version: 1.0" . "\r\n";
-$headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-
-// More headers
-$headers .= 'From: <admin@elearinguru.com>' . "\r\n";
-
-
-mail($to,$subject,$message,$headers);
-
-             ///end of sending mail
-
-            header("HTTP/1.1 200 OK");
-            $message = 'User registered successfuly';
-            $data['response'] = TRUE;
+              header("HTTP/1.1 200 OK");
+              $message = 'User registered successfuly';
+              $data['response'] = TRUE;
+            } else {
+              $message = 'Some error occured in saving user roles';
+            }
+          } else {
+            $message = 'Some error occured in registration';
           }
         }
       } catch (Exception $e) {
@@ -443,32 +455,44 @@ mail($to,$subject,$message,$headers);
 
     /**U11 – login User
      * loadComponent is defiened in this function for a time being. */
-    public function login() {
-      $this->loadComponent('Auth', [
-        'authenticate' => [
-           'Form' => [
-             'fields' => [
-               'username' => 'username',
-               'password' => 'password',
-             ]
-           ]
-         ],
-//          'loginAction' => [
-//            'controller' => 'Users',
-//            'action' => 'login'
-//          ]
-        ]);
-      $status = 'false';
-      $token = $message = '';
-      if ($this->request->is('post')) {
-        $user = $this->Auth->identify();
-        if ($user) {
-          $this->Auth->setUser($user);
-          $token = $this->request->session()->id();
-          $status = 'success';
-        } else {
-          $message = 'You entered either wrong email id or password';
+    public function login($user_id = null) {
+      try {
+        if ($user_id != null) {
+          $connection = ConnectionManager::get('default');
+          $connection->update('users', ['status' => '1'], ['id' => $user_id]);
         }
+        $this->loadComponent('Auth', [
+          'authenticate' => [
+            'Form' => [
+              'fields' => [
+                'username' => 'username',
+                'password' => 'password',
+              ]
+            ]
+          ],
+  //          'loginAction' => [
+  //            'controller' => 'Users',
+  //            'action' => 'login'
+  //          ]
+        ]);
+        $status = 'false';
+        $token = $message = '';
+        if ($this->request->is('post')) {
+          $user = $this->Auth->identify();
+          if ($user) {
+            if ($user['status'] != 0) {
+              $this->Auth->setUser($user);
+              $token = $this->request->session()->id();
+              $status = 'success';
+            } else {
+              $message = 'Please activate your account';
+            }
+          } else {
+            $message = 'You entered either wrong email id or password';
+          }
+        }
+      } catch (Exception $ex) {
+        $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
       }
       $this->set([
         'status' => $status,
@@ -478,7 +502,7 @@ mail($to,$subject,$message,$headers);
       ]);
     }
 
-    /*
+  /*
         U12 – getUserRoles ( or profile you can say )
         Request – Int <UUID>
    */
