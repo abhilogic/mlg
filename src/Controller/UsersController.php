@@ -356,7 +356,8 @@ class UsersController extends AppController{
 //              $email->headerCharset($headers);
               $email_message = 'Dear ' . $user['first_name'] . ' ' . $user['last_name'] . "\n";
               $email_message.= 'Your username is: ' . $user['username'] . "\n";
-              $email_message.= "\n Please login using following url \n" . Router::url('/', true). $user_id;
+//              $email_message.= "\n Please login using following url \n" . Router::url('/', true). $user_id;
+              $email_message.= "\n Please login using following url \n" . 'http://35.185.54.127/mlg_ui/app/parent_confirmation/' . $user_id;
               $email->send($email_message);
               ///end of sending mail
 
