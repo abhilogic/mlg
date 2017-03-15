@@ -60,6 +60,12 @@ class UsersTable extends Table{
             'foreignKey' => 'user_id',
             'dependent' => true
         ]);
+
+    $this->hasMany('Courses', [
+            'bindingKey' => ['created_by'],
+            'foreignKey' => ['id'],
+            'dependent' => true
+        ]);
     
 
 }

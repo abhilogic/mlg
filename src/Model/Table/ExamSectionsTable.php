@@ -7,7 +7,7 @@ use Cake\ORM\Table;
 use Cake\Validation\Validator;
 
 
-class CoursesTable extends Table{
+class ExamSectionsTable extends Table{
 
     /**
      * Initialize method
@@ -16,24 +16,30 @@ class CoursesTable extends Table{
      * @return void
      */
     public function initialize(array $config){
-        
-        $this->table('courses');
+                
+        $this->table('exam_sections');
         $this->displayField('id');
         $this->primaryKey('id');
 
         $this->addBehavior('Timestamp');
 
 
-        $this->belongsTo('UserCourses', [
-            'foreignKey' => 'course_id',
+       
+       $this->belongsTo('Exams', [
+            'foreignKey' => 'exam_id',
             'joinType'  =>  'INNER'
-        ]);  
+        ]); 
 
-        $this->belongsTo('Users', [
-            'bindingKey' => ['id'],
-            'foreignKey' => ['created_by'],
-            'joinType'  =>  'INNER'
-]);
+       $this->hasOne('QuizItems', [
+          'foreignKey' => 'exam_section_id',
+          'dependent' => true
+        ]);
+       
+
+
+
+
+       
 
 
     }
