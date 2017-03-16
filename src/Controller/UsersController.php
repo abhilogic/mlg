@@ -458,10 +458,6 @@ class UsersController extends AppController{
      * loadComponent is defiened in this function for a time being. */
     public function login($user_id = null) {
       try {
-        if ($user_id != null) {
-          $connection = ConnectionManager::get('default');
-          $connection->update('users', ['status' => '1'], ['id' => $user_id]);
-        }
         $this->loadComponent('Auth', [
           'authenticate' => [
             'Form' => [
@@ -478,18 +474,31 @@ class UsersController extends AppController{
         ]);
         $status = 'false';
         $token = $message = '';
-        if ($this->request->is('post')) {
-          $user = $this->Auth->identify();
+        if ($user_id != null) {
+          $connection = ConnectionManager::get('default');
+          $connection->update('users', ['status' => '1'], ['id' => $user_id]);
+          $user = $this->Users->get($user_id);;
           if ($user) {
-            if ($user['status'] != 0) {
               $this->Auth->setUser($user);
               $token = $this->request->session()->id();
               $status = 'success';
-            } else {
-              $message = 'Please activate your account';
-            }
           } else {
             $message = 'You entered either wrong email id or password';
+          }
+        } else {
+          if ($this->request->is('post')) {
+            $user = $this->Auth->identify();
+            if ($user) {
+              if ($user['status'] != 0) {
+                $this->Auth->setUser($user);
+                $token = $this->request->session()->id();
+                $status = 'success';
+            } else {
+                $message = 'Please activate your account';
+              }
+            } else {
+              $message = 'You entered either wrong email id or password';
+            }
           }
         }
       } catch (Exception $ex) {
