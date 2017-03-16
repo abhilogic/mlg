@@ -343,10 +343,10 @@ class UsersController extends AppController{
             }
             $new_user_role = $userroles->newEntity(array('role_id' => $user['role_id'] , 'user_id' => $user_id));
             if ($userroles->save($new_user_role)) {
-              //send mail
-              $email = new Email();
-              $email->subject('Signup: mylearinguru.com');
-              $email->to($user['email'])->from('logicdeveloper7@gmail.com');
+              $to = $user['email'];
+              $from = 'logicdeveloper7@gmail.com';
+              $subject = 'Signup: mylearinguru.com';
+
               // Always set content-type when sending HTML email
 //              $headers = "MIME-Version: 1.0" . "\r\n";
 //              $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
@@ -358,8 +358,8 @@ class UsersController extends AppController{
               $email_message.= 'Your username is: ' . $user['username'] . "\n";
 //              $email_message.= "\n Please login using following url \n" . Router::url('/', true). $user_id;
               $email_message.= "\n Please activate using following url \n" . 'http://35.185.54.127/mlg_ui/app/parent_confirmation/' . $user_id;
-              $email->send($email_message);
-              ///end of sending mail
+
+              $this->sendEmail($to, $from, $subject, $email_message);
 
               header("HTTP/1.1 200 OK");
               $message = 'User registered successfuly';
@@ -746,5 +746,36 @@ class UsersController extends AppController{
            '_serialize' => ['status', 'response']
          ]);
 
+       }
+
+       /**
+        * function sendEmail().
+        *
+        * @param String $to
+        *   contains the email to whom need to send.
+        *
+        * @param String $from
+        *   contains seders email.
+        *
+        * @param String $subject
+        *   contains the subject.
+        *
+        * @param String $email_message
+        *   contains the email message.
+        */
+       protected function sendEmail($to, $from, $subject = null, $email_message = null) {
+          try {
+            $status = FALSE;
+            //send mail
+            $email = new Email();
+            $email->to($to)->from($from);
+            $email->subject($subject);
+            if ($email->send($email_message)) {
+              $status = TRUE;
+            }
+          } catch (Exception $ex) {
+            $this->log($ex->getMessage());
+          }
+          return $status;
        }
 }
