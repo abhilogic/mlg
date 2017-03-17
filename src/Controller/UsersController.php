@@ -274,7 +274,7 @@ class UsersController extends AppController{
      */
     public function registerUser() {
       try {
-        $message = 'Error during adding user, ';
+        $message = '';
         $data['response'] = FALSE;
         header("HTTP/1.1 500 ERROR");
         if ($this->request->is(['post', 'put'])) {
@@ -347,17 +347,11 @@ class UsersController extends AppController{
               $from = 'logicdeveloper7@gmail.com';
               $subject = 'Signup: mylearinguru.com';
 
-              // Always set content-type when sending HTML email
-//              $headers = "MIME-Version: 1.0" . "\r\n";
-//              $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-
-              // More headers
-//              $headers .= 'From: <admin@elearinguru.com>' . "\r\n";
-//              $email->headerCharset($headers);
               $email_message = 'Dear ' . $user['first_name'] . ' ' . $user['last_name'] . "\n";
               $email_message.= 'Your username is: ' . $user['username'] . "\n";
-//              $email_message.= "\n Please login using following url \n" . Router::url('/', true). $user_id;
-              $email_message.= "\n Please activate using following url \n" . 'http://35.185.54.127/mlg_ui/app/parent_confirmation/' . $user_id;
+//              $user['source_url'];
+              $source_url = 'http://35.185.54.127/mlg_ui/app/';
+              $email_message.= "\n Please activate using following url \n" . $source_url . 'parent_confirmation/' . $user_id;
 
               $this->sendEmail($to, $from, $subject, $email_message);
 
@@ -384,22 +378,27 @@ class UsersController extends AppController{
 
 
     /**U9-Service to update status of user to Active or Inactive  */
-    public function setUserStatus($id = null, $status = 1) {
+    public function setUserStatus() {
+      file_put_contents('/var/log/amar.log', print_r($this->request->data, TRUE));
       try {
         $message = '';
         $success = FALSE;
-        if ($id != null) {
-          $user = $this->Users->get($id);
-          $user = $this->Users->patchEntity($user, array('id' => $id, 'status' => $status));
-          if ($this->Users->save($user)) {
-              $message = 'Status Changed';
-              $success = TRUE;
+        if ($this->request->is('post')) {
+          $id = isset($this->request->data['id']) ? $this->request->data['id'] : null;
+          $status = isset($this->request->data['status']) ? $this->request->data['status'] : 1;
+          if ($id != null) {
+            $user = $this->Users->get($id);
+            $user = $this->Users->patchEntity($user, array('id' => $id, 'status' => $status));
+            if ($this->Users->save($user)) {
+                $message = 'Status Changed';
+                $success = TRUE;
+            } else {
+              $message = 'Some Error occured';
+              throw new Exception('Unable to change status');
+            }
           } else {
-            $message = 'Some Error occured';
-            throw new Exception('Unable to change status');
+            $message = 'Please enter the User Id';
           }
-        } else {
-          $message = 'Please enter the User Id';
         }
       } catch (Exceptio $e) {
         $this->log($e->getMessage() .'(' . __METHOD__ . ')', 'error');
@@ -823,7 +822,7 @@ class UsersController extends AppController{
                  throw new Exception('Mobile number can not be blank');
                }
              } else {
-               $message = 'Please choose the frequency of the report';
+               $message = 'Please choose the frequency for the report';
              }
            }
          } catch (Exception $ex) {
