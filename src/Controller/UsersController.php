@@ -365,10 +365,11 @@ class UsersController extends AppController{
               $message = 'User registered successfuly';
               $data['response'] = TRUE;
             } else {
-              $message = 'Some error occured in saving user roles';
+              $message = 'Some error occured during registration';
+              throw new Exception('Unnable to save user roles');
             }
           } else {
-            $message = 'Some error occured in registration';
+            $message = 'Some error occured during registration';
           }
         }
       } catch (Exception $e) {
@@ -383,23 +384,30 @@ class UsersController extends AppController{
 
 
     /**U9-Service to update status of user to Active or Inactive  */
-    public function setUserStatus($id = null, $status) {
+    public function setUserStatus($id = null, $status = 1) {
       try {
-        $message = 'Error Occured while changing status';
-        $data['response'] = FALSE;
-        $user = $this->Users->get($id);
-        $user = $this->Users->patchEntity($user, array('id' => $id, 'status' => $status));
-        if ($this->Users->save($user)) {
-            $message = 'Status Changed';
-            $data['response'] = TRUE;
+        $message = '';
+        $success = FALSE;
+        if ($id != null) {
+          $user = $this->Users->get($id);
+          $user = $this->Users->patchEntity($user, array('id' => $id, 'status' => $status));
+          if ($this->Users->save($user)) {
+              $message = 'Status Changed';
+              $success = TRUE;
+          } else {
+            $message = 'Some Error occured';
+            throw new Exception('Unable to change status');
+          }
+        } else {
+          $message = 'Please enter the User Id';
         }
       } catch (Exceptio $e) {
         $this->log($e->getMessage() .'(' . __METHOD__ . ')', 'error');
       }
       $this->set([
+        'status' => $success,
         'message' => $message,
-        'data' => $data,
-        '_serialize' => ['message', 'data']
+        '_serialize' => ['status', 'message']
       ]);
     }
 
@@ -456,7 +464,7 @@ class UsersController extends AppController{
 
     /**U11 – login User
      * loadComponent is defiened in this function for a time being. */
-    public function login($user_id = null) {
+    public function login() {
       try {
         $this->loadComponent('Auth', [
           'authenticate' => [
@@ -474,31 +482,18 @@ class UsersController extends AppController{
         ]);
         $status = 'false';
         $token = $message = '';
-        if ($user_id != null) {
-          $connection = ConnectionManager::get('default');
-          $connection->update('users', ['status' => '1'], ['id' => $user_id]);
-          $user = $this->Users->get($user_id);;
+        if ($this->request->is('post')) {
+          $user = $this->Auth->identify();
           if ($user) {
+            if ($user['status'] != 0) {
               $this->Auth->setUser($user);
               $token = $this->request->session()->id();
               $status = 'success';
+            } else {
+              $message = 'Please activate your account';
+            }
           } else {
             $message = 'You entered either wrong email id or password';
-          }
-        } else {
-          if ($this->request->is('post')) {
-            $user = $this->Auth->identify();
-            if ($user) {
-              if ($user['status'] != 0) {
-                $this->Auth->setUser($user);
-                $token = $this->request->session()->id();
-                $status = 'success';
-            } else {
-                $message = 'Please activate your account';
-              }
-            } else {
-              $message = 'You entered either wrong email id or password';
-            }
           }
         }
       } catch (Exception $ex) {
@@ -777,5 +772,89 @@ class UsersController extends AppController{
             $this->log($ex->getMessage());
           }
           return $status;
+       }
+
+       /**
+        * function setUserPreference().
+        *
+        * setting user prefernce under Daily, Weekly or Fornightly basis.
+        */
+       public function setUserPreference() {
+         try {
+           $status = FALSE;
+           $message = '';
+           if ($this->request->is('post')) {
+             $post_data = $this->request->data;
+             $frequency = isset($post_data['frequency']) ? $post_data['frequency'] : '';
+             $mobile = isset($post_data['mobile']) ? $post_data['mobile'] : '';
+             $sms_subscription = isset($post_data['sms']) ? $post_data['sms'] : 0;
+             $user_id = isset($post_data['user_id']) ? $post_data['user_id'] : 0;
+             if (!empty($frequency)) {
+               if (!empty($mobile)) {
+                 if (preg_match('/^[0-9]{10}$/', $mobile)) {
+                   $user_preference = TableRegistry::get('UserPreferences');
+                   $preference_data = $user_preference->newEntity();
+                   $preference_data['mobile'] = $mobile;
+                   $preference_data['user_id'] = $user_id;
+                   $preference_data['frequency'] = $frequency;
+                   $preference_data['sms_subscription'] = $sms_subscription;
+                   $preference_data['time'] = time();
+                   if ($user_preference->save($preference_data)) {
+                     $username = 'abhishek@apparrant.com';
+                     $api_hash = 'jvvC6Rqa4vA-DSTzt6tnIAIGdlbD334KSsLXbkC1wa';
+                     $sms_msg = 'Your Preferences are saved successfully';
+                     $sms_response = $this->sendSms($username, $api_hash, array($mobile), $sms_msg);
+                     if ($sms_response['status'] != 'failure') {
+                       $status = TRUE;
+                     } else {
+                       $message = 'Unable to send message, Kindly contact to the administrator';
+                       throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
+                     }
+                   } else {
+                     $message = 'Some error occured';
+                     throw new Exception('Unable to save data');
+                   }
+                 } else {
+                   $message = 'Please enter valid mobile number';
+                   throw new Exception('not valid mobile number');
+                 }
+               } else {
+                 $message = 'Please enter mobile number';
+                 throw new Exception('Mobile number can not be blank');
+               }
+             } else {
+               $message = 'Please choose the frequency of the report';
+             }
+           }
+         } catch (Exception $ex) {
+           $this->log($ex->getMessage());
+         }
+         $this->set([
+           'status' => $status,
+           'message' => $message,
+           '_serialize' => ['status', 'message']
+         ]);
+       }
+
+       /**
+        * function sendSms().
+        */
+       protected function sendSms($username, $hash, $numbers, $message) {
+
+         // Message details
+         $sender = urlencode('TXTLCL');
+         $message = rawurlencode($message);
+         $numbers = implode(',', $numbers);
+         // Prepare data for POST request
+         $data = array('username' => $username, 'hash' => $hash,
+           'numbers' => $numbers, "sender" => $sender, "message" => $message);
+         // Send the POST request with cURL
+         $ch = curl_init('http://api.textlocal.in/send/');
+         curl_setopt($ch, CURLOPT_POST, true);
+         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+         $response = curl_exec($ch);
+         curl_close($ch);
+         return json_decode($response, TRUE);
        }
 }
