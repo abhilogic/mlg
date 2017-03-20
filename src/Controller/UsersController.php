@@ -809,10 +809,10 @@ class UsersController extends AppController{
                          }
                          $warning = TRUE;
                          $message = $sms_response['warnings'][0]['message'];
+                       } else {
+                         $message = 'Unable to send message, Kindly contact to the administrator';
+                         throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
                        }
-                     } else {
-                       $message = 'Unable to send message, Kindly contact to the administrator';
-                       throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
                      }
                    } else {
                      $message = 'Some error occured';
