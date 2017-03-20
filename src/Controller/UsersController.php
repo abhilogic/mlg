@@ -16,10 +16,7 @@ use Cake\Datasource\ConnectionManager;
 class UsersController extends AppController{
 
 
-    
-
-
-    public function initialize(){
+  public function initialize(){
         parent::initialize();
 
        // $conn = ConnectionManager::get('default');
@@ -379,7 +376,6 @@ class UsersController extends AppController{
 
     /**U9-Service to update status of user to Active or Inactive  */
     public function setUserStatus() {
-      file_put_contents('/var/log/amar.log', print_r($this->request->data, TRUE));
       try {
         $message = '';
         $success = FALSE;
@@ -780,7 +776,7 @@ class UsersController extends AppController{
         */
        public function setUserPreference() {
          try {
-           $status = FALSE;
+           $warning = $status = FALSE;
            $message = '';
            if ($this->request->is('post')) {
              $post_data = $this->request->data;
@@ -800,11 +796,15 @@ class UsersController extends AppController{
                    $preference_data['time'] = time();
                    if ($user_preference->save($preference_data)) {
                      $username = 'abhishek@apparrant.com';
-                     $api_hash = 'jvvC6Rqa4vA-DSTzt6tnIAIGdlbD334KSsLXbkC1wa';
-                     $sms_msg = 'Your Preferences are saved successfully';
+                     $api_hash = '623e0140ced100da648065a6583b6cfccf29d5fb16c024be9d5723ea2fe6adf3';
+                     $sms_msg = 'Your Preferences are saved successfully @team MLG';
                      $sms_response = $this->sendSms($username, $api_hash, array($mobile), $sms_msg);
-                     if ($sms_response['status'] != 'failure') {
+                     if ($sms_response['status'] == 'success') {
                        $status = TRUE;
+                       if (isset ($sms_response['warnings'][0]['message'])) {
+                         $warning = TRUE;
+                         $message = $sms_response['warnings'][0]['message'];
+                       }
                      } else {
                        $message = 'Unable to send message, Kindly contact to the administrator';
                        throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
@@ -830,8 +830,9 @@ class UsersController extends AppController{
          }
          $this->set([
            'status' => $status,
+           'warning' => $warning,
            'message' => $message,
-           '_serialize' => ['status', 'message']
+           '_serialize' => ['status', 'warning',  'message']
          ]);
        }
 
@@ -839,21 +840,29 @@ class UsersController extends AppController{
         * function sendSms().
         */
        protected function sendSms($username, $hash, $numbers, $message) {
-
-         // Message details
-         $sender = urlencode('TXTLCL');
-         $message = rawurlencode($message);
-         $numbers = implode(',', $numbers);
-         // Prepare data for POST request
-         $data = array('username' => $username, 'hash' => $hash,
-           'numbers' => $numbers, "sender" => $sender, "message" => $message);
-         // Send the POST request with cURL
-         $ch = curl_init('http://api.textlocal.in/send/');
-         curl_setopt($ch, CURLOPT_POST, true);
-         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-         $response = curl_exec($ch);
-         curl_close($ch);
-         return json_decode($response, TRUE);
+         try {
+           // Message details
+           $sender = urlencode('TXTLCL');
+           $message = rawurlencode($message);
+           $numbers = implode(',', $numbers);
+           // Prepare data for POST request
+           $data = array('username' => $username, 'hash' => $hash,
+             'numbers' => $numbers, "sender" => $sender, "message" => $message);
+           // Send the POST request with cURL
+           $ch = curl_init('http://api.textlocal.in/send/');
+           curl_setopt($ch, CURLOPT_POST, true);
+           curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+           curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+           $json_response = curl_exec($ch);
+           curl_close($ch);
+           $response = json_decode($json_response, TRUE);
+           if ($response['status'] == 'failure') {
+             throw new Exception('unable to send message. Response: ' . $json_response);
+           }
+         } catch (Exception $ex) {
+           $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+         }
+         return $response;
        }
+
 }
