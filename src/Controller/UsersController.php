@@ -346,6 +346,7 @@ class UsersController extends AppController{
 
               $email_message = 'Dear ' . $user['first_name'] . ' ' . $user['last_name'] . "\n";
               $email_message.= 'Your username is: ' . $user['username'] . "\n";
+//            TODO: change the ip with url.
 //              $user['source_url'];
               $source_url = 'http://35.185.54.127/mlg_ui/app/';
               $email_message.= "\n Please activate using following url \n" . $source_url . 'parent_confirmation/' . $user_id;
@@ -495,10 +496,11 @@ class UsersController extends AppController{
         $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
       }
       $this->set([
+        'user' => $user,
         'status' => $status,
         'response' => ['secure_token' => $token],
         'message' => $message,
-        '_serialize' => ['status', 'response', 'message']
+        '_serialize' => ['user', 'status', 'response', 'message']
       ]);
     }
 
@@ -795,13 +797,16 @@ class UsersController extends AppController{
                    $preference_data['sms_subscription'] = $sms_subscription;
                    $preference_data['time'] = time();
                    if ($user_preference->save($preference_data)) {
+                     $status = TRUE;
                      $username = 'abhishek@apparrant.com';
                      $api_hash = '623e0140ced100da648065a6583b6cfccf29d5fb16c024be9d5723ea2fe6adf3';
                      $sms_msg = 'Your Preferences are saved successfully @team MLG';
                      $sms_response = $this->sendSms($username, $api_hash, array($mobile), $sms_msg);
-                     if ($sms_response['status'] == 'success') {
-                       $status = TRUE;
+                     if ($sms_response['status'] == 'failure') {
                        if (isset ($sms_response['warnings'][0]['message'])) {
+                         if ($sms_response['warnings'][0]['message'] == 'Number is in DND') {
+                           $sms_response['warnings'][0]['message'].= '. Please Remove DND to receive our messages';
+                         }
                          $warning = TRUE;
                          $message = $sms_response['warnings'][0]['message'];
                        }
