@@ -775,7 +775,6 @@ class CoursesController extends AppController{
 
 */
 
-
      public function getCourseListForLevel($grade=null){
         if($grade!=null){
           $courses_count= $this->Courses->find('all')->where(['level_id'=>$grade])->count();
