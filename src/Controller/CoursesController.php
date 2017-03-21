@@ -755,4 +755,54 @@ class CoursesController extends AppController{
      }
 
 
+/*
+      
+    // * New - getPackages
+    // * Request -   String <CourseCode>
+     
+     public function getPackages() {
+        $packs = TableRegistry::get('Packages')->find('all');
+        foreach ($packs as $pack) {
+            $data['packs'][] = $pack;
+                    }
+
+        $this->set(array(
+        'data' => $data,
+        '_serialize' => ['response', 'data']
+      ));
+
+     }
+
+*/
+
+
+     public function getCourseListForLevel($grade=null){
+        if($grade!=null){
+          $courses_count= $this->Courses->find('all')->where(['level_id'=>$grade])->count();
+          $courses= $this->Courses->find('all')->where(['level_id'=>$grade]);
+          if($courses_count>0){
+              foreach ($courses as $course) {
+                $data['message']="Records to course level $grade ";
+                $data['courses'][]= $course;
+                 $data['course_list']= 1;
+              }
+          }else{
+            $data['message']="Records is not found ";
+            $data['courses'][]= "";
+            $data['course_list']= 0;
+          }
+
+          
+        }
+        else{
+            $data['message']="Please select Level/Grade ";
+        }
+        $this->set([           
+           'response' => $data,
+           '_serialize' => ['response']
+         ]);
+
+     }
+
+
 }
