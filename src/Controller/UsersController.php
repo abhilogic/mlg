@@ -326,6 +326,7 @@ class UsersController extends AppController{
           $user['status'] = 0;
           $user['created'] = $user['modfied'] = time();
           $userroles = TableRegistry::get('UserRoles');
+          $userdetails = TableRegistry::get('UserDetails');
 
           if ($new_user = $this->Users->save($user)) {
             //save into user role table
@@ -334,6 +335,8 @@ class UsersController extends AppController{
               $user_id = $row->id;
             }
             $new_user_role = $userroles->newEntity(array('role_id' => $user['role_id'] , 'user_id' => $user_id));
+             $new_user_detail = $userdetails->newEntity(array('user_id' => $user_id));
+             $userdetails->save($new_user_detail);
             if ($userroles->save($new_user_role)) {
               $to = $user['email'];
               $from = 'logicdeveloper7@gmail.com';
