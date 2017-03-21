@@ -13,17 +13,10 @@ use Cake\Datasource\ConnectionManager;
 /**
  * Users Controller
  */
-<<<<<<< Updated upstream
-class UsersController extends AppController{
 
-
-  public function initialize(){
-=======
-class UsersController extends AppController{    
-
+class UsersController extends AppController{  
 
     public function initialize(){
->>>>>>> Stashed changes
         parent::initialize();
        // $conn = ConnectionManager::get('default');
         $this->loadComponent('RequestHandler');
@@ -920,12 +913,10 @@ class UsersController extends AppController{
        }
 
       
+     
 
 
-
-       }
-
+     //  }
 
 
->>>>>>> Stashed changes
 }
