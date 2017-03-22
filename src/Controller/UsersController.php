@@ -13,16 +13,14 @@ use Cake\Datasource\ConnectionManager;
 /**
  * Users Controller
  */
-class UsersController extends AppController{
 
+class UsersController extends AppController{  
 
-  public function initialize(){
+    public function initialize(){
         parent::initialize();
-
        // $conn = ConnectionManager::get('default');
         $this->loadComponent('RequestHandler');
          $this->RequestHandler->renderAs($this, 'json');
-
     }
 
 
@@ -70,8 +68,7 @@ class UsersController extends AppController{
         *  U2- getUserDetails,         
         *  Request – Int <UUID>;
     */
-    public function getUserDetails($id = null){
-        
+    public function getUserDetails($id = null){        
         $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
         if($user_record>0){
               $data['user'] = $this->Users->get($id);
@@ -87,8 +84,6 @@ class UsersController extends AppController{
               'data' => $data,
               '_serialize' => ['data']
           ]);
-
-
         }       
     }
 
@@ -331,6 +326,7 @@ class UsersController extends AppController{
           $user['status'] = 0;
           $user['created'] = $user['modfied'] = time();
           $userroles = TableRegistry::get('UserRoles');
+          $userdetails = TableRegistry::get('UserDetails');
 
           if ($new_user = $this->Users->save($user)) {
             //save into user role table
@@ -339,6 +335,8 @@ class UsersController extends AppController{
               $user_id = $row->id;
             }
             $new_user_role = $userroles->newEntity(array('role_id' => $user['role_id'] , 'user_id' => $user_id));
+             $new_user_detail = $userdetails->newEntity(array('user_id' => $user_id));
+             $userdetails->save($new_user_detail);
             if ($userroles->save($new_user_role)) {
               $to = $user['email'];
               $from = 'logicdeveloper7@gmail.com';
@@ -739,6 +737,7 @@ class UsersController extends AppController{
 
        }
 
+
        /**
         * function sendEmail().
         *
@@ -1005,4 +1004,56 @@ class UsersController extends AppController{
            '_serialize' => ['status', 'data', 'total_amount', 'message']
          ]);
        }
+
+      public function addChildren() {
+
+        $user = $this->Users->newEntity();
+        if ($this->request->is('post')) {
+
+        }
+
+
+       }
+
+       public function getGradeList() {
+          $levels = TableRegistry::get('Levels')->find('all');
+          foreach ($levels as $level) {
+              $data['Grades'][]= $level;
+          }
+          $this->set([           
+           'response' => $data,
+           '_serialize' => ['response']
+         ]);
+
+       }
+
+       public function getPlanList() {
+          $plans = TableRegistry::get('Plans')->find('all');
+          foreach ($plans as $plan) {
+              $data['plans'][]= $plan;
+          }
+          $this->set([           
+           'response' => $data,
+           '_serialize' => ['response']
+         ]);
+       }
+
+        public function getPackageList() {
+            $packages = TableRegistry::get('Packages')->find('all');
+            foreach ($packages as $package) {
+                $data['package'][]= $package;
+            }
+            $this->set([           
+             'response' => $data,
+             '_serialize' => ['response']
+           ]);
+       }
+
+      
+     
+
+
+     //  }
+
+
 }
