@@ -346,9 +346,8 @@ class UsersController extends AppController{
 
               $email_message = 'Dear ' . $user['first_name'] . ' ' . $user['last_name'] . "\n";
               $email_message.= 'Your username is: ' . $user['username'] . "\n";
-//            TODO: change the ip with url.
-//              $user['source_url'];
-              $source_url = 'http://35.185.54.127/mlg_ui/app/';
+
+              $source_url = isset($user['source_url']) ? $user['source_url'] : '';
               $email_message.= "\n Please activate using following url \n" . $source_url . 'parent_confirmation/' . $user_id;
 
               $this->sendEmail($to, $from, $subject, $email_message);
@@ -870,4 +869,140 @@ class UsersController extends AppController{
          return $response;
        }
 
+       /**
+        * funnction setStaticContents().
+        */
+       public function setStaticContents() {
+         $status = FALSE;
+         try {
+          if ($this->request->is('post')) {
+            $static_contents = TableRegistry::get('StaticContents');
+            $title = $this->request->data['title'];
+            $description = addslashes($this->request->data['description']);
+            $created = $modified = time();
+            $contents = $static_contents->find()->where(['title' => $title]);
+            if ($contents->count()) {
+              foreach($contents as $content) {
+                $content->description = $description;
+                $content->modified = $modified;
+              }
+            } else {
+              $content = $static_contents->newEntity(array(
+                'title' => $title,
+                'description' => $description,
+                'created' => $created,
+                'modified' => $modified
+                )
+              );
+            }
+
+            if ($static_contents->save($content)) {
+              $status = TRUE;
+              $id = $content->id;
+            }
+          }
+         } catch (Exception $ex) {
+           $this->log($ex->getMessage(). '(' . __METHOD__ . ')');
+         }
+
+         $this->set([
+           'status' => $status,
+           'id' => $id,
+           '_serialize' => ['status', 'id']
+         ]);
+       }
+
+       /**
+        * funnction getStaticContents().
+        */
+       public function getStaticContents() {
+         $content = array();
+         $status = FALSE;
+         try {
+           if ($this->request->is('post')) {
+             $title = $this->request->data['title'];
+             $static_contents = TableRegistry::get('StaticContents');
+             $static_data = $static_contents->find('all')->where(['title' => $title])->toArray();
+             if ($static_data) {
+              foreach($static_data as $data) {
+                $content['title'] = $data->title;
+                $content['description'] = stripslashes($data->description);
+                $content['created'] = $data->created;
+                $content['modified'] = $data->modified;
+              }
+             }
+           }
+         } catch (Exception $ex) {
+           $this->log($ex->getMessage(). '(' . __METHOD__ . ')');
+         }
+
+         $this->set([
+           'content' => $content,
+           '_serialize' => ['content']
+         ]);
+       }
+
+       /**
+        * function paymentbrief().
+        */
+       public function getPaymentbrief() {
+         $status = FALSE;
+         $message = '';
+         $child_info = array();
+         $total_amount = 0;
+         if ($this->request->is('post')) {
+          try {
+            $parent_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : '';
+            if (!empty($parent_id)) {
+
+              $user_details = TableRegistry::get('UserDetails');
+              $user_info = $user_details->find()->select('user_id')->where(['parent_id' => $parent_id]);
+              $parent_children = array();
+              foreach ($user_info as $user) {
+                $parent_children[] = $user->user_id;
+              }
+
+              $connection = ConnectionManager::get('default');
+              $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
+                . " user_purchase_items.amount as purchase_amount, packages.name as package_subjects, plans.name as plan_duration"
+                . " FROM users"
+                . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
+                . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
+                . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
+                . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ")";
+              $user_detail_result = $connection->execute($sql)->fetchAll('assoc');
+              $results = $connection->execute($sql)->fetchAll('assoc');
+              if (!empty($results)) {
+                $status = TRUE;
+
+                foreach ($results as $result) {
+                  $child_info[] = array(
+                    'child_name' => $result['user_first_name'] . ' ' . $result['user_last_name'],
+                    'package_subjects' => $result['package_subjects'],
+                    'package_amount' => $result['purchase_amount'],
+                    'plan_duration' => $result['plan_duration'],
+                  );
+                  $total_amount += $result['purchase_amount'];
+                }
+              } else {
+                $message = 'No record found';
+                throw new Exception($message);
+              }
+            } else {
+              $message = 'Parent id cannot be blank';
+              throw new Exception('Parent id is null');
+            }
+          } catch (Exception $ex) {
+            $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+          }
+         }
+
+         $this->set([
+           'status' => $status,
+           'message' => $message,
+           'data' => $child_info,
+           'total_amount' => $total_amount,
+           '_serialize' => ['status', 'data', 'total_amount', 'message']
+         ]);
+       }
 }
