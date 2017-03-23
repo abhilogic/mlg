@@ -423,9 +423,10 @@ class UsersController extends AppController{
         ]);
       $response = $status = FALSE;
       $user_info = $this->Auth->user();
-      $token = $this->request->session()->id();
-      if (!empty($token)) {
+      $token=null;
+      if (!empty($user_info)) {
         $response = $status = TRUE;
+        $token = $this->request->session()->id();
       }
       $this->set([
          'status' => $status,
@@ -1062,6 +1063,26 @@ class UsersController extends AppController{
             }
             $this->set([           
              'response' => $data,
+             '_serialize' => ['response']
+           ]);
+       }
+
+       public function logout() {
+            $this->loadComponent('Auth', [
+          'authenticate' => [
+            'Form' => [
+              'fields' => [
+                'username' => 'username',
+                'password' => 'password',
+              ]
+            ]
+          ],
+            
+        ]);
+            $this->Auth->logout();
+
+            $this->set([           
+             'response' => true,
              '_serialize' => ['response']
            ]);
        }
