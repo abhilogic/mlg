@@ -1022,15 +1022,7 @@ class UsersController extends AppController{
          ]);
        }
 
-      public function addChildren() {
-
-        $user = $this->Users->newEntity();
-        if ($this->request->is('post')) {
-
-        }
-
-
-       }
+   
 
        public function getGradeList() {
           $levels = TableRegistry::get('Levels')->find('all');
@@ -1069,8 +1061,95 @@ class UsersController extends AppController{
       
      
 
+      public function setCountOfChildrenOfParent($id,$child_count){
+          if(isset($id) && isset($child_count) ){            
+              $user_details = TableRegistry::get('UserDetails');
+              $query = $user_details->query();
+              $result=  $query->update()
+                      ->set(['no_of_children' => $child_count])
+                      ->where(['user_id' => $id])
+                      ->execute();
+              $affectedRows = $result->rowCount();
 
-     //  }
+              if($affectedRows>0)
+                $data['status']="True";
+              else
+                $data['status']="False";
+
+              $this->set([           
+             'response' => $data,
+             '_serialize' => ['response']
+           ]);
+          }
+      }
+
+      public function getCountOfChildrenOfParent($pid){
+        if(isset($pid)){
+          $user_details = TableRegistry::get('UserDetails')->find('all')->where(['user_id'=>$pid]);
+          //$rowcounts=$user_details->rowCount();
+          $data['number_of_children']=0;
+          foreach($user_details as $user_detail){            
+            $data['number_of_children'] = $user_detail['no_of_children'];
+          }
+          $this->set([           
+             'response' => $data,
+             '_serialize' => ['response']
+           ]);
+        }
+      }
+
+      public function getChildrenListOfParent($pid){
+            if(isset($pid)){
+                $added_children = TableRegistry::get('UserDetails')->find('all')->where(['parent_id'=>$pid])->count();
+               // $rowcounts=$user_details->rowCount();
+                $data['added_children'] = $added_children;                 
+            }else{
+              $data['message'] = 'Set parent_id';
+            }
+
+        $this->set([           
+                 'response' => $data,
+                 '_serialize' => ['response']
+               ]);
+
+      }
+
+
+
+       public function addChildren() {
+           $users=TableRegistry::get('Users');
+           $user_details=TableRegistry::get('UserDetails');
+           $user_roles=TableRegistry::get('UserRoles');
+           $user_courses=TableRegistry::get('User_Courses');
+           $user_purchase_items=TableRegistry::get('User_purchase_items');
+
+
+            if ($this->request->data('post')) {
+                $new_user = $this->Users->newEntity($this->request->data);
+                $new_user_details = $user_details->newEntity($this->request->data);
+                $new_user_roles = $user_roles->newEntity($this->request->data);
+                $new_user_courses = $user_courses->newEntity($this->request->data);
+                $new_user_purchase_items = $user_purchase_items->newEntity($this->request->data);
+
+                if ($users->save($new_user)) {}
+                if ($user_details->save($new_user_details)) {}
+                if ($user_roles->save($new_user_roles)) {}
+                if ($user_courses->save($new_user_courses)) {}
+                if ($user_purchase_items->save($new_user_purchase_items)) {}
+            }
+          else{
+            $data['message']='No data to save';
+          }
+
+         $this->set([           
+                 'response' => $data,
+                 '_serialize' => ['response']
+               ]);
+
+       }
+
+
+
 
 
 }
