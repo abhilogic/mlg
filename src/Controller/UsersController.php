@@ -407,15 +407,32 @@ class UsersController extends AppController{
     /**U11 – Service to check that user still logged in or not.
       * basically to check his active session  */
     public function isUserLoggedin() {
+      $this->loadComponent('Auth', [
+          'authenticate' => [
+            'Form' => [
+              'fields' => [
+                'username' => 'username',
+                'password' => 'password',
+              ]
+            ]
+          ],
+  //          'loginAction' => [
+  //            'controller' => 'Users',
+  //            'action' => 'login'
+  //          ]
+        ]);
       $response = $status = FALSE;
-      $isUserLoggedin = $this->request->session()->id();
-      if (!empty($isUserLoggedin)) {
+      $user_info = $this->Auth->user();
+      $token = $this->request->session()->id();
+      if (!empty($token)) {
         $response = $status = TRUE;
       }
       $this->set([
          'status' => $status,
          'response' => $response,
-         '_serialize' => ['status', 'response']
+         'user_info' => $user_info,
+         'token' => $token,
+         '_serialize' => ['status', 'response', 'user_info', 'token']
       ]);
     }
 
