@@ -1167,6 +1167,33 @@ class UsersController extends AppController{
                  '_serialize' => ['response']
                ]);
 
+       }       
+
+
+       public function priceCalOnCourse(){
+        $postdata = file_get_contents("php://input");
+        $request = json_decode($postdata);
+        $id_list="0";
+        foreach ($request as $key => $value) {
+          if($value!=""){
+              $id_list=$id_list.','.$key;
+              //$data['value'][]=$value;
+            }
+        }
+        $course_ids='('.$id_list.')';        
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT sum(price) as amount From courses where id IN $course_ids";
+            
+          $results = $connection->execute($sql)->fetchAll('assoc');
+            foreach ($results as $result) { 
+                if($result['amount']!=null){$data['amount']=$result['amount'];}
+                else{$data['amount']=0;}              
+            }
+        $this->set([           
+                 'response' => $data,
+                 '_serialize' => ['response']
+               ]);       
+
        }
 
 
