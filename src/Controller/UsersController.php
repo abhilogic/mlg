@@ -1196,8 +1196,79 @@ class UsersController extends AppController{
 
        }
 
+      /*
+       * function saveCardToPaypal().
+       */
+       public function saveCardToPaypal() {
+         $message = $response = '';
+         $status = FALSE;
+         $data = array();
+         $Acess_token = 'A101.dLBtZv7Oqfyop4fU7Jtid_JKZ26zw6TjRsZMk34QasDaQtbXQ_8nX8MwrgVbgV9r.b3eQaG4jrObvV7rtOcIiuZe6DN8';
+         if ($this->request->is('post')) {
+           try {
+             $ch = curl_init();
+             if (isset($this->request->data['name']) && !empty($this->request->data['name'])) {
+               $data['first_name'] = $this->request->data['name'];
+               $name =  explode(' ', $this->request->data['name']);
+             }
+             if (count($name) >= 2) {
+               $data['first_name'] = @current($name);
+               $data['last_name'] = @end($name);
+             }
+             if (isset($this->request->data['card_number']) && !empty($this->request->data['card_number'])) {
+               $data['number'] = $this->request->data['card_number'];
+             } else {
+               $message = 'Card Number is required';
+               throw new Exception($message);
+             }
+             if (isset($this->request->data['expiry_month']) && !empty($this->request->data['expiry_month'])) {
+               $data['expire_month'] = $this->request->data['expiry_month'];
+             } else {
+               $message = 'Expiry Month is required';
+               throw new Exception($message);
+             }
+             if (isset($this->request->data['expiry_year']) && !empty($this->request->data['expiry_year'])) {
+               $data['expire_year'] = $this->request->data['expiry_year'];
+             } else {
+               $message = 'Expiry Year is required';
+               throw new Exception($message);
+             }
+             if (isset($this->request->data['cvv']) && !empty($this->request->data['cvv'])) {
+               $data['cvv2'] = $this->request->data['cvv'];
+             } else {
+               $message = 'CVV is required';
+               throw new Exception($message);
+             }
+             $data['type'] = isset($this->request->data['card_type']) && !empty($this->request->data['card_type']) ?
+               $this->request->data['card_type'] : 'visa';
+             $data['external_customer_id'] = 'customer' . '_' . time();
+             curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/vault/credit-cards/");
+             curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+             curl_setopt($ch, CURLOPT_POST, 1);
+             $headers = array();
+             $headers[] = "Content-Type: application/json";
+             $headers[] = "Authorization: Bearer $Acess_token";
+             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+             $response = curl_exec($ch);
+             if (curl_errno($ch)) {
+               $message = 'Some error occured';
+               throw new Exception(curl_error($ch));
+             }
+             $response = json_decode($response, TRUE);
+             if  ($response['state'] == 'ok') {
+               $status = TRUE;
+             }
+             curl_close ($ch);
+           } catch (Exception $ex) {
+             $this->log($ex->getMessage(). '(' . __METHOD__ . ')');
+           }
+         }
 
-
-
-
+         $this->set([
+           'status' => $status,
+           'message' => $message,
+           '_serialize' => ['status', 'message',]
+         ]);
+       }
 }
