@@ -335,8 +335,8 @@ class UsersController extends AppController{
               $user_id = $row->id;
             }
             $new_user_role = $userroles->newEntity(array('role_id' => $user['role_id'] , 'user_id' => $user_id));
-             $new_user_detail = $userdetails->newEntity(array('user_id' => $user_id));
-             $userdetails->save($new_user_detail);
+            $new_user_detail = $userdetails->newEntity(array('user_id' => $user_id));
+            $userdetails->save($new_user_detail);
             if ($userroles->save($new_user_role)) {
               $to = $user['email'];
               $from = 'logicdeveloper7@gmail.com';
@@ -1257,11 +1257,14 @@ class UsersController extends AppController{
        public function saveCardToPaypal() {
          $message = $response = '';
          $status = FALSE;
-         $data = array();
-         $Acess_token = 'A101.dLBtZv7Oqfyop4fU7Jtid_JKZ26zw6TjRsZMk34QasDaQtbXQ_8nX8MwrgVbgV9r.b3eQaG4jrObvV7rtOcIiuZe6DN8';
+         $data = $name = array();
+         $Acess_token = 'A101.XKGw7qUrTEuCraf-MdSL_thbvEWyiiZF700Eu554E1q-tj8dhuZSlRyaQt5swFGz.P5_LMBjoiPsu9yp1NBuJPBxUAEu';
          if ($this->request->is('post')) {
            try {
-             $ch = curl_init();
+             if (empty($this->request->data['user_id'])) {
+               $message = 'Please login to submit payment';
+               throw new Exception($message);
+             }
              if (isset($this->request->data['name']) && !empty($this->request->data['name'])) {
                $data['first_name'] = $this->request->data['name'];
                $name =  explode(' ', $this->request->data['name']);
@@ -1289,6 +1292,10 @@ class UsersController extends AppController{
                throw new Exception($message);
              }
              if (isset($this->request->data['cvv']) && !empty($this->request->data['cvv'])) {
+               if (strlen($this->request->data['cvv']) > 4) {
+                 $message = 'not valid CVV';
+                 throw new Exception($message);
+               }
                $data['cvv2'] = $this->request->data['cvv'];
              } else {
                $message = 'CVV is required';
@@ -1297,6 +1304,7 @@ class UsersController extends AppController{
              $data['type'] = isset($this->request->data['card_type']) && !empty($this->request->data['card_type']) ?
                $this->request->data['card_type'] : 'visa';
              $data['external_customer_id'] = 'customer' . '_' . time();
+             $ch = curl_init();
              curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/vault/credit-cards/");
              curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
              curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -1310,16 +1318,55 @@ class UsersController extends AppController{
                $message = 'Some error occured';
                throw new Exception(curl_error($ch));
              }
+             $user_orders = TableRegistry::get('UserOrders');
              $response = json_decode($response, TRUE);
-             if  ($response['state'] == 'ok') {
+             if  (isset($response['state']) && $response['state'] == 'ok') {
+               $order = array(
+                 'user_id' => $this->request->data['user_id'],
+                 'amount' => $this->request->data['amount'],
+                 'discount' => isset($this->request->data['discount']) ? $this->request->data['discount'] : '',
+                 'order_date' => time(),
+                 'trial_period' => 1,
+                 'card_response' => 'card added successfully',
+               );
+               $user_order = $user_orders->newEntity($order);
+               $user_orders->save($user_order);
                $status = TRUE;
+             }
+             if (isset($response['name']) && $response['name'] == 'VALIDATION_ERROR') {
+               $message = $response['details'][0]['issue'];
+               $error_fields = explode(',', $response['details'][0]['field']);
+               foreach ($error_fields as $error_field) {
+                 switch($error_field) {
+                   case 'number' :  $message = "Card number is not valid \n";
+                    break;
+                }
+               }
+               $user_order = $user_orders->find()->where(['user_id' => $this->request->data['user_id']]);
+               if ($user_order->count()) {
+                 foreach($user_order as $user_order_data) {
+                    $user_order_data->card_response = $message;
+                    $user_order_data->order_date= time();
+                 }
+                 $user_orders->save($user_order_data);
+               } else {
+                 $order = array(
+                   'user_id' => $this->request->data['user_id'],
+                   'amount' => $this->request->data['amount'],
+                   'discount' => isset($this->request->data['discount']) ? $this->request->data['discount'] : '',
+                   'order_date' => time(),
+                   'trial_period' => 1,
+                   'card_response' => $message,
+                 );
+                $user_order = $user_orders->newEntity($order);
+                $user_orders->save($user_order);
+               }
              }
              curl_close ($ch);
            } catch (Exception $ex) {
              $this->log($ex->getMessage(). '(' . __METHOD__ . ')');
            }
          }
-
          $this->set([
            'status' => $status,
            'message' => $message,
