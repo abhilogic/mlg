@@ -1138,6 +1138,8 @@ class UsersController extends AppController{
 
 
        public function addChildren() {
+
+
            $users=TableRegistry::get('Users');
            $user_details=TableRegistry::get('UserDetails');
            $user_roles=TableRegistry::get('UserRoles');
@@ -1145,18 +1147,71 @@ class UsersController extends AppController{
            $user_purchase_items=TableRegistry::get('User_purchase_items');
 
 
-            if ($this->request->data('post')) {
-                $new_user = $this->Users->newEntity($this->request->data);
-                $new_user_details = $user_details->newEntity($this->request->data);
-                $new_user_roles = $user_roles->newEntity($this->request->data);
-                $new_user_courses = $user_courses->newEntity($this->request->data);
-                $new_user_purchase_items = $user_purchase_items->newEntity($this->request->data);
+            if ($this->request->is('post')) { 
 
-                if ($users->save($new_user)) {}
-                if ($user_details->save($new_user_details)) {}
-                if ($user_roles->save($new_user_roles)) {}
-                if ($user_courses->save($new_user_courses)) {}
-                if ($user_purchase_items->save($new_user_purchase_items)) {}
+                $packs= TableRegistry::get('Packages')->find('all')->where(["id"=>$this->request->data['package_id'] ]);
+                foreach ($packs as $pack) {
+                    $upurchase['discount']=$pack['discount'];
+                    $upurchase['discount_type']=$pack['type'];
+                }          
+              
+
+                $new_user = $this->Users->newEntity($this->request->data);                 
+                
+
+                if ($result=$users->save($new_user)) {
+                      $udetails['user_id'] = $result->id;
+                      $udetails['parent_id'] = $this->request->data['parent_id'];
+                      $udetails['dob']=$this->request->data['dob'];
+                      $udetails['school']=$this->request->data['school'];                     
+                      $new_user_details = $user_details->newEntity($udetails);
+                    if ($user_details->save($new_user_details)) {
+                          $urole['user_id']=$result->id;
+                          $urole['role_id']=$this->request->data['role_id'];
+                          $new_user_roles = $user_roles->newEntity($urole);                        
+                      if ($user_roles->save($new_user_roles)) {
+                          $courses=$this->request->data['courses'];
+
+                          foreach ($courses as $course_id => $name) {
+                            $ucourse['user_id']= $result->id;
+                            $ucourse['course_id']= $course_id;
+                            $new_user_courses = $user_courses->newEntity($ucourse);
+                            if ($user_courses->save($new_user_courses)) {
+                                $upurchase['user_id']=$result->id;
+                                $upurchase['course_id']=$course_id;
+                                $upurchase['plan_id']= $this->request->data['plan_id'];
+                                $upurchase['package_id']=$this->request->data['package_id'];
+                                $upurchase['level_id']=$this->request->data['level_id'];
+                                $new_user_purchase_items = $user_purchase_items->newEntity($upurchase);
+
+                              if ($user_purchase_items->save($new_user_purchase_items)) {
+                                  $data['message']='The child has been saved';
+                              }
+                              else{ $data['message']='Purchase history of child is not saved'; }
+                              $data['message']='The child courses are saved';
+                            }
+                            else{ $data['message']='The child course is not saved';}
+                          }                         
+                        $data['message']= 'user role has been saved';
+                         
+                      }
+                      else{
+                        $data['message']= 'User Role detail is not saved';
+                      }
+                    
+                                         
+                    }
+                    else{
+                      $data['message']= 'User Details is not saved';
+                    }
+                   
+                    
+                    
+                }
+                
+                
+                
+                
             }
           else{
             $data['message']='No data to save';
