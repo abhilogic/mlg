@@ -806,28 +806,41 @@ class UsersController extends AppController{
                if (!empty($mobile)) {
                  if (preg_match('/^[0-9]{10}$/', $mobile)) {
                    $user_preference = TableRegistry::get('UserPreferences');
-                   $preference_data = $user_preference->newEntity();
-                   $preference_data['mobile'] = $mobile;
-                   $preference_data['user_id'] = $user_id;
-                   $preference_data['frequency'] = $frequency;
-                   $preference_data['sms_subscription'] = $sms_subscription;
-                   $preference_data['time'] = time();
+                   $is_existed_preference = $user_preference->find()->where(['user_id' => $user_id]);
+                   $preference_data = array();
+                   if ($is_existed_preference->count()) {
+                     foreach ($is_existed_preference as $preference_data) {
+                       $preference_data->mobile = $mobile;
+                       $preference_data->frequency = $frequency;
+                       $preference_data->sms_subscription = $sms_subscription;
+                       $preference_data->time = time();
+                     }
+                   } else {
+                     $preference_data = $user_preference->newEntity();
+                     $preference_data['mobile'] = $mobile;
+                     $preference_data['user_id'] = $user_id;
+                     $preference_data['frequency'] = $frequency;
+                     $preference_data['sms_subscription'] = $sms_subscription;
+                     $preference_data['time'] = time();
+                   }
                    if ($user_preference->save($preference_data)) {
                      $status = TRUE;
-                     $username = 'abhishek@apparrant.com';
-                     $api_hash = '623e0140ced100da648065a6583b6cfccf29d5fb16c024be9d5723ea2fe6adf3';
-                     $sms_msg = 'Your Preferences are saved successfully @team MLG';
-                     $sms_response = $this->sendSms($username, $api_hash, array($mobile), $sms_msg);
-                     if ($sms_response['status'] == 'failure') {
-                       if (isset ($sms_response['warnings'][0]['message'])) {
-                         if ($sms_response['warnings'][0]['message'] == 'Number is in DND') {
-                           $sms_response['warnings'][0]['message'].= '. Please Remove DND to receive our messages';
+                     if (!empty($sms_subscription)) {
+                       $username = 'abhishek@apparrant.com';
+                       $api_hash = '623e0140ced100da648065a6583b6cfccf29d5fb16c024be9d5723ea2fe6adf3';
+                       $sms_msg = 'Your Preferences are saved successfully @team MLG';
+                       $sms_response = $this->sendSms($username, $api_hash, array($mobile), $sms_msg);
+                       if ($sms_response['status'] == 'failure') {
+                         if (isset ($sms_response['warnings'][0]['message'])) {
+                           if ($sms_response['warnings'][0]['message'] == 'Number is in DND') {
+                             $sms_response['warnings'][0]['message'].= '. Please Remove DND to receive our messages';
+                           }
+                           $warning = TRUE;
+                           $message = $sms_response['warnings'][0]['message'];
+                         } else {
+                           $message = 'Unable to send message, Kindly contact to the administrator';
+                           throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
                          }
-                         $warning = TRUE;
-                         $message = $sms_response['warnings'][0]['message'];
-                       } else {
-                         $message = 'Unable to send message, Kindly contact to the administrator';
-                         throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
                        }
                      }
                    } else {
