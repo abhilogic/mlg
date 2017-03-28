@@ -1271,7 +1271,7 @@ class UsersController extends AppController{
          $message = $response = '';
          $status = FALSE;
          $data = $name = array();
-         $Acess_token = 'A101.XKGw7qUrTEuCraf-MdSL_thbvEWyiiZF700Eu554E1q-tj8dhuZSlRyaQt5swFGz.P5_LMBjoiPsu9yp1NBuJPBxUAEu';
+         $Acess_token = 'A21AAFo-ojQmOW_A7fZk6P14YTmR7ds3-dWOtF4-Y_Dxf7H5HUgQfUnE5UYD34qz8ybdCiAOr2fEnFnB-hmm-WUnlJfQ2b_gA';
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
@@ -1327,9 +1327,19 @@ class UsersController extends AppController{
              $headers[] = "Authorization: Bearer $Acess_token";
              curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
              $response = curl_exec($ch);
+             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
              if (curl_errno($ch)) {
                $message = 'Some error occured';
                throw new Exception(curl_error($ch));
+             }
+             switch ($httpCode) {
+               case 401 : $message = 'Some error occured. Unable to proceed, Kindly contact to administrator';
+                          throw new Exception('Unauthorised Access');
+                 break;
+
+               case 500 : $message = 'Some error occured. Unable to proceed, Kindly contact to administrator';
+                          throw new Exception('Internal Server Error Occured');
+                 break;
              }
              $user_orders = TableRegistry::get('UserOrders');
              $response = json_decode($response, TRUE);
@@ -1377,7 +1387,7 @@ class UsersController extends AppController{
              }
              curl_close ($ch);
            } catch (Exception $ex) {
-             $this->log($ex->getMessage(). '(' . __METHOD__ . ')');
+             $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
            }
          }
          $this->set([
