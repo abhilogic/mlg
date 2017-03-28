@@ -1271,7 +1271,7 @@ class UsersController extends AppController{
          $message = $response = '';
          $status = FALSE;
          $data = $name = array();
-         $Acess_token = 'A21AAFo-ojQmOW_A7fZk6P14YTmR7ds3-dWOtF4-Y_Dxf7H5HUgQfUnE5UYD34qz8ybdCiAOr2fEnFnB-hmm-WUnlJfQ2b_gA';
+         $Acess_token = 'A21AAGkM0SFg4ryJxI4ANokeErgZcCnvomNtCjvaDSCJgbHaGlZIYf1syh3jFYklOqkN0oGWLchCndkB8y4ONC9R4g6HMlmDw';
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
@@ -1344,22 +1344,8 @@ class UsersController extends AppController{
              $user_orders = TableRegistry::get('UserOrders');
              $response = json_decode($response, TRUE);
              if  (isset($response['state']) && $response['state'] == 'ok') {
-               $order = array(
-                 'user_id' => $this->request->data['user_id'],
-                 'amount' => $this->request->data['amount'],
-                 'discount' => isset($this->request->data['discount']) ? $this->request->data['discount'] : '',
-                 'order_date' => time(),
-                 'trial_period' => 1,
-                 'card_response' => 'card added successfully',
-                 'card_id' => $response['id'],
-               );
-               $user_order = $user_orders->newEntity($order);
-               if ($user_orders->save($user_order)) {
-                 $status = TRUE;
-               } else {
-                 $message = 'unable to save data, Kindly retry again';
-                 throw new Exception($message);
-               }
+               $message = 'card added successfully';
+               $status = TRUE;
              }
              if (isset($response['name']) && $response['name'] == 'VALIDATION_ERROR') {
                $message = $response['details'][0]['issue'];
@@ -1370,27 +1356,29 @@ class UsersController extends AppController{
                     break;
                  }
                }
-               $user_order_data = $user_orders->find()->where(['user_id' => $this->request->data['user_id']]);
-               $user_order = array();
-               if ($user_order_data->count()) {
-                 foreach($user_order_data as $user_order) {
-                    $user_order->card_response = $message;
-                    $user_order->order_date= time();
-                 }
-               } else {
-                 $order = array(
-                   'user_id' => $this->request->data['user_id'],
-                   'amount' => $this->request->data['amount'],
-                   'discount' => isset($this->request->data['discount']) ? $this->request->data['discount'] : '',
-                   'order_date' => time(),
-                   'trial_period' => 1,
-                   'card_response' => $message,
-                 );
-                 $user_order = $user_orders->newEntity($order);
+             }
+             $user_order_data = $user_orders->find()->where(['user_id' => $this->request->data['user_id']]);
+             $user_order = array();
+             if ($user_order_data->count()) {
+               foreach($user_order_data as $user_order) {
+                  $user_order->card_response = $message;
+                  $user_order->order_date= time();
                }
-               if (!$user_orders->save($user_order)) {
-                 throw new Exception('unable to save data, Kindly retry again');
-               }
+             } else {
+               $order = array(
+                 'user_id' => $this->request->data['user_id'],
+                 'amount' => $this->request->data['amount'],
+                 'discount' => isset($this->request->data['discount']) ? $this->request->data['discount'] : '',
+                 'order_date' => time(),
+                 'trial_period' => 1,
+                 'card_response' => $message,
+                 'card_id' => isset($response['id']) ? $response['id'] : '',
+               );
+               $user_order = $user_orders->newEntity($order);
+             }
+             if (!$user_orders->save($user_order)) {
+               $status = FALSE;
+               throw new Exception('unable to save data, Kindly retry again');
              }
              curl_close ($ch);
            } catch (Exception $ex) {
