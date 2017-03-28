@@ -1351,10 +1351,15 @@ class UsersController extends AppController{
                  'order_date' => time(),
                  'trial_period' => 1,
                  'card_response' => 'card added successfully',
+                 'card_id' => $response['id'],
                );
                $user_order = $user_orders->newEntity($order);
-               $user_orders->save($user_order);
-               $status = TRUE;
+               if ($user_orders->save($user_order)) {
+                 $status = TRUE;
+               } else {
+                 $message = 'unable to save data, Kindly retry again';
+                 throw new Exception($message);
+               }
              }
              if (isset($response['name']) && $response['name'] == 'VALIDATION_ERROR') {
                $message = $response['details'][0]['issue'];
@@ -1363,15 +1368,15 @@ class UsersController extends AppController{
                  switch($error_field) {
                    case 'number' :  $message = "Card number is not valid \n";
                     break;
-                }
-               }
-               $user_order = $user_orders->find()->where(['user_id' => $this->request->data['user_id']]);
-               if ($user_order->count()) {
-                 foreach($user_order as $user_order_data) {
-                    $user_order_data->card_response = $message;
-                    $user_order_data->order_date= time();
                  }
-                 $user_orders->save($user_order_data);
+               }
+               $user_order_data = $user_orders->find()->where(['user_id' => $this->request->data['user_id']]);
+               $user_order = array();
+               if ($user_order_data->count()) {
+                 foreach($user_order_data as $user_order) {
+                    $user_order->card_response = $message;
+                    $user_order->order_date= time();
+                 }
                } else {
                  $order = array(
                    'user_id' => $this->request->data['user_id'],
@@ -1381,8 +1386,10 @@ class UsersController extends AppController{
                    'trial_period' => 1,
                    'card_response' => $message,
                  );
-                $user_order = $user_orders->newEntity($order);
-                $user_orders->save($user_order);
+                 $user_order = $user_orders->newEntity($order);
+               }
+               if (!$user_orders->save($user_order)) {
+                 throw new Exception('unable to save data, Kindly retry again');
                }
              }
              curl_close ($ch);
@@ -1396,4 +1403,32 @@ class UsersController extends AppController{
            '_serialize' => ['status', 'message',]
          ]);
        }
+
+       /**
+        * function getChildrenDetails().
+        * @param String $pid
+        *   parent Id.
+        */
+       public function getChildrenDetails($pid) {
+         $childRecords = TableRegistry::get('UserDetails')->find('all')->where(['parent_id' => $pid])->contain(['Users']);
+         $data = array();
+         foreach ($childRecords as $childRecord) {
+           $fname = $childRecord->user['first_name'];
+           $lname = $childRecord->user['last_name'];
+           $data[] = array(
+             'user_id' => $childRecord['user_id'],
+             'parent_id' => $childRecord['parent_id'],
+             'children_name' => $fname . ' ' . $lname,
+             'username' => $childRecord['username'],
+             'email' => $childRecord['email'],
+             'mobile' => $childRecord['mobile'],
+           );
+         }
+
+         $this->set([
+           'response' => $data,
+           '_serialize' => ['response']
+         ]);
+       }
+
 }
