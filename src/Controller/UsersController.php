@@ -1110,7 +1110,7 @@ class UsersController extends AppController{
               $user_details = TableRegistry::get('UserDetails');
               $query = $user_details->query();
               $result=  $query->update()
-                      ->set(['no_of_children' => $child_count])
+                      ->set(['no_of_children' => $child_count, 'step_completed'=>1])
                       ->where(['user_id' => $id])
                       ->execute();
               $affectedRows = $result->rowCount();
@@ -1179,8 +1179,28 @@ class UsersController extends AppController{
        public function addChildrenRecord() {          
 
            if ($this->request->is('post')) { 
-              $postdata=$this->request->data;
+              //$postdata=$this->request->data;
+              $postdata['username']=$this->request->data['username'];
+              $postdata['first_name']=$this->request->data['first_name'];
+              $postdata['last_name']=$this->request->data['last_name'];
+              
+              $postdata['parent_id']=$this->request->data['parent_id'];              
+              $postdata['emailchoice']=$this->request->data['emailchoice'];
+              $postdata['email']=$this->request->data['email'];
+             
 
+              $postdata['school']=$this->request->data['school'];
+              $postdata['role_id']=$this->request->data['role_id'];
+              $postdata['status']=$this->request->data['status'];
+             
+              $postdata['dob']=$this->request->data['dob'];
+              $postdata['created']=$this->request->data['created'];
+              $postdata['modified']=$this->request->data['created'];
+              
+              $postdata['package_id']=$this->request->data['package_id'];
+              //$postdata['level_id']=$this->request->data['level_id'];
+              $postdata['plan_id']=$this->request->data['plan_id'];
+                  
                $users=TableRegistry::get('Users');
                $user_details=TableRegistry::get('UserDetails');
                $user_roles=TableRegistry::get('UserRoles');
@@ -1201,6 +1221,7 @@ class UsersController extends AppController{
                 $packs= TableRegistry::get('Packages')->find('all')->where(["id"=>$postdata['package_id'] ]);
                 foreach ($packs as $pack) {
                     $upurchase['discount']=$pack['discount'];
+                    $postdata['discount']=$pack['discount'];
                     $discount_type=$pack['type'];                    
                 } 
 
@@ -1222,22 +1243,23 @@ class UsersController extends AppController{
 
                         "
                           Your Child Login Credential in My Learning Guru is 
-                          User Name :"."usernames 
+                          User Name :".$postdata['username'] ." 
                           Password : ".$pass;
 
                 if($postdata['emailchoice']==0){ $to=$parent_record['email'];}
                 else{ $to=$postdata['email'];  }
 
-                // User Table
+                //1. User Table
                 $new_user = $this->Users->newEntity($postdata);
                 if ($result=$this->Users->save($new_user)) { 
+                    $this->sendEmail($to, $from, $subject,$email_message); 
                     $postdata['user_id']  = $result->id;
 
-                    // User Details Table
+                    //2.  User Details Table
                     $new_user_details = $user_details->newEntity($postdata);
                     if ($user_details->save($new_user_details)) {
 
-                        // User TRoles Table
+                        //3. User Roles Table
                         $new_user_roles = $user_roles->newEntity($postdata);                        
                       if ($user_roles->save($new_user_roles)) {
 
@@ -1247,7 +1269,7 @@ class UsersController extends AppController{
                         foreach ($courses as $course_id => $name) {
                           $postdata['course_id']=$course_id;
 
-                          // User Courses Table
+                          //4. User Courses Table
                           $new_user_courses = $user_courses->newEntity($postdata);
                             if ($user_courses->save($new_user_courses)) {
 
@@ -1255,29 +1277,41 @@ class UsersController extends AppController{
                                 foreach ($courseamount as $camount) {
                                     $cramount=$camount['price']; 
                                     $upurchase['course_price']=$camount['price'];
+                                    $postdata['course_price']=$camount['price'];
                                                                                        
                                 }
 
                                 if($discount_type=="fixed"){
                                    $upurchase['amount']=($cramount-$upurchase['discount'])*($num_months);
+                                   $postdata['amount']=($cramount-$postdata['discount'])*($num_months);
                                 }
                                 if($discount_type=="percent"){
                                   $upurchase['amount']=($cramount-($cramount*($upurchase['discount'])*0.01))*($num_months);
+                                  $postdata['amount']=($cramount-($cramount*($postdata['discount'])*0.01))*($num_months);
                                 }
 
 
-                                // User Purchase Item Table
-                                $new_user_purchase_items = $user_purchase_items->newEntity($upurchase);
-                                if ($user_purchase_items->save($new_user_purchase_items)) {}
-                                $data['status']="True";
+                                //5. User Purchase Item Table
+                                $new_user_purchase_items = $user_purchase_items->newEntity($postdata);
+                                if ($user_purchase_items->save($new_user_purchase_items)) {$data['status']="True";}
+                                else{ 
+                                  $data['status']='flase';
+                                  $data['message']=" Not able to save data in User Purchase Item Table Table";}
+                                      
                             }
-                            else{ $data['message']=" Not able to save data in User Courses Table";}
+                            else{
+                            $data['status']='flase';
+                            $data['message']=" Not able to save data in User Courses Table";}
                         }
 
                       }
-                      else{ $data['message']=" Not able to save data in User Roles Table";}
+                      else{ 
+                        $data['status']='flase';
+                      $data['message']=" Not able to save data in User Roles Table";}
                     }
-                    else{ $data['message']=" Not able to save data in User Details Table"; }
+                    else{ 
+                      $data['status']='flase';
+                      $data['message']=" Not able to save data in User Details Table"; }
                     
 
                     //$data['status']='True';
