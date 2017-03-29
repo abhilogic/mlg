@@ -994,12 +994,12 @@ class UsersController extends AppController{
 
               $connection = ConnectionManager::get('default');
               $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
-                . " user_purchase_items.amount as purchase_amount, packages.name as package_subjects, plans.name as plan_duration"
+                . " SUM(user_purchase_items.amount) as purchase_amount, packages.name as package_subjects, plans.name as plan_duration"
                 . " FROM users"
                 . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
                 . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
                 . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
-                . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ")";
+                . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ") GROUP BY user_purchase_items.user_id";
               $user_detail_result = $connection->execute($sql)->fetchAll('assoc');
               $results = $connection->execute($sql)->fetchAll('assoc');
               if (!empty($results)) {
@@ -1397,7 +1397,7 @@ class UsersController extends AppController{
         * @param String $pid
         *   parent Id.
         */
-       public function getChildrenDetails($pid) {
+       public function getChildrenDetails($pid, $cid = null) {
          $childRecords = TableRegistry::get('UserDetails')->find('all')->where(['parent_id' => $pid])->contain(['Users']);
          $data = array();
          foreach ($childRecords as $childRecord) {
@@ -1411,6 +1411,18 @@ class UsersController extends AppController{
              'email' => $childRecord['email'],
              'mobile' => $childRecord['mobile'],
            );
+         }
+
+         /** ordering of data **/
+         if (!empty($cid) && !empty($data)) {
+           $temp_array = array();
+           foreach ($data as $key => $child) {
+             if ($child['user_id'] == $cid) {
+               $temp_array = $child;
+               unset($data[$key]);
+             }
+           }
+           array_unshift($data, $temp_array);
          }
 
          $this->set([
