@@ -14,7 +14,7 @@ use Cake\Datasource\ConnectionManager;
  * Users Controller
  */
 
-class UsersController extends AppController{  
+class UsersController extends AppController{
 
     public function initialize(){
         parent::initialize();
@@ -907,7 +907,7 @@ class UsersController extends AppController{
          try {
           if ($this->request->is('post')) {
             $static_contents = TableRegistry::get('StaticContents');
-            $title = $this->request->data['title'];
+            $title = trim($this->request->data['title']);
             $description = addslashes($this->request->data['description']);
             $created = $modified = time();
             $contents = $static_contents->find()->where(['title' => $title]);
@@ -948,9 +948,14 @@ class UsersController extends AppController{
        public function getStaticContents() {
          $content = array();
          $status = FALSE;
+         $message = '';
          try {
            if ($this->request->is('post')) {
-             $title = $this->request->data['title'];
+             if (empty($this->request->data['title'])) {
+               $message = 'Some error occurred.Kindly retry';
+               throw new Exception('Please select titles');
+             }
+             $title = trim($this->request->data['title']);
              $static_contents = TableRegistry::get('StaticContents');
              $static_data = $static_contents->find('all')->where(['title' => $title])->toArray();
              if ($static_data) {
@@ -960,6 +965,9 @@ class UsersController extends AppController{
                 $content['created'] = $data->created;
                 $content['modified'] = $data->modified;
               }
+              $status = TRUE;
+             } else {
+               throw new Exception('Some error occurred.Kindly retry');
              }
            }
          } catch (Exception $ex) {
@@ -968,7 +976,9 @@ class UsersController extends AppController{
 
          $this->set([
            'content' => $content,
-           '_serialize' => ['content']
+           'status' => $status,
+           'message' => $message,
+           '_serialize' => ['content', 'status', 'message']
          ]);
        }
 
