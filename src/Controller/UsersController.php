@@ -1373,4 +1373,41 @@ class UsersController extends AppController{
            '_serialize' => ['status', 'message',]
          ]);
        }
+     /***
+    * This api is used for getting offers.
+    * @return offer details.
+    * @author Shweta Mishra <shweta.mishra@incaendo.com>
+    * @link http://www.incaendo.com 
+    * @copyright (c) 2017, Incaendo Technology Pvt Ltd.
+    * 
+    * **/    
+   public function getOffers() { 
+   try{
+      $offer_list = array();
+      $current_date = Time::now();
+      $offers = TableRegistry::get('Offers');
+      $offers_detail = $offers->find('all')->where(['validity >=' => $current_date])->toArray();
+      $i=0;
+      foreach ($offers_detail as $offersDetails) {
+        if(isset($offersDetails->title) && !empty($offersDetails->title) ) {
+          $offer_list[$i]['title'] = $offersDetails->title;
+		  $offer_list[$i]['description'] = $offersDetails->description;
+          $offer_list[$i]['image'] = $offersDetails->image;
+          $date = explode(' ',$offersDetails->validity);
+          $offer_list[$i]['validity'] = date('d M Y',strtotime($date[0]));
+          $i++;
+        } else {
+          throw new Exception('Unable to find offers');
+        }
+      } 
+    } catch (Exception $e) {
+      log($e->getMessage(), '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'response' => $offer_list,
+      '_serialize' => ['response']
+    ]);
+   }
 }
+
+
