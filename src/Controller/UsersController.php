@@ -1404,7 +1404,7 @@ class UsersController extends AppController{
          $message = $response = '';
          $status = FALSE;
          $data = $name = array();
-         $Acess_token = 'A21AAGkM0SFg4ryJxI4ANokeErgZcCnvomNtCjvaDSCJgbHaGlZIYf1syh3jFYklOqkN0oGWLchCndkB8y4ONC9R4g6HMlmDw';
+         $Acess_token = 'A21AAFwsARNl_pFPq-V2Tkv0q2XaY4oZyaFf22YmmDDAc2cVHq0HNfTuV_Ck0-bfMivsZPJcd4L0Z2su0fe5iBWNMRk8hi0QA';
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
@@ -1582,6 +1582,7 @@ class UsersController extends AppController{
          ]);
        }
    /***
+
     * This api is used for getting offers.
     * @return offer details.
     * @author Shweta Mishra <shweta.mishra@incaendo.com>
@@ -1590,7 +1591,9 @@ class UsersController extends AppController{
     * 
     * **/    
    public function getOffers() { 
-    try{
+
+   try{
+
       $offer_list = array();
       $current_date = Time::now();
       $offers = TableRegistry::get('Offers');
@@ -1599,6 +1602,7 @@ class UsersController extends AppController{
       foreach ($offers_detail as $offersDetails) {
         if(isset($offersDetails->title) && !empty($offersDetails->title) ) {
           $offer_list[$i]['title'] = $offersDetails->title;
+		  $offer_list[$i]['description'] = $offersDetails->description;
           $offer_list[$i]['image'] = $offersDetails->image;
           $date = explode(' ',$offersDetails->validity);
           $offer_list[$i]['validity'] = date('d M Y',strtotime($date[0]));
@@ -1616,3 +1620,5 @@ class UsersController extends AppController{
     ]);
    }
 }
+
+
