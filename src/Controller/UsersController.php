@@ -346,7 +346,7 @@ class UsersController extends AppController{
               $email_message.= 'Your username is: ' . $user['username'] . "\n";
 
               $source_url = isset($user['source_url']) ? $user['source_url'] : '';
-              $email_message.= "\n Please activate using following url \n" . $source_url . 'parent_confirmation/' . $user_id;
+              $email_message.= "\n Please activate using following url \n" . $source_url . 'email/confirmation/' . $user_id;
 
               $this->sendEmail($to, $from, $subject, $email_message);
 
@@ -497,9 +497,16 @@ class UsersController extends AppController{
           $user = $this->Auth->identify();
           if ($user) {
             if ($user['status'] != 0) {
-              $this->Auth->setUser($user);
-              $token = $this->request->session()->id();
-              $status = 'success';
+              $user_roles = TableRegistry::get('UserRoles');
+              $valid_user = $user_roles->find()->where(['user_id' => $user['id'], 'role_id' => $this->request->data['role_id']]);
+              if ($valid_user->count()) {
+                $this->Auth->setUser($user);
+                $token = $this->request->session()->id();
+                $status = 'success';
+              } else {
+                $user = array();
+                $message = "You are not authenticated to login into this page";
+              }
             } else {
               $message = 'Please activate your account';
             }
