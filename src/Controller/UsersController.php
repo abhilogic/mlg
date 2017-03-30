@@ -1458,6 +1458,7 @@ class UsersController extends AppController{
                $message = 'Some error occured';
                throw new Exception(curl_error($ch));
              }
+             curl_close ($ch);
              switch ($httpCode) {
                case 401 : $message = 'Some error occured. Unable to proceed, Kindly contact to administrator';
                           throw new Exception('Unauthorised Access');
@@ -1505,29 +1506,22 @@ class UsersController extends AppController{
              if (!$user_orders->save($user_order)) {
                $status = FALSE;
                throw new Exception('unable to save data, Kindly retry again');
+             } else {
+               // start- update the user state
+               $user_details = TableRegistry::get('UserDetails');
+               $query = $user_details->query();
+               $result=  $query->update()
+                 ->set(['step_completed'=>4])
+                 ->where(['user_id' => $this->request->data['user_id'] ])
+                 ->execute();
+               $affectedRows = $result->rowCount();
+               if ($affectedRows > 0) {
+                 $data['status']="True";
+               } else {
+                 $data['status']="False";
+               }
              }
-             // start- update the user state
-             
-            /* else{
-                
-                   // start- update the user state
-                  $user_details = TableRegistry::get('UserDetails');
-                  $query = $user_details->query();
-                  $result=  $query->update()
-                      ->set('step_completed'=>4])
-                      ->where(['user_id' => $this->request->data['user_id'] ])
-                      ->execute();
-                   $affectedRows = $result->rowCount();
-
-                  if($affectedRows>0)
-                     $data['status']="True";
-                  else
-                   $data['status']="False";
-                //end- update the user state
-                
-             }*/
              //end- update the user
-             curl_close ($ch);
            } catch (Exception $ex) {
              $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
            }
