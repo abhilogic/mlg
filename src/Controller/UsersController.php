@@ -824,7 +824,17 @@ class UsersController extends AppController{
                      $preference_data['time'] = time();
                    }
                    if ($user_preference->save($preference_data)) {
-                     $status = TRUE;
+                      $user_details = TableRegistry::get('UserDetails');
+                      $query = $user_details->query();
+                      $result=  $query->update()
+                              ->set(['step_completed'=>3])
+                              ->where(['user_id' => $user_id])
+                              ->execute();
+                      $affectedRows = $result->rowCount();
+
+                      if($affectedRows>0)
+                              $status = TRUE;
+
                      if (!empty($sms_subscription)) {
                        $username = 'abhishek@apparrant.com';
                        $api_hash = '623e0140ced100da648065a6583b6cfccf29d5fb16c024be9d5723ea2fe6adf3';
@@ -1081,6 +1091,20 @@ class UsersController extends AppController{
              '_serialize' => ['response']
            ]);
        }
+
+       
+       public function getStepNum($uid) {
+            $steps = TableRegistry::get('UserDetails')->find('all')->where(['user_id'=>$uid]);
+            $data['step']= 0;
+            foreach ($steps as $step) {
+                $data['step']= $step;
+            }
+            $this->set([           
+             'response' => $data,
+             '_serialize' => ['response']
+           ]);
+       }
+
 
        public function logout() {
             $this->loadComponent('Auth', [
@@ -1482,6 +1506,27 @@ class UsersController extends AppController{
                $status = FALSE;
                throw new Exception('unable to save data, Kindly retry again');
              }
+             // start- update the user state
+             
+            /* else{
+                
+                   // start- update the user state
+                  $user_details = TableRegistry::get('UserDetails');
+                  $query = $user_details->query();
+                  $result=  $query->update()
+                      ->set('step_completed'=>4])
+                      ->where(['user_id' => $this->request->data['user_id'] ])
+                      ->execute();
+                   $affectedRows = $result->rowCount();
+
+                  if($affectedRows>0)
+                     $data['status']="True";
+                  else
+                   $data['status']="False";
+                //end- update the user state
+                
+             }*/
+             //end- update the user
              curl_close ($ch);
            } catch (Exception $ex) {
              $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
@@ -1500,6 +1545,8 @@ class UsersController extends AppController{
         *   parent Id.
         */
        public function getChildrenDetails($pid, $cid = null) {
+
+        
          $childRecords = TableRegistry::get('UserDetails')->find('all')->where(['parent_id' => $pid])->contain(['Users']);
          $data = array();
          foreach ($childRecords as $childRecord) {
