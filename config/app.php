@@ -229,7 +229,7 @@ return [
              */
             //'port' => 'non_standard_port_number',
             'username' => 'root',
-            'password' => 'redhat',
+            'password' => '',
             'database' => 'mlg',
             'encoding' => 'utf8',
             'timezone' => 'UTC',
