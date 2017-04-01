@@ -1211,13 +1211,18 @@ class UsersController extends AppController{
 
            if ($this->request->is('post')) { 
               //$postdata=$this->request->data;
+              if(isset($this->request->data['email']) && !empty($this->request->data['email'])){
+                  $postdata['email']  =$this->request->data['email'];
+              }else{
+                  $postdata['email']='';
+              }
               $postdata['username']=$this->request->data['username'];
               $postdata['first_name']=$this->request->data['first_name'];
               $postdata['last_name']=$this->request->data['last_name'];
               
               $postdata['parent_id']=$this->request->data['parent_id'];              
               $postdata['emailchoice']=$this->request->data['emailchoice'];
-              $postdata['email']=isset($this->request->data['email'])?$this->request->data['email']:'';
+              $postdata['email']=
              
 
               $postdata['school']=$this->request->data['school'];
@@ -1282,7 +1287,10 @@ class UsersController extends AppController{
 
                 //1. User Table
                 $new_user = $this->Users->newEntity($postdata);
+               // pr($new_user);
                 if ($result=$this->Users->save($new_user)) { 
+
+
                     $this->sendEmail($to, $from, $subject,$email_message); 
                     $postdata['user_id']  = $result->id;
 
@@ -1348,7 +1356,7 @@ class UsersController extends AppController{
                     //$data['status']='True';
 
                 }else{
-                  $data['status']='flase';
+                  $data['status']=false;
                   $data['message']="Not able to add data in Users table";
 
                 }
