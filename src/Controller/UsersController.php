@@ -1217,7 +1217,7 @@ class UsersController extends AppController{
               
               $postdata['parent_id']=$this->request->data['parent_id'];              
               $postdata['emailchoice']=$this->request->data['emailchoice'];
-              $postdata['email']=$this->request->data['email'];
+              $postdata['email']=isset($this->request->data['email'])?$this->request->data['email']:'';
              
 
               $postdata['school']=$this->request->data['school'];
