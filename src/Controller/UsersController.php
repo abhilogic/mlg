@@ -1672,7 +1672,7 @@ class UsersController extends AppController{
       foreach ($offers_detail as $offersDetails) {
         if(isset($offersDetails->title) && !empty($offersDetails->title) ) {
           $offer_list[$i]['title'] = $offersDetails->title;
-		  $offer_list[$i]['description'] = $offersDetails->description;
+      $offer_list[$i]['description'] = $offersDetails->description;
           $offer_list[$i]['image'] = $offersDetails->image;
           $date = explode(' ',$offersDetails->validity);
           $offer_list[$i]['validity'] = date('d M Y',strtotime($date[0]));
