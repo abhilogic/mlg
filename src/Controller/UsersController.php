@@ -1242,22 +1242,21 @@ class UsersController extends AppController{
               $postdata['status']=$this->request->data['status'];
               $postdata['created']=$this->request->data['created'];
               $postdata['modified']=$this->request->data['created'];
-              //$postdata['promocode_id']= 
+              $postdata['promocode_id']=isset($this->request->data['vcode'])?$this->request->data['vcode']:'0'; 
 
               $postdata['package_id']=isset($this->request->data['package_id'])?$this->request->data['package_id']:$data['message'][7]="Please select package for your child";
               $postdata['plan_id']=isset($this->request->data['plan_id'])?$this->request->data['plan_id']:$data['message'][8]="Please slelect Plans for your child";
               //$postdata['level_id']=$this->request->data['level_id'];
 
-
-            
-              
+  
               $data['message'] = array_filter($data['message']); // to check array is empty array_filter return(0, null)
               if(empty($data['message']) || $data['message']=="" ){
                      $users=TableRegistry::get('Users');
                      $user_details=TableRegistry::get('UserDetails');
                      $user_roles=TableRegistry::get('UserRoles');
-                     $user_courses=TableRegistry::get('User_Courses');
-                     $user_purchase_items=TableRegistry::get('User_purchase_items');
+                     $user_courses=TableRegistry::get('UserCourses');
+                     $user_purchase_items=TableRegistry::get('UserPurchaseItems');
+
 
                       $subtotal=0;
                       $count=0;
@@ -1280,8 +1279,9 @@ class UsersController extends AppController{
                        } 
 
                          // to check selected validation on courses
-                          $selected_courses_count=count($this->request->data['courses']);
-                          if( ( (int)$selected_courses_count)>(int)$postdata['no_of_subjects'] ){
+                          //count(array_filter($array));
+                          $selected_courses_count=count( array_filter($this->request->data['courses']));
+                          if($selected_courses_count>$postdata['no_of_subjects'] ){
                             $data['message'][9]="Your selected pakcage is for ". $postdata['no_of_subjects'] .
                                             " courses.You have selected ". $selected_courses_count." So please choose course accordingly";
                             $data['status']="false";
@@ -1291,6 +1291,19 @@ class UsersController extends AppController{
                             $data['message'][9]="Please select courses";
                             $data['status']="false";                            
                             throw new Exception("please select courses cannot ");
+                          }
+
+                          //promo code Records
+                          $pcodes= TableRegistry::get('PromoCodes')->find('all')->where(["voucher_code"=> $postdata['promocode_id'] ]);
+                          $pcodesRecordsCount=$pcodes->count();
+                          if($pcodesRecordsCount>0){
+                            foreach ($pcodes as $pcode) {
+                              $pcode_discount=$pcode.discount;
+                              $pcode_discountType=$pcode.discount_type;                           
+                            }
+                          }else{
+                            $pcode_discount=0;
+                              $pcode_discountType="";
                           }
 
                          
@@ -1355,6 +1368,17 @@ class UsersController extends AppController{
                                     //$upurchase['amount']=($cramount-($cramount*($upurchase['discount'])*0.01))*($num_months);
                                     $postdata['amount']=($cramount-($cramount*($postdata['discount'])*0.01))*($num_months);
                                   }
+
+                                  // amount alter if promo code is applied
+                                  if($pcode_discountType=="fixed"){
+                                    $postdata['amount']=($postdata['amount'])-($pcode_discount);               
+                                  }
+                                  if($pcode_discountType=="percent"){
+                                  $postdata['amount']= $postdata['amount']-($postdata['amount']*($pcode_discount*0.01));
+                                  }
+
+
+
 
 
                                 //5. User Purchase Item Table
