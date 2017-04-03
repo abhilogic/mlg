@@ -1027,7 +1027,6 @@ class UsersController extends AppController{
                 . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
                 . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
                 . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ") GROUP BY user_purchase_items.user_id";
-              $user_detail_result = $connection->execute($sql)->fetchAll('assoc');
               $results = $connection->execute($sql)->fetchAll('assoc');
               if (!empty($results)) {
                 $status = TRUE;
@@ -1689,6 +1688,55 @@ class UsersController extends AppController{
       '_serialize' => ['response']
     ]);
    }
+
+   /**
+    * function getUserPurchaseDetails().
+    *
+    * $uid :  user Id
+    */
+   public function getUserPurchaseDetails($uid) {
+     $status = FALSE;
+     $message = '';
+     $purchase_details = array();
+     try {
+       if (empty($uid)) {
+         $message = 'Please add child';
+         throw new Exception('User Id is empty');
+       }
+       $connection = ConnectionManager::get('default');
+       $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
+         . " user_purchase_items.amount as purchase_amount, packages.name as package_subjects, plans.name as plan_duration,"
+         . " courses.course_name"
+         . " FROM users"
+         . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
+         . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
+         . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
+         . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
+         . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
+       $purchase_details_result = $connection->execute($sql)->fetchAll('assoc');
+       if (!empty($purchase_details_result)) {
+         $status = TRUE;
+         foreach ($purchase_details_result as $purchase_result) {
+           $purchase_details['user_first_name'] = $purchase_result['user_first_name'];
+           $purchase_details['user_last_name'] = $purchase_result['user_last_name'];
+           $purchase_details['package_subjects'] = $purchase_result['package_subjects'];
+           $purchase_details['plan_duration'] = $purchase_result['plan_duration'];
+           $purchase_details['purchase_detail'][] = array(
+              'purchase_amount' => $purchase_result['purchase_amount'],
+              'course_name' => $purchase_result['course_name'],
+           );
+         }
+       } else {
+         $message = 'No record found';
+       }
+     } catch(Exception $e) {
+       $this->log($e->getMessage(), '(' . __METHOD__ . ')');
+     }
+     $this->set([
+      'status' => $status,
+      'message' => $message,
+      'response' => $purchase_details,
+      '_serialize' => ['status', 'message', 'response']
+    ]);
+   }
 }
-
-
