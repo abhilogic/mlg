@@ -498,7 +498,8 @@ class UsersController extends AppController{
           if ($user) {
             if ($user['status'] != 0) {
               $user_roles = TableRegistry::get('UserRoles');
-              $valid_user = $user_roles->find()->where(['user_id' => $user['id'], 'role_id' => $this->request->data['role_id']]);
+              $valid_user = $user_roles->find('all')->where(['user_id' => $user['id']]);
+              $role_id=$valid_user->first()->role_id;
               if ($valid_user->count()) {
                 $this->Auth->setUser($user);
                 $token = $this->request->session()->id();
@@ -519,10 +520,11 @@ class UsersController extends AppController{
       }
       $this->set([
         'user' => $user,
+        'role_id'=>$role_id,
         'status' => $status,
         'response' => ['secure_token' => $token],
         'message' => $message,
-        '_serialize' => ['user', 'status', 'response', 'message']
+        '_serialize' => ['user', 'status', 'response', 'message','role_id']
       ]);
     }
 
