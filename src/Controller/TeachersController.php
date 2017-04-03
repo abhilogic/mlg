@@ -23,9 +23,6 @@ class TeachersController extends AppController {
   /***
     * This api is used for set teacher detail in database.
     * @return Boolean value.
-    * @author Shweta Mishra <shweta.mishra@incaendo.com>
-    * @link http://www.incaendo.com 
-    * @copyright (c) 2017, Incaendo Technology Pvt Ltd.
     * 
     * **/ 
   public function setTeacherRecord() {
@@ -74,13 +71,76 @@ class TeachersController extends AppController {
       }
        
     } catch (Exception $ex) {
-      
+      throw new Exception('Error in setTeacherRecord'. $e->getMessage(),'(' . __METHOD__ . ')');
     }
     $this->set([
         'status' => $status,
         'message' => $message,
         '_serialize' => ['status','message']
  ]);
+  }
+  /***
+    * This api is used for set teacher detail in database.
+    * @return Boolean value.
+    * 
+    * **/ 
+  public function getTeacherSubject() {
+    try{
+      $status = FALSE;
+      $message = '';
+      $sub_details = array();
+      $total = 0;
+      if ($this->request->is('post')) {
+        if(empty($this->request->data['uid'])){
+          $message = 'Please login.';
+        }
+        $user_id = $this->request->data['uid'];
+      }
+      if (empty($message)) {
+        $connection = ConnectionManager::get('default');
+        $sql =" SELECT * from courses"
+                . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
+                . " WHERE user_courses.user_id =".$user_id;
+        $result = $connection->execute($sql)->fetchAll('assoc');
+        $count = count($result);
+        $grade = '';
+        $i = 0;
+        if($count >0) {
+          $status = TRUE;
+          foreach ($result as $detail) {
+            $total = $total + $detail['price'];
+            if(!empty($grade) && $grade == $detail['level_id']) {
+              $sub_details[$i]['course_name'] = $sub_details[$i]['course_name'].','.$detail['course_name'];
+              $sub_details[$i]['price'] = $sub_details[$i]['price']+$detail['price'];
+            }else if(!empty($grade) && $grade != $detail['level_id']){
+              $i++;
+              $grade = $detail['level_id'];
+              $sub_details[$i]['grade'] = $detail['level_id'];
+              $sub_details[$i]['course_name'] = $detail['course_name'];
+              $sub_details[$i]['price'] = $detail['price'];
+            } else if(empty($grade)) {
+              $grade = $detail['level_id'];
+              $sub_details[$i]['grade'] = $detail['level_id'];
+              $sub_details[$i]['course_name'] = $detail['course_name'];
+              $sub_details[$i]['price'] = $detail['price'];
+            }
+          } 
+        } else {
+          $message = 'You are not teach any subject. Please select subject.';
+        } 
+      }
+      
+    }  catch (Exception $e) {
+      throw new Exception('Error in getTeacherSubject'. $e->getMessage(),'(' . __METHOD__ . ')');
+
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'data' => $sub_details,
+      'total'=> $total,
+      '_serialize' => ['status','message','data','total'] 
+    ]);
   }
 }
 
