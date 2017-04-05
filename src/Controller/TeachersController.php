@@ -71,7 +71,8 @@ class TeachersController extends AppController {
       }
        
     } catch (Exception $ex) {
-      throw new Exception('Error in setTeacherRecord'. $e->getMessage(),'(' . __METHOD__ . ')');
+      $this->logs('Error in setTeacherRecord function in Teachers Controller'
+              . $e->getMessage().'(' . __METHOD__ . ')');
     }
     $this->set([
         'status' => $status,
@@ -131,7 +132,8 @@ class TeachersController extends AppController {
       }
       
     }  catch (Exception $e) {
-      throw new Exception('Error in getTeacherSubject'. $e->getMessage(),'(' . __METHOD__ . ')');
+      $this->log('Error in getTeacherSubject function in Teachers Controller.s'
+              .$e->getMessage().'(' . __METHOD__ . ')');
 
     }
     $this->set([
@@ -141,6 +143,89 @@ class TeachersController extends AppController {
       'total'=> $total,
       '_serialize' => ['status','message','data','total'] 
     ]);
+  }
+ /**
+  * This api is used for get student detail. 
+  **/ 
+  public function getStudentDetail($grade='',$subject='') {
+    try{
+      $user = array();
+      $message = '';
+      if (empty($grade)) {
+        $message = 'grade is empty';
+        throw new Exception('grade is empty');
+      }elseif (empty($subject)) {
+        $message = 'subject id is empty.';
+        throw new Exception('subject id is empty.');
+      }  elseif(empty ($message)){
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT * FROM users as user
+          Inner Join user_details as userDetail on user.id = userDetail.user_id 
+          Inner Join user_courses as userCourse on user.id = userCourse.user_id
+          Inner Join courses as course on course.id = userCourse.course_id
+          where course.level_id = ".$grade. " AND course.id = ".$subject;
+        $result = $connection->execute($sql)->fetchAll('assoc');
+        foreach($result as $data) {
+          $user_detail['name'] = $data['first_name'].' '.$data['last_name'];
+          $user_detail['profile_pic'] = $data['profile_pic'];
+          $user_detail['user_id'] = $data['user_id'];
+          $user_detail['courses_id'] = $data['course_id'];
+          $user[] = $user_detail;
+        }    
+      }  
+    }  catch (Exception $e){
+      $this->log('Error in getStudentDetail function in Teachers Controller'
+              .$e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'data' => $user,
+      '_serialize' => ['data'] 
+    ]);
+  }
+ /**
+  * This api is used for get teacher subject with grade.
+  * 
+  **/
+  public function getTeacherGradeSubject($user_id='') {
+    try{
+      $connection = ConnectionManager::get('default');
+      $status = FALSE;
+      $message = '';
+      $role_count = 0;
+      $level_subject = 'Something goes wrong.';
+      if (empty($user_id)) {
+        $message = 'user id is not valid';
+        throw new Exception('user id is not valid'); 
+      }  else { 
+        $sql =" SELECT * from user_roles WHERE user_id =".$user_id.
+                " AND role_id = 3 ";
+        $result = $connection->execute($sql)->fetchAll('assoc');
+        $role_count = count($result);
+      }  
+      if ($role_count == '1' && empty($message)) {
+        $level_subject = 'you have not choosen any subject or grade.';
+        $connection = ConnectionManager::get('default');
+        $sql =" SELECT level_id,course_id,course_name from courses"
+                . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
+                . " WHERE user_courses.user_id =".$user_id;
+        $level_subject  = $connection->execute($sql)->fetchAll('assoc');
+        $count = count($level_subject);
+        if ($count > 0) {
+          $status = TRUE;
+        }  else {
+          $level_subject = 'you have not choosen any subject or grade.';
+        } 
+      }  
+    }catch (Exception $e) {
+      $this->log('Error in getTeacherGradeSubject function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+    }  
+     $this->set([
+      'status' => $status,
+      'response' => $level_subject,
+      '_serialize' => ['status','response']
+    ]);
+
   }
 }
 
