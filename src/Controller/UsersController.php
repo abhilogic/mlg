@@ -1067,10 +1067,10 @@ class UsersController extends AppController{
    
 
        public function getGradeList() {
-          $levels = TableRegistry::get('Levels')->find('all');
-          foreach ($levels as $level) {
-              $data['Grades'][]= $level;
-          }
+             $levels = TableRegistry::get('Levels')->find('all');
+             foreach ($levels as $level) {
+                $data['Grades'][]= $level;
+             }
           $this->set([           
            'response' => $data,
            '_serialize' => ['response']
@@ -1213,7 +1213,7 @@ class UsersController extends AppController{
               //email validation ********
               $postdata['emailchoice']=isset($this->request->data['emailchoice'])?$this->request->data['emailchoice']:1;              
               $postdata['email']=isset($this->request->data['email'])?$this->request->data['email']:"";
-              if(!empty($postdata['email'] && $postdata['emailchoice']==1)){
+              if(!empty($postdata['email'])&& $postdata['emailchoice']==1){
                   $email_exist = $this->Users->find()->where(['Users.email' => $this->request->data['email'] ])->count();
                   if ($email_exist) {
                       $data['message'][1] = 'Email is already exist';                      
@@ -1222,22 +1222,16 @@ class UsersController extends AppController{
                      $data['message'][1] = 'Email is not valid';
                }
 
-              }else if(empty($postdata['email'] && $postdata['emailchoice']==1)){
+              }else if(empty($postdata['email']) && $postdata['emailchoice']==1){
                 $data['message'][1]="Please Add Your Child Email to send password over there.";
               }
               else{
                 $postdata['email']="";
               }
-
-
-              $postdata['first_name']=isset($this->request->data['first_name'])? $this->request->data['first_name']:$data['message'][2]="First name is require";
-              
+              $postdata['first_name']=isset($this->request->data['first_name'])? $this->request->data['first_name']:$data['message'][2]="First name is require";             
               $postdata['last_name']=isset($this->request->data['last_name'])?$this->request->data['last_name']:$data['message'][3]="Last Name is require"; 
-
-              $postdata['parent_id']=isset($this->request->data['parent_id'])? $this->request->data['parent_id']:$data['message'][4]="The Parent ID has been expired. please Login Again";               
-            
-              $postdata['school']=isset($this->request->data['school'])? $this->request->data['school']:$data['message'][5]="School Name is require";
-              
+              $postdata['parent_id']=isset($this->request->data['parent_id'])? $this->request->data['parent_id']:$data['message'][4]="The Parent ID has been expired. please Login Again";                          
+              $postdata['school']=isset($this->request->data['school'])? $this->request->data['school']:$data['message'][5]="School Name is require";        
               $postdata['dob']=isset($this->request->data['dob'])? $this->request->data['dob']:$data['message'][6]="Please select Date of Birth";
 
               $postdata['role_id']=$this->request->data['role_id'];
@@ -1250,7 +1244,6 @@ class UsersController extends AppController{
               $postdata['plan_id']=isset($this->request->data['plan_id'])?$this->request->data['plan_id']:$data['message'][8]="Please slelect Plans for your child";
               //$postdata['level_id']=$this->request->data['level_id'];
 
-  
               $data['message'] = array_filter($data['message']); // to check array is empty array_filter return(0, null)
               if(empty($data['message']) || $data['message']=="" ){
                      $users=TableRegistry::get('Users');
@@ -1258,11 +1251,8 @@ class UsersController extends AppController{
                      $user_roles=TableRegistry::get('UserRoles');
                      $user_courses=TableRegistry::get('UserCourses');
                      $user_purchase_items=TableRegistry::get('UserPurchaseItems');
-
-
-                      $subtotal=0;
-                      $count=0;
-
+                     $subtotal=0;
+                     $count=0;
                       // parent information by $pid
                         $parent_records= $users->find('all')->where(["id"=>$postdata['parent_id'] ]);
                           foreach ($parent_records as $parent_record) {
@@ -1378,11 +1368,6 @@ class UsersController extends AppController{
                                   if($pcode_discountType=="percent"){
                                   $postdata['amount']= $postdata['amount']-($postdata['amount']*($pcode_discount*0.01));
                                   }
-
-
-
-
-
                                 //5. User Purchase Item Table
                                 $new_user_purchase_items = $user_purchase_items->newEntity($postdata);
                                 if ($user_purchase_items->save($new_user_purchase_items)) {$data['status']="True";}
@@ -1499,7 +1484,7 @@ class UsersController extends AppController{
          $message = $response = '';
          $status = FALSE;
          $data = $name = array();
-         $Acess_token = 'A21AAFwsARNl_pFPq-V2Tkv0q2XaY4oZyaFf22YmmDDAc2cVHq0HNfTuV_Ck0-bfMivsZPJcd4L0Z2su0fe5iBWNMRk8hi0QA';
+         $Acess_token = 'A21AAEWm0IkiqULNSDvBW_sqeekt6zeQMDjQwOjUwlx8rzYqjAm0e0xgiHEa20uk0pgYxXVdxLOZHQQ8WY6yfeA8vGHrADy0A';
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
@@ -1707,7 +1692,7 @@ class UsersController extends AppController{
         }
       } 
     } catch (Exception $e) {
-      log($e->getMessage(), '(' . __METHOD__ . ')');
+      $this->log($e->getMessage(). '(' . __METHOD__ . ')');
     }
     $this->set([
       'response' => $offer_list,
