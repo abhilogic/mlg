@@ -1286,18 +1286,13 @@ class UsersController extends AppController{
                           }
 
                           //promo code Records
-                          $pcodes= TableRegistry::get('PromoCodes')->find('all')->where(["voucher_code"=> $postdata['promocode_id'] ]);
-                          $pcodesRecordsCount=$pcodes->count();
-                          if($pcodesRecordsCount>0){
-                            foreach ($pcodes as $pcode) {
-                              $pcode_discount=$pcode.discount;
-                              $pcode_discountType=$pcode.discount_type;                           
-                            }
-                          }else{
+                          $pcodes= TableRegistry::get('PromoCodes')->find('all')->where(["id"=> $postdata['promocode_id'] ]);
                             $pcode_discount=0;
-                              $pcode_discountType="";
-                          }
-
+                            $pcode_discountType="";
+                          
+                           $pcode_discount=$pcodes->first()->discount;
+                           $pcode_discountType=$pcodes->first()->discount_type;
+//die($pcode_discount.'====='.$pcode_discountType);
                          
 
                          // find number of month in selected plan
