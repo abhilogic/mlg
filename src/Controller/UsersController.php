@@ -1717,7 +1717,7 @@ class UsersController extends AppController{
        $connection = ConnectionManager::get('default');
        $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
          . " user_purchase_items.amount as purchase_amount, user_purchase_items.level_id as level_id,"
-         . " user_purchase_items.course_id, packages.name as package_subjects,"
+         . " user_purchase_items.course_id, user_purchase_items.order_date as order_date, packages.name as package_subjects,"
          . " packages.id as package_id, plans.id as plan_id, plans.name as plan_duration,"
          . " courses.course_name"
          . " FROM users"
@@ -1737,6 +1737,7 @@ class UsersController extends AppController{
            $purchase_details['plan_id'] = $purchase_result['plan_id'];
            $purchase_details['plan_duration'] = $purchase_result['plan_duration'];
            $purchase_details['level_id'] = $purchase_result['level_id'];
+           $purchase_details['order_date'] = @current(explode(' ', $purchase_result['order_date']));
            $purchase_details['purchase_detail'][] = array(
               'purchase_amount' => $purchase_result['purchase_amount'],
               'course_id' => $purchase_result['course_id'],
