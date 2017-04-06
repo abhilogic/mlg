@@ -1092,7 +1092,7 @@ class UsersController extends AppController{
             foreach ($packages as $package) {
                 $data['package'][]= $package;
             }
-            $this->set([           
+            $this->set([
              'response' => $data,
              '_serialize' => ['response']
            ]);
@@ -1705,7 +1705,9 @@ class UsersController extends AppController{
        }
        $connection = ConnectionManager::get('default');
        $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
-         . " user_purchase_items.amount as purchase_amount, packages.name as package_subjects, plans.name as plan_duration,"
+         . " user_purchase_items.amount as purchase_amount, user_purchase_items.level_id as level_id,"
+         . " user_purchase_items.course_id, packages.name as package_subjects,"
+         . " packages.id as package_id, plans.id as plan_id, plans.name as plan_duration,"
          . " courses.course_name"
          . " FROM users"
          . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
@@ -1719,10 +1721,14 @@ class UsersController extends AppController{
          foreach ($purchase_details_result as $purchase_result) {
            $purchase_details['user_first_name'] = $purchase_result['user_first_name'];
            $purchase_details['user_last_name'] = $purchase_result['user_last_name'];
+           $purchase_details['package_id'] = $purchase_result['package_id'];
            $purchase_details['package_subjects'] = $purchase_result['package_subjects'];
+           $purchase_details['plan_id'] = $purchase_result['plan_id'];
            $purchase_details['plan_duration'] = $purchase_result['plan_duration'];
+           $purchase_details['level_id'] = $purchase_result['level_id'];
            $purchase_details['purchase_detail'][] = array(
               'purchase_amount' => $purchase_result['purchase_amount'],
+              'course_id' => $purchase_result['course_id'],
               'course_name' => $purchase_result['course_name'],
            );
          }
@@ -1738,5 +1744,74 @@ class UsersController extends AppController{
       'response' => $purchase_details,
       '_serialize' => ['status', 'message', 'response']
     ]);
+   }
+
+   /**
+    * function upgrade().
+    *
+    */
+   public function upgrade() {
+     $response = array('status' => FALSE, 'message' => '');
+     if ($this->request->is('post')) {
+       try {
+        $total_amount = 0;
+        $data = $this->request->data;
+        $user_id = isset($data['user_id']) ? $data['user_id'] : '';
+        if (!empty($user_id)) {
+          $child_id = $data['child_id'];
+          $courses = $data['updatedCourses'];
+          $package = $data['updatedPackage'];
+          $plan = $data['updatedPlan'];
+
+          //backing up data
+          $connection = ConnectionManager::get('default');
+          $col_names = 'user_id, course_id, plan_id, package_id, level_id, discount, amount, order_date';
+          $backup_sql = 'INSERT INTO user_purchase_history (' . $col_names . ') SELECT '. $col_names .  ' FROM user_purchase_items where user_id =' . $child_id;
+          if (!$connection->execute($backup_sql)) {
+            $message = "unable to save data";
+            throw new Exception('unable to backup');
+          }
+
+          //deleting previous record
+          $delete_sql = 'DELETE FROM user_purchase_items WHERE user_id =' . $child_id;
+          if (!$connection->execute($delete_sql)) {
+            $message = "unable to delete previous record";
+            throw new Exception($message);
+          }
+
+          //insert row
+          foreach ($courses as $course) {
+            $total_amount = $total_amount + ($course['price'] * $package['discount'] * 0.01);
+            $insert_sql = 'INSERT INTO user_purchase_items ('. $col_names .') '
+            . 'VALUES (' . $child_id . ',' . $course['id'] . ',' . $plan['id'] . ',' . $package['id'] . ',' .
+              $course['level_id'] . ',' . $package['discount'] . ',' .  $course['price'] . ',' .
+              time() . ')';
+            if (!$connection->execute($insert_sql)) {
+              $message = "unable to delete previous record";
+              throw new Exception($message);
+            }
+          }
+
+          //updating table on user_order
+           $insert_user_order = 'INSERT INTO user_orders (user_id,course_id,amount,discount,tax,mode,order_date,'
+            . 'status,pg_response,retry,trial_period,card_response) VALUES( '
+            . $user_id . ',' . NULL . ',' . $total_amount . ',' . $package['discount'] . ',' .
+            NULL . ',' . NULL . ',' . time() . ',' . 'done' . ',' . NULL . ',' . NULL . ',' . 0 . ',' . ' card deducted successfully' . ' )';
+           if (!$connection->execute($insert_user_order)) {
+              $message = "unable to delete previous record";
+              throw new Exception($message);
+            }
+            $response['status'] = TRUE;
+        } else {
+          $response['message'] = 'Please login to update';
+        }
+       } catch (Exception $e) {
+         $this->log($e->getMessage(), '(' . __METHOD__ . ')');
+       }
+     }
+     $this->set([
+       'response' => $response,
+      '_serialize' => ['response']
+     ]);
    }
 }
