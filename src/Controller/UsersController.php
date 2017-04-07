@@ -1667,9 +1667,7 @@ class UsersController extends AppController{
     * 
     * **/    
    public function getOffers() { 
-
-   try{
-
+     try{
       $offer_list = array();
       $current_date = Time::now();
       $offers = TableRegistry::get('Offers');
@@ -1790,26 +1788,43 @@ class UsersController extends AppController{
           //insert row
           foreach ($courses as $course) {
             $total_amount = $total_amount + ($course['price'] * $package['discount'] * 0.01);
-            $insert_sql = 'INSERT INTO user_purchase_items ('. $col_names .') '
-            . 'VALUES (' . $child_id . ',' . $course['id'] . ',' . $plan['id'] . ',' . $package['id'] . ',' .
-              $course['level_id'] . ',' . $package['discount'] . ',' .  $course['price'] . ',' .
-              time() . ')';
-            if (!$connection->execute($insert_sql)) {
+            $user_purchase_items = TableRegistry::get('User_purchase_items');
+            $user_purchase_item = $user_purchase_items->newEntity(
+              array(
+                'user_id' => $child_id,
+                'course_id' => $course['id'],
+                'package_id' => $package['id'],
+                'level_id' => $course['level_id'],
+                'plan_id' => $plan['id'],
+                'amount' => $course['price'],
+                'discount' => $package['discount'],
+                'order_date' => date('Y-m-d H:i:s'),
+                )
+            );
+            if (!$user_purchase_items->save($user_purchase_item)) {
               $message = "unable to delete previous record";
               throw new Exception($message);
             }
           }
 
           //updating table on user_order
-           $insert_user_order = 'INSERT INTO user_orders (user_id,course_id,amount,discount,tax,mode,order_date,'
-            . 'status,pg_response,retry,trial_period,card_response) VALUES( '
-            . $user_id . ',' . NULL . ',' . $total_amount . ',' . $package['discount'] . ',' .
-            NULL . ',' . NULL . ',' . time() . ',' . 'done' . ',' . NULL . ',' . NULL . ',' . 0 . ',' . ' card deducted successfully' . ' )';
-           if (!$connection->execute($insert_user_order)) {
-              $message = "unable to delete previous record";
-              throw new Exception($message);
-            }
-            $response['status'] = TRUE;
+          $user_orders = TableRegistry::get('User_orders');
+          $user_order = $user_orders->newEntity(
+            array(
+              'user_id' => $user_id,
+              'amount' => $total_amount,
+              'discount' => $package['discount'],
+              'order_date' => date('Y-m-d H:i:s'),
+              'status' => 'done',
+              'trial_period' => 0,
+              'card_response' => 'card deducted successfully',
+            )
+          );
+          if (!$user_orders->save($user_order)) {
+            $message = "unable to delete previous record";
+            throw new Exception($message);
+          }
+          $response['status'] = TRUE;
         } else {
           $response['message'] = 'Please login to update';
         }
