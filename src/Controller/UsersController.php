@@ -1487,7 +1487,7 @@ class UsersController extends AppController{
          $message = $response = '';
          $status = FALSE;
          $data = $name = array();
-         $Acess_token = 'A21AAFncRxcjh4sv8DOWUPqYpTVX2t3gpffnvDt5BnELBC_DPtGhQzgStys6fsrMWU_dHG6SF5JmtUSggDqYt9I0tVqjy4xhQ';
+         $Acess_token = 'A21AAF7oNUAukQOEJJqBdHRH0Swo1kziXWLWgJdT1B6G_szSCS7TD03McGfTk_izGhsw74q4wkaVfx0iFgR5knp1psUTqipYw';
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
