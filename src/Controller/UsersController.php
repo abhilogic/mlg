@@ -1237,12 +1237,15 @@ class UsersController extends AppController{
               $postdata['role_id']=$this->request->data['role_id'];
               $postdata['status']=$this->request->data['status'];
               $postdata['created']=$this->request->data['created'];
-              $postdata['modified']=$this->request->data['created'];
+              $postdata['modfied']=$this->request->data['created'];
+              $postdata['order_date']=$this->request->data['created'];
               $postdata['promocode_id']=isset($this->request->data['vcode'])?$this->request->data['vcode']:'0'; 
 
               $postdata['package_id']=isset($this->request->data['package_id'])?$this->request->data['package_id']:$data['message'][7]="Please select package for your child";
               $postdata['plan_id']=isset($this->request->data['plan_id'])?$this->request->data['plan_id']:$data['message'][8]="Please slelect Plans for your child";
-              //$postdata['level_id']=$this->request->data['level_id'];
+              $postdata['level_id']=$this->request->data['level_id'];
+
+
 
               $data['message'] = array_filter($data['message']); // to check array is empty array_filter return(0, null)
               if(empty($data['message']) || $data['message']=="" ){
@@ -1291,9 +1294,7 @@ class UsersController extends AppController{
                             $pcode_discountType="";
                           
                            $pcode_discount=$pcodes->first()->discount;
-                           $pcode_discountType=$pcodes->first()->discount_type;
-//die($pcode_discount.'====='.$pcode_discountType);
-                         
+                           $pcode_discountType=$pcodes->first()->discount_type;                         
 
                          // find number of month in selected plan
                          $plans= TableRegistry::get('Plans')->find('all')->where(["id"=>$postdata['plan_id'] ]);
