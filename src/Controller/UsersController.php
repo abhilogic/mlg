@@ -1228,6 +1228,7 @@ class UsersController extends AppController{
               else{
                 $postdata['email']="";
               }
+              
               $postdata['first_name']=isset($this->request->data['first_name'])? $this->request->data['first_name']:$data['message'][2]="First name is require";             
               $postdata['last_name']=isset($this->request->data['last_name'])?$this->request->data['last_name']:$data['message'][3]="Last Name is require"; 
               $postdata['parent_id']=isset($this->request->data['parent_id'])? $this->request->data['parent_id']:$data['message'][4]="The Parent ID has been expired. please Login Again";                          
@@ -1236,15 +1237,22 @@ class UsersController extends AppController{
 
               $postdata['role_id']=$this->request->data['role_id'];
               $postdata['status']=$this->request->data['status'];
-              $postdata['created']=$this->request->data['created'];
-              $postdata['modfied']=$this->request->data['created'];
-              $postdata['order_date']=$this->request->data['created'];
+              //$postdata['created']=$this->request->data['created'];
+              //$postdata['modfied']=$this->request->data['created'];
+              //$postdata['order_date']=$this->request->data['created'];
+
+
+
+              $postdata['created']=time();
+              $postdata['modfied']=time();
+              $postdata['order_date']=time();
+
+
               $postdata['promocode_id']=isset($this->request->data['vcode'])?$this->request->data['vcode']:'0'; 
 
               $postdata['package_id']=isset($this->request->data['package_id'])?$this->request->data['package_id']:$data['message'][7]="Please select package for your child";
               $postdata['plan_id']=isset($this->request->data['plan_id'])?$this->request->data['plan_id']:$data['message'][8]="Please slelect Plans for your child";
               $postdata['level_id']=$this->request->data['level_id'];
-
 
 
               $data['message'] = array_filter($data['message']); // to check array is empty array_filter return(0, null)
@@ -1414,8 +1422,7 @@ class UsersController extends AppController{
           $this->set([           
               'response' => $data,
                '_serialize' => ['response']
-          ]);
-           
+          ]);         
 
        }       
 
