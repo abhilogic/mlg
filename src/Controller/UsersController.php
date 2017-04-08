@@ -69,22 +69,22 @@ class UsersController extends AppController{
         *  Request – Int <UUID>;
     */
     public function getUserDetails($id = null){        
-        $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
+      $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
         if($user_record>0){
               $data['user'] = $this->Users->get($id);
-              $this->set([
-                'data' => $data,
-                '_serialize' => ['data']
-              ]);          
+        $this->set([
+          'data' => $data,
+          '_serialize' => ['data']
+        ]);
 
         }
         else{
-            $data['response'] = "Record is not found";
-            $this->set([
-              'data' => $data,
-              '_serialize' => ['data']
-          ]);
-        }       
+        $data['response'] = "Record is not found";
+        $this->set([
+          'data' => $data,
+          '_serialize' => ['data']
+        ]);
+      }
     }
 
 /*
@@ -1487,7 +1487,7 @@ class UsersController extends AppController{
          $message = $response = '';
          $status = FALSE;
          $data = $name = array();
-         $Acess_token = 'A21AAF7oNUAukQOEJJqBdHRH0Swo1kziXWLWgJdT1B6G_szSCS7TD03McGfTk_izGhsw74q4wkaVfx0iFgR5knp1psUTqipYw';
+         $Acess_token = 'A21AAFVxCyei6_paEC6Tj51DpdEcdiBL1KzrMg8y1L1ZNf5Aik2n7uTGsKoU1rWG7Kn4wdabT1pJpRClRt-WdfX2_TF9cd9jQ';
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
