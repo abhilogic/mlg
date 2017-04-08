@@ -509,13 +509,17 @@ class CoursesController extends AppController{
         $course_id = isset($this->request->data['course_id']) ? $this->request->data['course_id'] : '';
         $file = isset($this->request->data['asset']) ? $this->request->data['asset'] : '';
         if (!empty($course_id)) {
+          $course_details_table = TableRegistry::get('CourseDetails');
+          $course_details = $course_details_table->find()->where(['course_id' => $course_id]);
+          foreach ($course_details as $details) {
+            $course_detail_id = $details->id;
+            break;
+          }
           if (!empty($file['name'])) {
             $course_contents_table = TableRegistry::get('CourseContents');
             $upload_path = 'img/assets/';
-            $resp_msg = $this->_uploadFiles($file, $upload_path, $course_contents_table);
+            $resp_msg = $this->_uploadFiles($file, $upload_path, $course_contents_table, array(),$course_detail_id);
             if ($resp_msg['success'] == TRUE) {
-              $course_details_table = TableRegistry::get('CourseDetails');
-              $course_details = $course_details_table->find()->where(['course_id' => $course_id]);
               if ($course_details->count()) {
                 foreach ($course_details as $course_details_fields) {
                   $course_details_fields->course_content_id = $resp_msg['course_content_id'];
@@ -603,7 +607,7 @@ class CoursesController extends AppController{
      * @return Array
      *   return response.
      */
-    private function _uploadFiles($file, $upload_path, $table = 'default_table', $condition = array()) {
+    private function _uploadFiles($file, $upload_path, $table = 'default_table', $condition = array(), $variable = null) {
       $response = array('success' => FALSE, 'url' => '', 'message' => '');
       $file_name = time() . '_' . $file['name'];
       $file_path = $upload_path . $file_name;
@@ -625,6 +629,7 @@ class CoursesController extends AppController{
             } else {
               $new_entry = $table->newEntity();
               $new_entry->url = $file_path;
+              $new_entry->course_detail_id = !empty($variable) ? $variable : 0;
               if ($table->save($new_entry)) {
                 $response['success'] = TRUE;
                 $response['course_content_id'] = $new_entry->id;
