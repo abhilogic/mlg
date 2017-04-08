@@ -147,7 +147,7 @@ class TeachersController extends AppController {
  /**
   * This api is used for get student detail. 
   **/ 
-  public function getStudentDetail($grade='',$subject='') {
+  public function getStudentDetail($grade='',$subject='',$type) {
     try{
       $user = array();
       $message = '';
@@ -160,10 +160,11 @@ class TeachersController extends AppController {
       }  elseif(empty ($message)){
         $connection = ConnectionManager::get('default');
         $sql = "SELECT * FROM users as user
-          Inner Join user_details as userDetail on user.id = userDetail.user_id 
-          Inner Join user_courses as userCourse on user.id = userCourse.user_id
+          Inner Join user_details as userDetail on user.id = userDetail.user_id
+          Inner Join user_courses as userCourse on user.id = userCourse.user_id 
           Inner Join courses as course on course.id = userCourse.course_id
-          where course.level_id = ".$grade. " AND course.id = ".$subject;
+          Inner Join user_roles as role on user.id = role.user_id
+          where course.level_id = ".$grade. " AND course.id = ".$subject." AND role.role_id = ".$type;
         $result = $connection->execute($sql)->fetchAll('assoc');
         foreach($result as $data) {
           $user_detail['name'] = $data['first_name'].' '.$data['last_name'];
@@ -186,19 +187,22 @@ class TeachersController extends AppController {
   * This api is used for get teacher subject with grade.
   * 
   **/
-  public function getTeacherGradeSubject($user_id='') {
+  public function getTeacherGradeSubject($user_id='',$type) {
     try{
       $connection = ConnectionManager::get('default');
       $status = FALSE;
       $message = '';
       $role_count = 0;
       $level_subject = 'Something goes wrong.';
+      $level = array();
+      $urldata = array();
+      $subject = array();
       if (empty($user_id)) {
         $message = 'user id is not valid';
         throw new Exception('user id is not valid'); 
       }  else { 
         $sql =" SELECT * from user_roles WHERE user_id =".$user_id.
-                " AND role_id = 3 ";
+                " AND role_id = ".$type;
         $result = $connection->execute($sql)->fetchAll('assoc');
         $role_count = count($result);
       }  
@@ -207,11 +211,33 @@ class TeachersController extends AppController {
         $connection = ConnectionManager::get('default');
         $sql =" SELECT level_id,course_id,course_name from courses"
                 . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
-                . " WHERE user_courses.user_id =".$user_id;
-        $level_subject  = $connection->execute($sql)->fetchAll('assoc');
-        $count = count($level_subject);
+                . " WHERE user_courses.user_id =".$user_id." ORDER BY level_id ";
+        $result = $connection->execute($sql)->fetchAll('assoc');
+        $count = count($result);
+        $level_subject = $result;
+        $temp = '';
+        $temp_subj = '';
         if ($count > 0) {
           $status = TRUE;
+          foreach($result as $data) { 
+            if (empty($temp)) {
+              $temp = $data['level_id'];
+              $urldata['level_id'] = $data['level_id'];
+              $urldata['course_id'] = $data['course_id'];
+              $urldata['course_name'] = $data['course_name'];
+              $level['level_id'] = $data['level_id'];
+            }else if($temp != $data['level_id']) {
+              $temp = $data['level_id'];
+              $level['level_id'] = $level['level_id'].','.$data['level_id'];
+            }
+            if (empty($temp_subj)) {
+              $temp_subj = $data['course_id'];
+              $subject['course_name'] = $data['course_name'];
+            }else if($temp_subj!= $data['course_id']) {
+              $temp_subj = $data['course_id'];
+              $subject['course_name'] = $subject['course_name'].','.$data['course_name'];
+            }  
+          }
         }  else {
           $level_subject = 'you have not choosen any subject or grade.';
         } 
@@ -223,7 +249,10 @@ class TeachersController extends AppController {
      $this->set([
       'status' => $status,
       'response' => $level_subject,
-      '_serialize' => ['status','response']
+      'grade' => $level,
+      'subject' => $subject,
+      'urlData' => $urldata, 
+      '_serialize' => ['status','response','grade','subject','urlData']
     ]);
 
   }
