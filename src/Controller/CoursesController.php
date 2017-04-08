@@ -115,48 +115,36 @@ class CoursesController extends AppController{
       try {
         if ($this->request->is(['post'])) {
           $course_id = isset($this->request->data['course_id']) ? $this->request->data['course_id'] : '';
-          $course_code = isset($this->request->data['course_code']) ? $this->request->data['course_code'] : '';
-          $course_name = isset($this->request->data['course_name']) ? $this->request->data['course_name'] : '';
-          $author = isset($this->request->data['author']) ? $this->request->data['author'] : '';
-          $created_by = isset($this->request->data['created_by']) ? $this->request->data['created_by'] : '';
-          $paid = isset($this->request->data['paid']) ? $this->request->data['paid'] : '';
-          $price = isset($this->request->data['price']) ? $this->request->data['price'] : '';
+          $course_content_id = isset($this->request->data['course_content_id']) ? $this->request->data['course_content_id'] : '';
           $name = isset($this->request->data['name']) ? $this->request->data['name'] : '';
           $meta_tags = isset($this->request->data['meta_tags']) ? $this->request->data['meta_tags'] : '';
-          $parent_id = isset($this->request->data['parent_id']) ? $this->request->data['parent_id'] : '';
-          $node_id = isset($this->request->data['node_id']) ? $this->request->data['node_id'] : '';
+          $descriptions = isset($this->request->data['descriptions']) ? $this->request->data['descriptions'] : '';
+          $modified = date('Y-m-d H:i:s');
           $validity = isset($this->request->data['validity']) ? $this->request->data['validity'] : '';
           $status = isset($this->request->data['status']) ? $this->request->data['status'] : '';
-          $descriptions = isset($this->request->data['descriptions']) ? $this->request->data['descriptions'] : '';
           if (!empty($course_id)) {
-            $courses_table = $this->Courses->find()->where(['id' => $course_id]);
-            foreach ($courses_table as $courses) {
-              $courses->course_code = !empty($course_code) ? $course_code : $courses->course_code;
-              $courses->course_name = !empty($course_name) ? $course_name : $courses->course_name;
-              $courses->meta_tags = !empty($meta_tags) ? $meta_tags : $courses->meta_tags;
-              $courses->descriptions = !empty($descriptions) ? $descriptions : $courses->descriptions;
-              $courses->author = !empty($author) ? $author : $courses->author;
-              $courses->created_by = !empty($created_by) ? $created_by : $courses->created_by;
-              $courses->paid = !empty($paid) ? $paid : $courses->paid;
-              $courses->price = !empty($price) ? $price : $courses->price;
-              $courses->modified = time();
-            }
             $course_details_table = TableRegistry::get('CourseDetails');
             $course_details = $course_details_table->find()->where(['course_id' => $course_id]);
+            if ($course_details->count()) {
             foreach ($course_details as $course_detail) {
+              $course_detail->course_content_id = !empty($course_content_id) ? $course_content_id : $course_detail->course_content_id;
               $course_detail->name = !empty($name) ? $name : $course_detail->name;
               $course_detail->meta_tags = !empty($meta_tags) ? $meta_tags : $course_detail->meta_tags;
-              $course_detail->parent_id = !empty($parent_id) ? $parent_id : $course_detail->parent_id;
-              $course_detail->node_id = !empty($node_id) ? $node_id : $course_detail->node_id;
               $course_detail->descriptions = !empty($descriptions) ? $descriptions : $course_detail->descriptions;
               $course_detail->validity = !empty($validity) ? $validity : $course_detail->validity;
               $course_detail->status = !empty($status) ? $status : $course_detail->status;
+              $course_detail->modified = $modified;
             }
-            if ($this->Courses->save($courses) && $course_details_table->save($course_detail)) {
-              $response = TRUE;
+            if ($course_details_table->save($course_detail)) {
+                $response = TRUE;
+              }
+            } else {
+              $data['message'] = "No records found";
+              throw new Exception($data['message']);
             }
           } else {
             $data['message'] = 'Course id could not be empty';
+            throw new Exception($data['message']);
           }
         }
       } catch (Exception $ex) {
@@ -168,7 +156,7 @@ class CoursesController extends AppController{
         '_serialize' => ['response', 'data']
       ));
     }
-    
+
 
       /**
           * S6 - mapContentToCourse
@@ -205,9 +193,6 @@ class CoursesController extends AppController{
           ]);
         }
 
-
-
-
     /**
      * S26 - Desc – Service to create course with lguru.
      * Request –  String<courseName>, Array<meta info>
@@ -217,50 +202,46 @@ class CoursesController extends AppController{
       $data['message'] = '';
       try {
         if ($this->request->is(['post'])) {
+          $level_id = isset($this->request->data['level_id']) ? $this->request->data['level_id'] : '';
           $course_code = isset($this->request->data['course_code']) ? $this->request->data['course_code'] : '';
           $course_name = isset($this->request->data['course_name']) ? $this->request->data['course_name'] : '';
-          $author = isset($this->request->data['author']) ? $this->request->data['author'] : '';
+          $logo = isset($this->request->data['course_logo']) ? $this->request->data['course_logo'] : '';
+          $meta_tags = isset($this->request->data['meta_tags']) ? $this->request->data['meta_tags'] : '';
           $descriptions = isset($this->request->data['descriptions']) ? $this->request->data['descriptions'] : '';
+          $author = isset($this->request->data['author']) ? $this->request->data['author'] : '';
+          $created = $modified = time();
           $created_by = isset($this->request->data['created_by']) ? $this->request->data['created_by'] : '';
           $paid = isset($this->request->data['paid']) ? $this->request->data['paid'] : '';
           $price = isset($this->request->data['price']) ? $this->request->data['price'] : '';
-          $name = isset($this->request->data['name']) ? $this->request->data['name'] : '';
-          $meta_tags = isset($this->request->data['meta_tags']) ? $this->request->data['meta_tags'] : '';
-          $parent_id = isset($this->request->data['parent_id']) ? $this->request->data['parent_id'] : '';
-          $node_id = isset($this->request->data['node_id']) ? $this->request->data['node_id'] : '';
-          $validity = isset($this->request->data['validity']) ? $this->request->data['validity'] : '';
-          $status = isset($this->request->data['status']) ? $this->request->data['status'] : '';
-          $created = $modified = time();
+          $parent_id = isset($this->request->data['parent_id']) ? $this->request->data['parent_id'] : 0;
 
           // Entries for Courses
           $courses = $this->Courses->newEntity();
+          $courses->level_id = $level_id;
           $courses->course_code = $course_code;
           $courses->course_name = $course_name;
+          $courses->logo = $logo;
           $courses->meta_tags = $meta_tags;
           $courses->descriptions = $descriptions;
           $courses->author = $author;
+          $courses->created = $created;
+          $courses->modified = $modified;
           $courses->created_by = $created_by;
           $courses->paid = $paid;
           $courses->price = $price;
-          $courses->created = $created;
-          $courses->modified = $modified;
 
           //Entries for course_details
           $course_details_table = TableRegistry::get('CourseDetails');
           $course_detail = $course_details_table->newEntity();
-          $course_detail->name = $name;
-          $course_detail->meta_tags = $meta_tags;
           $course_detail->parent_id = $parent_id;
-          $course_detail->node_id = $node_id;
-          $course_detail->descriptions = $descriptions;
-          $course_detail->validity = $validity;
-          $course_detail->status = $status;
           $course_detail->created = $created;
           $course_detail->modified = $modified;
           if ($this->Courses->save($courses)) {
             $course_detail->course_id = $courses->id;
             if ($course_details_table->save($course_detail)) {
               $response = TRUE;
+              $this->request->data['course_id'] = $courses->id;
+              $this->setCourseDetails();
             } else {
               $data['message'] = 'Data not saved to course detail';
             }
@@ -537,7 +518,7 @@ class CoursesController extends AppController{
               $course_details = $course_details_table->find()->where(['course_id' => $course_id]);
               if ($course_details->count()) {
                 foreach ($course_details as $course_details_fields) {
-                  $course_details_fields->node_id = $resp_msg['node_id'];
+                  $course_details_fields->course_content_id = $resp_msg['course_content_id'];
                 }
                 if ($course_details_table->save($course_details_fields)) {
                   $response = TRUE;
@@ -646,7 +627,7 @@ class CoursesController extends AppController{
               $new_entry->url = $file_path;
               if ($table->save($new_entry)) {
                 $response['success'] = TRUE;
-                $response['node_id'] = $new_entry->id;
+                $response['course_content_id'] = $new_entry->id;
                 $response['url'] = Router::url('/', true) . $file_path;
               } else {
                 $response['message'] = 'Unable to save url to table';
