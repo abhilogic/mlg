@@ -35,6 +35,16 @@ class CoursesTable extends Table{
             'joinType'  =>  'INNER'
 ]);
 
+        $this->hasOne('CourseDetails', [
+          'foreignKey' => 'course_id',
+          'dependent' => true
+        ]); 
+
+
+        
+
+
+
 
     }
 
