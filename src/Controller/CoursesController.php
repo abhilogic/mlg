@@ -802,6 +802,21 @@ class CoursesController extends AppController{
          ]);
 
      }
+       
+     public function getAllCourseList($parent_id=0){
+      try{
+        $course_details_table = TableRegistry::get('CourseDetails');
+        $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents']);                    
+      }  catch (Exception $e) {
+        $this->log('Error in getAllCourseList function in Courses Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+      }
+      $this->set([           
+         'response' => $course_details,
+         '_serialize' => ['response']
+       ]);
+
+     }
 
 
 }
