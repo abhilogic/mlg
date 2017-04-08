@@ -759,7 +759,7 @@ class CoursesController extends AppController{
      public function getCourseListForLevel($grade=null){
         if($grade!=null){
           $courses_count= $this->Courses->find('all')->where(['level_id'=>$grade])->count();
-          $courses= $this->Courses->find('all')->where(['level_id'=>$grade]);
+          $courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails'=>['CourseContents'] ]);
           if($courses_count>0){
               foreach ($courses as $course) {
                 $data['message']="Records to course level $grade ";

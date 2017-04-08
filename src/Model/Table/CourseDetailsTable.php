@@ -24,10 +24,16 @@ class CourseDetailsTable extends Table{
         $this->addBehavior('Timestamp');
 
 
-        $this->belongsTo('Courses', [
+        /*$this->belongsTo('Courses', [
             'foreignKey' => 'course_id',
             'joinType'  =>  'INNER'
-        ]);          
+        ]);  */ 
+
+
+        $this->hasOne('CourseContents', [
+          'foreignKey' => 'course_detail_id',
+          'dependent' => true
+        ]);       
     }
 
   
