@@ -1298,11 +1298,15 @@ class UsersController extends AppController{
 
                           //promo code Records
                           $pcodes= TableRegistry::get('PromoCodes')->find('all')->where(["id"=> $postdata['promocode_id'] ]);
+                          $pcodesRecordsCount=$pcodes->count();
                             $pcode_discount=0;
                             $pcode_discountType="";
+                             if($pcodesRecordsCount>0){
+                                $pcode_discount=$pcodes->first()->discount;
+                                $pcode_discountType=$pcodes->first()->discount_type;
+                             }
                           
-                           $pcode_discount=$pcodes->first()->discount;
-                           $pcode_discountType=$pcodes->first()->discount_type;                         
+                                                    
 
                          // find number of month in selected plan
                          $plans= TableRegistry::get('Plans')->find('all')->where(["id"=>$postdata['plan_id'] ]);
