@@ -26,7 +26,7 @@ class UsersController extends AppController{
 
     /** Index method    */
     public function index(){
-              
+
         $user = $this->Users->find('all')->contain(['UserDetails']);        
         $this->set(array(
             'data' => $user,
@@ -1480,14 +1480,42 @@ class UsersController extends AppController{
 
        }
 
-      /*
+       /**
+        * function paypalAcessToken
+        *   To generate paypal Acess Token.
+        */
+       public function  paypalAccessToken() {
+
+         $ch = curl_init();
+         curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/oauth2/token");
+         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+         curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=client_credentials");
+         curl_setopt($ch, CURLOPT_POST, 1);
+         curl_setopt($ch, CURLOPT_USERPWD, "AX-eb2b8qhYpvLJs_kw6vnDIYoWYcCzV8-mby7q7gHFA452lqrO95Qm2ivu4hYCt2VDTRTDy5jzLAscD" . ":" . "EC1WXNHIEoBMMvswkRw6LTASVcs5IWX8WV5LSlbQIrnTfTgdBJAZCj8vlwxHraq3SI-c6Pqe_ETpDAii");
+
+         $headers = array();
+         $headers[] = "Accept: application/json";
+         $headers[] = "Accept-Language: en_US";
+         $headers[] = "Content-Type: application/x-www-form-urlencoded";
+         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+         $result = curl_exec($ch);
+         if (curl_errno($ch)) {
+           echo 'Error:' . curl_error($ch);
+         }
+         curl_close ($ch);
+         $result = json_decode($result, TRUE);
+         return $result['access_token'];
+       }
+
+       /*
        * function saveCardToPaypal().
        */
        public function saveCardToPaypal() {
          $message = $response = '';
          $status = FALSE;
          $data = $name = array();
-         $Acess_token = 'A21AAFVxCyei6_paEC6Tj51DpdEcdiBL1KzrMg8y1L1ZNf5Aik2n7uTGsKoU1rWG7Kn4wdabT1pJpRClRt-WdfX2_TF9cd9jQ';
+         $Acess_token = $this->paypalAccessToken();
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
