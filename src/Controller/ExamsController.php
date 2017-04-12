@@ -272,6 +272,85 @@ public function mapItemsToQuiz($examid=null, $sectionid=null) {
 
 
 
+// To add the value of attamped question response in Table user quiz response
+public function setUserQuizResponse(){
+   
+    if ($this->request->is('post')) {
+        $postdata['user_id']    =isset($this->request->data['user_id'])?$this->request->data['user_id']:"null";
+        $postdata['exam_id']    =isset($this->request->data['exam_id'])?$this->request->data['exam_id']:"null";                
+        $postdata['response']   =isset($this->request->data['response'])?$this->request->data['response']:"null";
+        $postdata['correct']    =isset($this->request->data['correct'])?$this->request->data['correct']:"null";
+        $postdata['score']      =isset($this->request->data['score'])?$this->request->data['score']:"null";
+        $postdata['skip_count'] =isset($this->request->data['skip_count'])?$this->request->data['skip_count']:"0";
+        $postdata['time_taken'] =isset($this->request->data['time_taken'])?$this->request->data['time_taken']:"0";
+        $postdata['exam_date']  =time();
+        $item_id =isset($this->request->data['item_id'])?$this->request->data['item_id']:"null";
+
+        
+        if($postdata['user_id']!=null && $postdata['exam_id']!=null && $item_id!=null ){
+            $itemid = explode('-', $item_id);
+            $postdata['item_id']=$itemid[1];
+             
+            $userQuizResponses = TableRegistry::get('UserQuizResponses');
+            $new_userQuizResponse = $userQuizResponses->newEntity($postdata);
+            
+              if ($userQuizResponses->save($new_userQuizResponse)) {
+                $data['message']="Successfull data is save.";
+                $data['status']="true";
+              }else{
+                  $data['message']="opps something is wrong. Sent Data is correct but data is not saved";
+                  $data['message']="false";
+              }
+
+        } 
+        else{
+        $data['message']="user id and exam id is null. Record is ";
+        $data['status']="false";
+      } 
+
+    }else{
+       $data['message']="No record is send to save in user quiz response";
+       $data['status']="false";
+    }
+
+
+      $this->set(array(
+        'response' => $data,
+        '_serialize' => ['response']
+      ));
+}
+
+
+
+
+// To get the quiz Response
+public function getUserQuizResponse($uid=null,$exam_id=null){
+    if(isset($_REQUEST)){
+        $uid=isset($_REQUEST['uid'])?$_REQUEST['uid']:'null';
+        $exam_id=isset($_REQUEST['exam_id'])?$_REQUEST['exam_id']:'null';
+    }
+    if($uid!=null && $exam_id!=null){ 
+        $userQuizResults = TableRegistry::get('UserQuizResponses')->find('all')->where(['user_id' => $uid,'exam_id'=>$exam_id]);
+        $numRecords=$userQuizResults->count();
+        if($numRecords>0){
+            foreach ($userQuizResults as $qresult) {
+                $data['quiz_result']=$qresult;
+                $data['status']="true";
+            }
+
+        }
+    }
+    else{
+      $data['message']="UID and exam_id is null.";
+      $data['status']='false';
+    }
+
+    $this->set(array(
+        'response' => $data,
+        '_serialize' => ['response']
+      ));
+
+  }
 
    
 }// end of class
