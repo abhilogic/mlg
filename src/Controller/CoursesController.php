@@ -850,7 +850,7 @@ class CoursesController extends AppController{
      public function readCSV() {
        $status = FALSE;
        $headers = array('parent_code', 'level_id', 'course_code', 'course_name', 'logo', 'meta_tags',
-                  'descriptions','author', 'created', 'modified', 'created_by', 'paid','price');
+                  'descriptions','author', 'created', 'modified', 'created_by', 'paid','price','name');
        $file =  fopen('abc.csv', 'r');
        $first_row = TRUE;
        while ($row = fgetcsv($file, 256, ',')) {
@@ -876,7 +876,7 @@ class CoursesController extends AppController{
          $course->modified = time();
          $course->created_by = isset($temp['created_by']) ? $temp['created_by'] : '';
          $course->paid = isset($temp['paid']) ? $temp['paid'] : '';
-         $course->price = isset($temp['created_by']) ? $temp['created_by'] : '';
+         $course->price = isset($temp['price']) ? $temp['price'] : '';
          
          
          if ($saved_course = $this->Courses->save($course)) {
