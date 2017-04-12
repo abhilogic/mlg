@@ -233,9 +233,11 @@ class TeachersController extends AppController {
             if (empty($temp_subj)) {
               $temp_subj = $data['course_id'];
               $subject['course_name'] = $data['course_name'];
+              $subject['course_id'] = $data['course_id'];
             }else if($temp_subj!= $data['course_id']) {
               $temp_subj = $data['course_id'];
               $subject['course_name'] = $subject['course_name'].','.$data['course_name'];
+              $subject['course_id'] = $subject['course_id'].','.$data['course_id'];
             }  
           }
         }  else {
@@ -254,7 +256,91 @@ class TeachersController extends AppController {
       'urlData' => $urldata, 
       '_serialize' => ['status','response','grade','subject','urlData']
     ]);
-
+  }
+  
+  public function getTeacherDetailsForLesson($tid,$grade,$subject='',$type){
+   try{
+    $connection = ConnectionManager::get('default');
+    if($subject == '-1') {
+      $sql =" SELECT level_id,course_id,course_name from courses"
+               . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
+               . " WHERE user_courses.user_id =".$tid." AND courses.level_id =".$grade; 
+    }  else {
+      $sql = " SELECT * from course_contents as content "
+              . "INNER JOIN course_details as detail ON content.course_detail_id = detail.course_id "
+              . " WHERE detail.course_id =".$subject;
+    }
+    $result = $connection->execute($sql)->fetchAll('assoc');
+   }catch(Exception $e){
+     $this->log('Error in getTeacherDetailsForContent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+   }
+   $this->set([
+      'response' => $result,
+      '_serialize' => ['response']
+    ]);
+  }
+  public function setContentForLesson(){
+   try{
+     $result = "";
+      if($this->request->is('post')) {
+        print_r('hi');
+      }
+    $connection = ConnectionManager::get('default');
+   }catch(Exception $e){
+     $this->log('Error in getTeacherDetailsForContent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+   }
+   $this->set([
+      'response' => $result,
+      '_serialize' => ['response']
+    ]);
+  }
+  public function readCsv() {
+    try{
+      $status = FALSE;
+      $headers = array('grade', 'subject','lesson','skills', 'sub_skills', 'standard_type', 'standard',
+                 'text_title','text_description', 'video_title', 'video_url', 'image_title', 'image_url');
+      $file =  fopen('../src/View/datalink/physics.csv', 'r');
+      $first_row = TRUE;
+      $course_detail= TableRegistry::get('CourseContents');
+      while ($row = fgetcsv($file,'',':')) {
+        if ($first_row) {
+          $first_row = FALSE;
+          continue;
+        }
+        $temp = array_combine($headers, $row);
+        $detail = $course_detail->newEntity();
+        $detail->name = isset($temp['name']) ? $temp['name'] : '';
+        $detail->text_title = isset($temp['text_title']) ? $temp['text_title'] : '';
+        $detail->text_description = isset($temp['text_description']) ? $temp['text_description'] : '';
+        $detail->video_title = isset($temp['video_title']) ? $temp['video_title'] : '';
+        $detail->video_url = isset($temp['video_url']) ? $temp['video_url'] : '';
+        $detail->image_title = isset($temp['image_title']) ? $temp['image_title'] : '';
+        $detail->image_url = isset($temp['image_url']) ? $temp['image_url'] : '';
+        $skill = explode(',', $temp['skills']);
+        if(count($skill)>0) {
+          foreach ($skill as $value) {
+             $detail->id = '';
+            $detail->course_detail_id = $value; 
+            $saved = $course_detail->save($detail);
+          }
+          
+        }
+        $sub_skill = explode(',', $temp['sub_skills']);
+        if(count($sub_skill)>0) {
+          foreach ($sub_skill as $value) {
+             $detail->id = '';
+            $detail->course_detail_id = $value; 
+            $saved = $course_detail->save($detail);
+          }
+          
+        }
+      }
+    }  catch (Exception $e) {
+      
+    }
+    
   }
 }
 
