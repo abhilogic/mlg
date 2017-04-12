@@ -862,7 +862,7 @@ class CoursesController extends AppController{
          $parent_id = 0;
          if ($temp['parent_code'] != 'NULL') {
            $course_code = $temp['course_code'];
-           $parent_id = $this->Courses->find()->select('id')->where(['course_code' => $parent_code]);
+           $parent_id = $this->Courses->find()->select('id')->where(['course_code' => $temp['parent_code']]);
          }
          $course = $this->Courses->newEntity();
          $course->level_id = isset($temp['level_id']) ? $temp['level_id'] : '';
