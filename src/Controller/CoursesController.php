@@ -850,7 +850,7 @@ class CoursesController extends AppController{
      public function readCSV() {
        $status = FALSE;
        $headers = array('parent_code', 'level_id', 'course_code', 'course_name', 'logo', 'meta_tags',
-                  'descriptions','author', 'created', 'modified', 'created_by', 'paid','price','name');
+                  'descriptions','author', 'created', 'modified', 'created_by', 'paid','price');
        $file =  fopen('abc.csv', 'r');
        $first_row = TRUE;
        while ($row = fgetcsv($file, 256, ',')) {
@@ -861,8 +861,11 @@ class CoursesController extends AppController{
          $temp = array_combine($headers, $row);
          $parent_id = 0;
          if ($temp['parent_code'] != 'NULL') {
-           $course_code = $temp['course_code'];
-           $parent_id = $this->Courses->find()->select('id')->where(['course_code' => $temp['parent_code']])->first()->toArray()['id'];
+           $parent_course = $this->Courses->find()->select('id')->where(['course_code' => $temp['parent_code']])->limit(1)->toArray();
+           foreach ($parent_course as $parent) {
+             $parent_id = $parent->id;
+             break;
+           }
          }
          $course = $this->Courses->newEntity();
          $course->level_id = isset($temp['level_id']) ? $temp['level_id'] : '';
@@ -884,7 +887,7 @@ class CoursesController extends AppController{
            $course_detail = $course_details_table->newEntity();
            $course_detail->course_id = $saved_course->id;
            $course_detail->course_content_id = isset($temp['course_content_id']) ? $temp['course_content_id'] : '';
-           $course_detail->name = isset($temp['name']) ? $temp['name'] : '';
+           $course_detail->name = isset($temp['course_name']) ? $temp['course_name'] : '';
            $course_detail->meta_tags = isset($temp['meta_tags']) ? $temp['meta_tags'] : '';
            $course_detail->descriptions = isset($temp['descriptions']) ? $temp['descriptions'] : '';
            $course_detail->modified = time();
