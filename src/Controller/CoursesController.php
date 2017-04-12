@@ -859,6 +859,9 @@ class CoursesController extends AppController{
            continue;
          }
          $temp = array_combine($headers, $row);
+         if ($this->Courses->find()->where(['course_code' => $temp['course_code']])->count()) {
+           continue;
+         }
          $parent_id = 0;
          if ($temp['parent_code'] != 'NULL') {
            $parent_course = $this->Courses->find()->select('id')->where(['course_code' => $temp['parent_code']])->limit(1)->toArray();
