@@ -257,7 +257,9 @@ class TeachersController extends AppController {
       '_serialize' => ['status','response','grade','subject','urlData']
     ]);
   }
-  
+  /**
+   * this function is used for fetch teacher detail regarding to their grade.
+   **/
   public function getTeacherDetailsForLesson($tid,$grade,$subject='',$type){
    try{
     $connection = ConnectionManager::get('default');
@@ -280,6 +282,11 @@ class TeachersController extends AppController {
       '_serialize' => ['response']
     ]);
   }
+  
+  /**
+   * this function is used for add lesson.
+   **/
+  
   public function setContentForLesson(){
    try{
      $result = "";
@@ -296,6 +303,12 @@ class TeachersController extends AppController {
       '_serialize' => ['response']
     ]);
   }
+  
+ /**
+  * This function is used for read csv for add lesson.
+  * 
+  **/
+  
   public function readCsv() {
     try{
       $status = FALSE;
@@ -309,36 +322,52 @@ class TeachersController extends AppController {
           $first_row = FALSE;
           continue;
         }
+        $id = 0;
         $temp = array_combine($headers, $row);
-        $detail = $course_detail->newEntity();
-        $detail->name = isset($temp['name']) ? $temp['name'] : '';
-        $detail->text_title = isset($temp['text_title']) ? $temp['text_title'] : '';
-        $detail->text_description = isset($temp['text_description']) ? $temp['text_description'] : '';
-        $detail->video_title = isset($temp['video_title']) ? $temp['video_title'] : '';
-        $detail->video_url = isset($temp['video_url']) ? $temp['video_url'] : '';
-        $detail->image_title = isset($temp['image_title']) ? $temp['image_title'] : '';
-        $detail->image_url = isset($temp['image_url']) ? $temp['image_url'] : '';
         $skill = explode(',', $temp['skills']);
         if(count($skill)>0) {
           foreach ($skill as $value) {
-             $detail->id = '';
+            if($id != 0) {
+              $detail->id = $id+1;
+            } 
+            $detail = $course_detail->newEntity();
+            $detail->name = isset($temp['lesson']) ? $temp['lesson'] : '';
+            $detail->text_title = isset($temp['text_title']) ? $temp['text_title'] : '';
+            $detail->text_description = isset($temp['text_description']) ? $temp['text_description'] : '';
+            $detail->video_title = isset($temp['video_title']) ? $temp['video_title'] : '';
+            $detail->video_url = isset($temp['video_url']) ? $temp['video_url'] : '';
+            $detail->image_title = isset($temp['image_title']) ? $temp['image_title'] : '';
+            $detail->image_url = isset($temp['image_url']) ? $temp['image_url'] : '';
             $detail->course_detail_id = $value; 
-            $saved = $course_detail->save($detail);
-          }
-          
+            if($course_detail->save($detail)){
+              $id = $detail->id;
+            }
+          }  
         }
         $sub_skill = explode(',', $temp['sub_skills']);
         if(count($sub_skill)>0) {
           foreach ($sub_skill as $value) {
-             $detail->id = '';
+            if($id != 0) {
+              $detail->id = $id+1;
+            } 
+            $detail = $course_detail->newEntity();
+            $detail->name = isset($temp['lesson']) ? $temp['lesson'] : '';
+            $detail->text_title = isset($temp['text_title']) ? $temp['text_title'] : '';
+            $detail->text_description = isset($temp['text_description']) ? $temp['text_description'] : '';
+            $detail->video_title = isset($temp['video_title']) ? $temp['video_title'] : '';
+            $detail->video_url = isset($temp['video_url']) ? $temp['video_url'] : '';
+            $detail->image_title = isset($temp['image_title']) ? $temp['image_title'] : '';
+            $detail->image_url = isset($temp['image_url']) ? $temp['image_url'] : '';
             $detail->course_detail_id = $value; 
-            $saved = $course_detail->save($detail);
-          }
-          
+            if($course_detail->save($detail)){
+              $id = $detail->id;
+            }
+          }  
         }
       }
     }  catch (Exception $e) {
-      
+      $this->log('Error in getTeacherDetailsForContent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
     }
     
   }
