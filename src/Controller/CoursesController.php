@@ -804,5 +804,102 @@ class CoursesController extends AppController{
 
      }
 
+     /**
+      * function getCourseAllDetails.
+      * This function will fetch all contents , details regarding course id.
+      */
+     public function getCourseAllDetails($course_id = null) {
+       try {
+         $message = '';
+         $data = array();
+         if ($course_id == NULL) {
+           $message = 'Course Id could not be empty';
+           throw new Exception($message);
+         }
+         $course_details_table = TableRegistry::get('CourseDetails');
+         $course_details = $course_details_table->find('all')->where(['course_id' => $course_id]);
+         $data['course_details'] = $course_details->toArray();
+         if ($course_details->count()) {
+           $course_detail_id = '';
+           foreach ($course_details as $course_detail) {
+             $course_detail_id = $course_detail->id;
+           }
+           $course_contents_table = TableRegistry::get('CourseContents');
+           $course_contents = $course_contents_table->find('all')->where(['course_detail_id' => $course_detail_id]);
+           if ($course_contents->count()) {
+             $data['course_contents'] = $course_contents->toArray();
+           } else {
+             $message = "No related content found regrading course";
+             throw new Exception($message);
+           }
+         } else {
+           $message = "No related content found regrading course";
+           throw new Exception($message);
+         }
+       } catch (Exception $e) {
+         $this->log($e->getMessage() . '(' . __METHOD__ . ')', 'error');
+       }
+       $this->set([
+         'data' => $data,
+         'message' => $message,
+         '_serialize' => ['data', 'message']
+       ]);
 
+     }
+
+     public function readCSV() {
+       $status = FALSE;
+       $headers = array('parent_code', 'level_id', 'course_code', 'course_name', 'logo', 'meta_tags',
+                  'descriptions','author', 'created', 'modified', 'created_by', 'paid','price');
+       $file =  fopen('abc.csv', 'r');
+       $first_row = TRUE;
+       while ($row = fgetcsv($file, 256, ',')) {
+         if ($first_row) {
+           $first_row = FALSE;
+           continue;
+         }
+         $temp = array_combine($headers, $row);
+         $parent_id = 0;
+         if ($temp['parent_code'] != 'NULL') {
+           $course_code = $temp['course_code'];
+           $parent_id = $this->Courses->find()->select('id')->where(['course_code' => $parent_code]);
+         }
+         $course = $this->Courses->newEntity();
+         $course->level_id = isset($temp['level_id']) ? $temp['level_id'] : '';
+         $course->course_code = isset($temp['course_code']) ? $temp['course_code'] : '';
+         $course->course_name = isset($temp['course_name']) ? $temp['course_name'] : '';
+         $course->logo = isset($temp['logo']) ? $temp['logo'] : '';
+         $course->meta_tags = isset($temp['meta_tags']) ? $temp['meta_tags'] : '';
+         $course->descriptions = isset($temp['descriptions']) ? $temp['descriptions'] : '';
+         $course->author = isset($temp['author']) ? $temp['author'] : '';
+         $course->created = time();
+         $course->modified = time();
+         $course->created_by = isset($temp['created_by']) ? $temp['created_by'] : '';
+         $course->paid = isset($temp['paid']) ? $temp['paid'] : '';
+         $course->price = isset($temp['created_by']) ? $temp['created_by'] : '';
+         
+         
+         if ($saved_course = $this->Courses->save($course)) {
+           $course_details_table = TableRegistry::get('CourseDetails');
+           $course_detail = $course_details_table->newEntity();
+           $course_detail->course_id = $saved_course->id;
+           $course_detail->course_content_id = isset($temp['course_content_id']) ? $temp['course_content_id'] : '';
+           $course_detail->name = isset($temp['name']) ? $temp['name'] : '';
+           $course_detail->meta_tags = isset($temp['meta_tags']) ? $temp['meta_tags'] : '';
+           $course_detail->descriptions = isset($temp['descriptions']) ? $temp['descriptions'] : '';
+           $course_detail->modified = time();
+           $course_detail->validity = isset($temp['validity']) ? $temp['validity'] : '';
+           $course_detail->status = isset($temp['status']) ? $temp['status'] : '';
+           $course_detail->parent_id = $parent_id;
+           $course_details_table->save($course_detail);
+           $status = TRUE;
+         }
+         
+       }
+       fclose($file);
+        $this->set([
+         'status' => $status,
+         '_serialize' => ['status']
+       ]);
+   }
 }
