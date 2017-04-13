@@ -280,6 +280,7 @@ public function setUserQuizResponse(){
         $postdata['exam_id']    =isset($this->request->data['exam_id'])?$this->request->data['exam_id']:"null";                
         $postdata['response']   =isset($this->request->data['response'])?$this->request->data['response']:"null";
         $postdata['correct']    =isset($this->request->data['correct'])?$this->request->data['correct']:"null";
+        $postdata['item_marks'] =isset($this->request->data['item_marks'])?$this->request->data['item_marks']:"0";
         $postdata['score']      =isset($this->request->data['score'])?$this->request->data['score']:"null";
         $postdata['skip_count'] =isset($this->request->data['skip_count'])?$this->request->data['skip_count']:"0";
         $postdata['time_taken'] =isset($this->request->data['time_taken'])?$this->request->data['time_taken']:"0";
@@ -301,7 +302,6 @@ public function setUserQuizResponse(){
                   $data['message']="opps something is wrong. Sent Data is correct but data is not saved";
                   $data['message']="false";
               }
-
         } 
         else{
         $data['message']="user id and exam id is null. Record is ";
@@ -312,7 +312,6 @@ public function setUserQuizResponse(){
        $data['message']="No record is send to save in user quiz response";
        $data['status']="false";
     }
-
 
       $this->set(array(
         'response' => $data,
@@ -329,15 +328,38 @@ public function getUserQuizResponse($uid=null,$exam_id=null){
         $uid=isset($_REQUEST['uid'])?$_REQUEST['uid']:'null';
         $exam_id=isset($_REQUEST['exam_id'])?$_REQUEST['exam_id']:'null';
     }
-    if($uid!=null && $exam_id!=null){ 
+
+    
+    if($uid!=null && $exam_id!=null){       
         $userQuizResults = TableRegistry::get('UserQuizResponses')->find('all')->where(['user_id' => $uid,'exam_id'=>$exam_id]);
         $numRecords=$userQuizResults->count();
+        $correct_count=0;
+        $wrong_count=0;
+        $exam_marks=0;
+        $student_score=0;
+
         if($numRecords>0){
             foreach ($userQuizResults as $qresult) {
-                $data['quiz_result']=$qresult;
-                $data['status']="true";
-            }
+                if($qresult['correct']==0)
+                     $wrong_count++;                
+                else
+                    $correct_count++;                
 
+                $data['results'][]=$qresult;                
+                $exam_marks= $exam_marks+($qresult['item_marks']);
+                $student_score=$student_score+($qresult['score']);                               
+            } 
+            $data['status']="true";
+            $data['correct_questions']=$correct_count;
+            $data['wrong_questions']=$wrong_count;
+            $data['exam_marks']=$exam_marks;
+            $data['student_score']=$student_score;
+            $data['student_result']=(($student_score/$exam_marks)*(100)).'%';
+
+
+        }else{
+            $data['message']="No record Found";
+            $data['status']="false";
         }
     }
     else{
