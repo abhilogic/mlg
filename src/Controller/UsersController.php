@@ -26,7 +26,7 @@ class UsersController extends AppController{
 
     /** Index method    */
     public function index(){
-
+     
         $user = $this->Users->find('all')->contain(['UserDetails']);        
         $this->set(array(
             'data' => $user,
@@ -1876,4 +1876,43 @@ class UsersController extends AppController{
       '_serialize' => ['response']
      ]);
    }
+
+   /** guestLogin().
+    */
+    public function guestLogin() {
+      try {
+        $status = 0;
+        $message = '';
+        if ($this->request->is('post')) {
+          $guest_session = TableRegistry::get('Guest_session');
+          $existed_guest = $guest_session->find()->where(['ip' => $this->request->data['user_ip']]);
+          if ($existed_guest->count()) {
+            $status = -1;
+            $message = 'Trial already Taken';
+          } else {
+            $new_guest = $guest_session->newEntity(array(
+              'username' => $this->request->data['username'],
+              'grade' => $this->request->data['levelchoice']['id'],
+              'ip' => $this->request->data['user_ip'],
+              'created' => time()
+              )
+            );
+            if ($guest_session->save($new_guest)) {
+              $status = 1;
+              $message = 'Your Guest session started';
+            }
+          }
+        }
+      } catch (Exception $ex) {
+        $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      }
+      $this->set([
+        'user' => $this->request->data['username'],
+        'user_id' => isset($new_guest->id) ? $new_guest->id : '',
+        'status' => $status,
+        'message' => $message,
+        '_serialize' => ['user', 'user_id', 'status', 'message']
+      ]);
+    }
+
 }
