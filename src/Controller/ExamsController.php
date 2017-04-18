@@ -173,7 +173,7 @@ class ExamsController extends AppController{
           $examid=isset($_REQUEST['exam_id'])? $_REQUEST['exam_id']:'null';
           $uid=isset($_REQUEST['uid'])?$_REQUEST['uid']:'null';
       }
-      $data['status'] = 0;
+      $data['status'] = 1;
       if($examid!=null && $uid!=null){
           $data['message']= "Score of UserID $uid for examId $examid";
           $userQuizes = TableRegistry::get('UserQuizes');
