@@ -169,6 +169,11 @@ class ExamsController extends AppController{
         *Request –  String<quizID>, Int<UUID>
     */
   public function getUserScoreForQuiz($examid=null, $uid=null) {
+      if (isset($_REQUEST)){
+          $examid=isset($_REQUEST['exam_id'])? $_REQUEST['exam_id']:'null';
+          $uid=isset($_REQUEST['uid'])?$_REQUEST['uid']:'null';
+      }
+      $data['status'] = 0;
       if($examid!=null && $uid!=null){
           $data['message']= "Score of UserID $uid for examId $examid";
           $userQuizes = TableRegistry::get('UserQuizes');
@@ -251,8 +256,8 @@ public function mapItemsToQuiz($examid=null, $sectionid=null) {
 
         foreach ($examitems as $examitem) {
           $data['quiz_items'][]=$examitem;
-        }
-    }
+  }
+                }
     elseif($examid!=null){
         $data['message']= "Items for examId $examid";
         $examitems= $examItems->find()->contain(['ExamSections','Items'])->where(['ExamSections.exam_id'=>$examid]);
@@ -374,7 +379,7 @@ public function getUserQuizResponse($uid=null,$exam_id=null){
 
   }
 
-   
+
 }// end of class
 
 
