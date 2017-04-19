@@ -326,11 +326,11 @@ public function setUserQuizResponse(){
                       $new_userQuizResponse = $userQuizResponses->newEntity($postdata);
                       if ($userQuizResponses->save($new_userQuizResponse)) {
                         $data['message']="add data in user responnse table";
-                        $data['status']=1;
+                        $data['status']="true";
                       }
                       else{
                           $data['message']="add data in user responnse table";
-                          $data['status']=0;
+                          $data['status']="false";
                        }
                   }
               }else{
