@@ -326,10 +326,12 @@ public function setUserQuizResponse(){
                       $new_userQuizResponse = $userQuizResponses->newEntity($postdata);
                       if ($userQuizResponses->save($new_userQuizResponse)) {
                         $data['message']="add data in user responnse table";
+                        $data['quiz_attampt']=$postdata['user_quiz_id'];
                         $data['status']="true";
                       }
                       else{
-                          $data['message']="add data in user responnse table";
+                          $data['message']="No data add in user quiz response table";
+                          $data['quiz_attampt']=$postdata['user_quiz_id'];
                           $data['status']="false";
                        }
                   }
@@ -354,33 +356,37 @@ public function setUserQuizResponse(){
 
 
 // To get the quiz Response
-public function getUserQuizResponse($uid=null,$exam_id=null){
+public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
 
     if(!empty($_REQUEST)){
         $uid=isset($_REQUEST['user_id'])?$_REQUEST['user_id']:null;
         $exam_id=isset($_REQUEST['exam_id'])?$_REQUEST['exam_id']:null;
+         $quiz_id=isset($_REQUEST['quiz_id'])?$_REQUEST['quiz_id']:null;
     }
 
     
     if($uid!=null){
         $UserQuizResponses = TableRegistry::get('UserQuizResponses') ;       
 
-        if($exam_id==null){         
+        if($exam_id==null && $quiz_id==null){         
            $results= $UserQuizResponses->find('all')->where(['user_id' => $uid]);
             $rowcount=$results->count();
            
                if($rowcount>0){
                   $lastrow=$results->last();
                   $exam_id=$lastrow->exam_id;
+                  $quiz_id=$lastrow->quiz_id;
                }
                else{
                   $exam_id=0;
+                  $quiz_id=0;
                }
         }
 
 
-        $userQuizResults = $UserQuizResponses->find('all')->where(['user_id' => $uid,'exam_id'=>$exam_id]);
+        $userQuizResults = $UserQuizResponses->find()->where(['user_id' => $uid,'exam_id'=>$exam_id,'user_quiz_id'=>$quiz_id]);
         $numRecords=$userQuizResults->count();
+
         $correct_count=0;
         $wrong_count=0;
         $exam_marks=0;
@@ -388,21 +394,32 @@ public function getUserQuizResponse($uid=null,$exam_id=null){
 
         if($numRecords>0){
             foreach ($userQuizResults as $qresult) {
+              
                 if($qresult['correct']==0)
-                     $wrong_count++;                
+                    { $wrong_count++;  }              
                 else
-                    $correct_count++;                
+                   { $correct_count++; }
 
-                $data['results'][]=$qresult;                
+                       
+
+                //$data['results'][]=$qresult;                
                 $exam_marks= $exam_marks+($qresult['item_marks']);
-                $student_score=$student_score+($qresult['score']);                               
+                $student_score=$student_score+($qresult['score']);
+
+                     // pr($qresult['correct']);
+
+
             } 
+
+           
             $data['status']="true";
             $data['correct_questions']=$correct_count;
             $data['wrong_questions']=$wrong_count;
             $data['exam_marks']=$exam_marks;
             $data['student_score']=$student_score;
-            $data['student_result']=(($student_score/$exam_marks)*(100));         
+            $data['student_result']=(int)(($student_score/$exam_marks)*(100));
+
+                    
 
 
         }else{
