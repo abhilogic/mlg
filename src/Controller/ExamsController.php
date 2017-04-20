@@ -366,16 +366,18 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
 
     
     if($uid!=null){
-        $UserQuizResponses = TableRegistry::get('UserQuizResponses') ;       
+        $UserQuizResponses = TableRegistry::get('UserQuizResponses') ;           
 
-        if($exam_id==null && $quiz_id==null){         
+       if($exam_id=='null' && $quiz_id=='null'){ 
+              
+
            $results= $UserQuizResponses->find('all')->where(['user_id' => $uid]);
-            $rowcount=$results->count();
-           
+            $rowcount=$results->count();        
+
                if($rowcount>0){
                   $lastrow=$results->last();
                   $exam_id=$lastrow->exam_id;
-                  $quiz_id=$lastrow->quiz_id;
+                  $quiz_id=$lastrow->user_quiz_id;
                }
                else{
                   $exam_id=0;
@@ -383,9 +385,12 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
                }
         }
 
+  
 
         $userQuizResults = $UserQuizResponses->find()->where(['user_id' => $uid,'exam_id'=>$exam_id,'user_quiz_id'=>$quiz_id]);
         $numRecords=$userQuizResults->count();
+
+
 
         $correct_count=0;
         $wrong_count=0;
