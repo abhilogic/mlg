@@ -792,16 +792,24 @@ class CoursesController extends AppController{
      public function getAllCourseList($parent_id=0){
       try{
         $course_details_table = TableRegistry::get('CourseDetails');
-        $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents']);                    
+        $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents', 'ContentCategories'])->toArray();
       }  catch (Exception $e) {
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
-      $this->set([           
-         'response' => $course_details,
+      $khan_api_slugs = array();
+      foreach ($course_details as $course_detail) {
+        if (isset($course_detail['content_category']) && !empty($course_detail['content_category'])) {
+          $content = $course_detail['content_category'];
+          if (trim($content['source']) == 'khan_api') {
+            $khan_api_slugs[] = $content['slug'];
+          }
+        }
+      }
+      $this->set([
+         'response' => ['course_details' => $course_details, 'khan_api_slugs' => $khan_api_slugs],
          '_serialize' => ['response']
        ]);
-
      }
 
      /**
