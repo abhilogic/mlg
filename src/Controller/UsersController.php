@@ -26,7 +26,7 @@ class UsersController extends AppController{
 
     /** Index method    */
     public function index(){
-     
+
         $user = $this->Users->find('all')->contain(['UserDetails']);        
         $this->set(array(
             'data' => $user,
@@ -1884,6 +1884,23 @@ class UsersController extends AppController{
         $status = 0;
         $message = '';
         if ($this->request->is('post')) {
+          if (empty($this->request->data['username'])) {
+            $message = 'User name cannot be empty';
+            throw new Exception($message);
+          }
+          if (empty($this->request->data['levelchoice']['id'])) {
+            $message = 'Grade cannot be empty';
+            throw new Exception($message);
+          }
+          $email = $this->request->data['email'];
+          if (empty($email)) {
+            $message = 'Email cannot be empty';
+            throw new Exception($message);
+          }
+          if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $message = 'Email is not valid';
+            throw new Exception($message);
+          }
           $guest_session = TableRegistry::get('Guest_session');
           $existed_guest = $guest_session->find()->where(['ip' => $this->request->data['user_ip']]);
           if ($existed_guest->count()) {
@@ -1892,6 +1909,7 @@ class UsersController extends AppController{
           } else {
             $new_guest = $guest_session->newEntity(array(
               'username' => $this->request->data['username'],
+              'email' => $email,
               'grade' => $this->request->data['levelchoice']['id'],
               'ip' => $this->request->data['user_ip'],
               'created' => time()
