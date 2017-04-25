@@ -812,67 +812,61 @@ class UsersController extends AppController{
              $sms_subscription = isset($post_data['sms']) ? $post_data['sms'] : 0;
              $user_id = isset($post_data['user_id']) ? $post_data['user_id'] : 0;
              if (!empty($frequency)) {
-               if (!empty($mobile)) {
-                 if (preg_match('/^[0-9]{10}$/', $mobile)) {
-                   $user_preference = TableRegistry::get('UserPreferences');
-                   $is_existed_preference = $user_preference->find()->where(['user_id' => $user_id]);
-                   $preference_data = array();
-                   if ($is_existed_preference->count()) {
-                     foreach ($is_existed_preference as $preference_data) {
-                       $preference_data->mobile = $mobile;
-                       $preference_data->frequency = $frequency;
-                       $preference_data->sms_subscription = $sms_subscription;
-                       $preference_data->time = time();
-                     }
-                   } else {
-                     $preference_data = $user_preference->newEntity();
-                     $preference_data['mobile'] = $mobile;
-                     $preference_data['user_id'] = $user_id;
-                     $preference_data['frequency'] = $frequency;
-                     $preference_data['sms_subscription'] = $sms_subscription;
-                     $preference_data['time'] = time();
-                   }
-                   if ($user_preference->save($preference_data)) {
-                      $user_details = TableRegistry::get('UserDetails');
-                      $query = $user_details->query();
-                      $result=  $query->update()
-                              ->set(['step_completed'=>3])
-                              ->where(['user_id' => $user_id])
-                              ->execute();
-                      $affectedRows = $result->rowCount();
-
-                      if($affectedRows>0)
-                              $status = TRUE;
-
-                     if (!empty($sms_subscription)) {
-                       $username = 'abhishek@apparrant.com';
-                       $api_hash = '623e0140ced100da648065a6583b6cfccf29d5fb16c024be9d5723ea2fe6adf3';
-                       $sms_msg = 'Your Preferences are saved successfully @team MLG';
-                       $sms_response = $this->sendSms($username, $api_hash, array($mobile), $sms_msg);
-                       if ($sms_response['status'] == 'failure') {
-                         if (isset ($sms_response['warnings'][0]['message'])) {
-                           if ($sms_response['warnings'][0]['message'] == 'Number is in DND') {
-                             $sms_response['warnings'][0]['message'].= '. Please Remove DND to receive our messages';
-                           }
-                           $warning = TRUE;
-                           $message = $sms_response['warnings'][0]['message'];
-                         } else {
-                           $message = 'Unable to send message, Kindly contact to the administrator';
-                           throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
-                         }
-                       }
-                     }
-                   } else {
-                     $message = 'Some error occured';
-                     throw new Exception('Unable to save data');
-                   }
-                 } else {
-                   $message = 'Please enter valid mobile number';
-                   throw new Exception('not valid mobile number');
+               if (!empty($mobile) && !preg_match('/^[0-9]{10}$/', $mobile)) {
+                 $message = 'Please enter valid mobile number';
+                 throw new Exception('not valid mobile number');
+               }
+               $user_preference = TableRegistry::get('UserPreferences');
+               $is_existed_preference = $user_preference->find()->where(['user_id' => $user_id]);
+               $preference_data = array();
+               if ($is_existed_preference->count()) {
+                 foreach ($is_existed_preference as $preference_data) {
+                   $preference_data->mobile = $mobile;
+                   $preference_data->frequency = $frequency;
+                   $preference_data->sms_subscription = $sms_subscription;
+                   $preference_data->time = time();
                  }
                } else {
-                 $message = 'Please enter mobile number';
-                 throw new Exception('Mobile number can not be blank');
+                 $preference_data = $user_preference->newEntity();
+                 $preference_data['mobile'] = $mobile;
+                 $preference_data['user_id'] = $user_id;
+                 $preference_data['frequency'] = $frequency;
+                 $preference_data['sms_subscription'] = $sms_subscription;
+                 $preference_data['time'] = time();
+               }
+               if ($user_preference->save($preference_data)) {
+                 $user_details = TableRegistry::get('UserDetails');
+                 $query = $user_details->query();
+                 $result=  $query->update()
+                   ->set(['step_completed'=>3])
+                   ->where(['user_id' => $user_id])
+                   ->execute();
+                 $affectedRows = $result->rowCount();
+
+                 if($affectedRows>0)
+                   $status = TRUE;
+
+                 if (!empty($sms_subscription)) {
+                   $username = 'abhishek@apparrant.com';
+                   $api_hash = '623e0140ced100da648065a6583b6cfccf29d5fb16c024be9d5723ea2fe6adf3';
+                   $sms_msg = 'Your Preferences are saved successfully @team MLG';
+                   $sms_response = $this->sendSms($username, $api_hash, array($mobile), $sms_msg);
+                   if ($sms_response['status'] == 'failure') {
+                     if (isset ($sms_response['warnings'][0]['message'])) {
+                       if ($sms_response['warnings'][0]['message'] == 'Number is in DND') {
+                         $sms_response['warnings'][0]['message'].= '. Please Remove DND to receive our messages';
+                       }
+                       $warning = TRUE;
+                       $message = $sms_response['warnings'][0]['message'];
+                     } else {
+                       $message = 'Unable to send message, Kindly contact to the administrator';
+                       throw new Exception('Error code:' . $sms_response['errors'][0]['code'] . ' Message:' .  $sms_response['errors'][0]['message']);
+                     }
+                   }
+                 }
+               } else {
+                 $message = 'Some error occured';
+                 throw new Exception('Unable to save data');
                }
              } else {
                $message = 'Please choose the frequency for the report';
