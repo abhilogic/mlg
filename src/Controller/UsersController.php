@@ -268,7 +268,6 @@ class UsersController extends AppController{
       try {
         $message = '';
         $data['response'] = FALSE;
-        header("HTTP/1.1 500 ERROR");
         if ($this->request->is(['post', 'put'])) {
           $user = $this->Users->newEntity($this->request->data);
 
@@ -319,11 +318,8 @@ class UsersController extends AppController{
             $message = 'password not match';
             throw new Exception('Pregmatch not matched for Username');
           }
-          // if (!preg_match('/^[0-9]{10}$/', $user['mobile'])) {
-          //   $message = 'Mobile number is not valid';
-          //   throw new Exception($message);
-          // }
           $user['status'] = 0;
+          $user['subscription_end_date'] = time() + 60 * 60 * 24 * $user['subscription_days'];
           $user['created'] = $user['modfied'] = time();
           $userroles = TableRegistry::get('UserRoles');
           $userdetails = TableRegistry::get('UserDetails');
@@ -350,15 +346,17 @@ class UsersController extends AppController{
 
               $this->sendEmail($to, $from, $subject, $email_message);
 
-              header("HTTP/1.1 200 OK");
               $message = 'User registered successfuly';
               $data['response'] = TRUE;
             } else {
+              $entity = $this->Users->get($user_id);
+              $this->Users->delete($entity);
               $message = 'Some error occured during registration';
-              throw new Exception('Unnable to save user roles');
+              throw new Exception('Unable to save user roles');
             }
           } else {
             $message = 'Some error occured during registration';
+            throw new Exception('Unable to save user');
           }
         }
       } catch (Exception $e) {
@@ -496,17 +494,33 @@ class UsersController extends AppController{
         if ($this->request->is('post')) {
           $user = $this->Auth->identify();
           if ($user) {
+            $user_roles = TableRegistry::get('UserRoles');
+            $valid_user = $user_roles->find('all')->where(['user_id' => $user['id']]);
+            $role_id=$valid_user->first()->role_id;
             if ($user['status'] != 0) {
-              $user_roles = TableRegistry::get('UserRoles');
-              $valid_user = $user_roles->find('all')->where(['user_id' => $user['id']]);
-              $role_id=$valid_user->first()->role_id;
-              if ($valid_user->count()) {
-                $this->Auth->setUser($user);
-                $token = $this->request->session()->id();
-                $status = 'success';
+              $subscription_end_date = !empty($user['subscription_end_date']) ? strtotime($user['subscription_end_date']) : 0;
+              if ($user['status'] != 2) {
+                //If subscription is over
+                if ((time() - (60 * 60 * 24))  > $subscription_end_date) {
+                  $user['status'] = 2;
+                  $this->Users->query()->update()->set($user)->where(['id' => $user['id']])->execute();
+                  $message = 'Your subscription period is over';
+                  throw new Exception('subscription period is over, Account Expired for user id: ' .  $user['id']);
+                }
+
+                //updating login time.
+                $this->Users->query()->update()->set(['modfied' => time()])->where(['id' => $user['id']])->execute();
+
+                if ($valid_user->count()) {
+                  $this->Auth->setUser($user);
+                  $token = $this->request->session()->id();
+                  $status = 'success';
+                } else {
+                  $user = array();
+                  $message = "You are not authenticated to login into this page";
+                }
               } else {
-                $user = array();
-                $message = "You are not authenticated to login into this page";
+                $message = 'Your subscription period is over';
               }
             } else {
               $message = 'Please activate your account';
@@ -1326,6 +1340,7 @@ class UsersController extends AppController{
                           else{ $to=$postdata['email'];  }
 
                       //1. User Table
+                      $postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $postdata['subscription_days'];
                       $new_user = $this->Users->newEntity($postdata);
                       if ($result=$this->Users->save($new_user)) { 
                           $this->sendEmail($to, $from, $subject,$email_message); 
