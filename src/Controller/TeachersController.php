@@ -57,7 +57,8 @@ class TeachersController extends AppController {
                 'country' => $country,
                 'state' => $state,
                 'city' => $city,
-                'district' => $district
+                'district' => $district,
+                'step_completed'=>1
              ])->where(['user_id' => $id ])->execute();
           $row_count = $result->rowCount();
           if ($row_count == '1') {
@@ -80,8 +81,58 @@ class TeachersController extends AppController {
         '_serialize' => ['status','message']
  ]);
   }
+
+  /*  * This api is used for set teacher subject/courses/grade in database.
+    * @return Boolean value.
+    * 
+    * **/ 
+  public function setTeacherSubjects() {
+      if(isset($this->request->data['selectedcourse']) && isset($this->request->data['user_id']) ){
+          $user_courses = TableRegistry::get('UserCourses');
+          $user_details = TableRegistry::get('UserDetails');
+          $selected_courses=$this->request->data['selectedcourse'];
+          $data_usercourse['user_id']= $this->request->data['user_id'];
+      
+          foreach ($selected_courses as $key=>$value) {              
+              $data_usercourse['course_id']= $key;
+              $data_usercourse['expiry_date']=time()+60;                
+              $new_usercourses = $user_courses->newEntity($data_usercourse);
+
+              if ($user_courses->save($new_usercourses)) {
+                  $data['status']='TRUE';
+                  $data['message']='Sucess';
+              }else{
+                  $data['status']='FALSE';
+                  $data['message']='Opps not able to add data on course_id'.$selectedcourse['id'];
+                }
+          }
+
+          // update step_completed in user detail
+            $query = $user_details->query();
+            $result=  $query->update()
+               ->set(['step_completed'=>2])
+               ->where(['user_id' => $data_usercourse['user_id'] ])
+               ->execute();
+                  
+      }else{
+        $data['status']='FALSE';
+         $data['message']='Please select at least one course';
+      }
+
+  
+      $this->set([
+        'response' => $data,      
+        '_serialize' => ['response']
+ ]);
+
+  }
+
+
+
+
+
   /***
-    * This api is used for set teacher detail in database.
+    * This api is used for get teacher detail in database.
     * @return Boolean value.
     * 
     * **/ 
