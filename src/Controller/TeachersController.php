@@ -319,9 +319,11 @@ class TeachersController extends AppController {
                . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
                . " WHERE user_courses.user_id =".$tid." AND courses.level_id =".$grade; 
     }  else {
-      $sql = " SELECT * from course_contents as content "
-              . "INNER JOIN course_details as detail ON content.course_detail_id = detail.course_id "
-              . " WHERE detail.course_id =".$subject;
+//      $sql = " SELECT * from course_contents as content "
+//              . "INNER JOIN course_details as detail ON content.course_detail_id = detail.course_id "
+//              . " WHERE detail.course_id =".$subject;
+      $sql = " SELECT * from course_details "
+              . " WHERE course_id =".$subject;
     }
     $result = $connection->execute($sql)->fetchAll('assoc');
    }catch(Exception $e){
@@ -340,18 +342,126 @@ class TeachersController extends AppController {
   
   public function setContentForLesson(){
    try{
-     $result = "";
+     $message = "";
+     $image = '';
+     $video = '';
+     $file = '';
+     $status = FALSE;
+     $connection = ConnectionManager::get('default');
+     $course_detail= TableRegistry::get('CourseContents');
       if($this->request->is('post')) {
-        print_r('hi');
+        $id = 0;
+        $exist_value = 0; 
+        if(empty($this->request->data['grade'])) {
+          $message = "please select a grade.";
+        }elseif ($this->request->data['course'] == '-1') {
+          $message = "please select a course.";
+        }elseif (empty($this->request->data['standard'])) {
+          $message = "please select a standard.";
+        }elseif (empty($this->request->data['standard_type'])) {
+          $message = "please select a standard type.";
+        }elseif (empty($this->request->data['lesson'])) {
+          $message = "please select a lesson name";
+        }elseif (empty($this->request->data['skills'])) {
+          $message = "please select skills.";
+        }elseif (empty($this->request->data['sub_skill'])) {
+          $message = "please select sub skills.";
+        }
+        if(!empty($this->request->data['image_url'])){
+          $temp_image = explode(': "', $this->request->data['image_url']);
+          $temp_string = explode('"', $temp_image[1]);
+          $image = $temp_string[0];
+        }
+        if(!empty($this->request->data['video_url'])){
+          $temp_video = explode(': "', $this->request->data['video_url']);
+          $temp_string = explode('"', $temp_video[1]);
+          $video = $temp_string[0];
+        }
+        if(!empty($this->request->data['doc_file'])){
+          $temp_file = explode(': "', $this->request->data['doc_file']);
+          $temp_string = explode('"', $temp_file[1]);
+          $file = $temp_string[0];
+        }
+        // insertion of skill.
+        if(empty($message)) {
+          $skills = $this->request->data['skills'];
+          if(count($skills)>0) {
+            foreach ($skills as $value) {
+//              $skill_count = $course_detail->find()->where(['course_detail_id' => $value])->count();
+              $skill_count = -1;
+              if($skill_count>0 || $exist_value == 1) {
+               $message = 'Value already exist.';
+               $exist_value = 1;
+               break;
+              }  else {
+                if($id != 0) {
+                  $detail->id = $id+1;
+                } 
+                $detail = $course_detail->newEntity();
+                $detail->name = isset($this->request->data['lesson']) ? $this->request->data['lesson']: '';
+                $detail->text_title = isset($this->request->data['text_title']) ? $this->request->data['text_title'] : '';
+                $detail->text_description = isset($this->request->data['text_description']) ? $this->request->data['text_description'] : '';
+                $detail->video_title = isset($this->request->data['video_title']) ? $temp['video_title'] : '';
+                $detail->video_url = isset($this->request->data['video_url']) ? $video: '';
+                $detail->image_title = isset($this->request->data['image_title']) ? $this->request->data['image_title'] : '';
+                $detail->image_url = isset($this->request->data['image_url']) ? $image : '';
+                $detail->doc_name = isset($this->request->data['doc_file']) ? $file : '';
+                $detail->course_detail_id = $value; 
+                if($course_detail->save($detail)){
+                  $id = $detail->id;
+                  $message = 'Value Inserted Successfully';
+                  $status = TRUE;
+                }  else {
+                  $message = 'unable to insert the skill value.';
+                }
+              }
+            }       
+          }
+          // insertion of sub-skill.
+          $sub_skill = $this->request->data['sub_skill'];
+          foreach ($sub_skill as $value) {
+            if($exist_value == 1) {
+              break;
+            }
+//            $sub_skill_count = $course_detail->find()->where(['course_detail_id' => $value])->count();
+            $sub_skill_count = -1;
+            if($sub_skill_count >0) {
+              $message = 'Sub skill already exist.';
+              $exist_value = 1;
+            }  else {
+              if($id != 0) {
+                $detail->id = $id+1;
+              } 
+              $detail = $course_detail->newEntity();
+              $detail->name = isset($this->request->data['lesson']) ? $this->request->data['lesson']: '';
+              $detail->text_title = isset($this->request->data['text_title']) ? $this->request->data['text_title'] : '';
+              $detail->text_description = isset($this->request->data['text_description']) ? $this->request->data['text_description'] : '';
+              $detail->video_title = isset($this->request->data['video_title']) ? $temp['video_title'] : '';
+              $detail->video_url = isset($this->request->data['video_url']) ? $video: '';
+              $detail->image_title = isset($this->request->data['image_title']) ? $this->request->data['image_title'] : '';
+              $detail->image_url = isset($this->request->data['image_url']) ? $image : '';
+              $detail->doc_name = isset($this->request->data['doc_file']) ? $file : '';
+              $detail->course_detail_id = $value; 
+              if($course_detail->save($detail)){
+                $id = $detail->id;
+                $message = 'Value Inserted Successfully';
+                $status = TRUE;
+              } else {
+                $message = 'Unable to insert the subSkill value.';
+              }
+            } 
+          } 
+        }
+         
       }
-    $connection = ConnectionManager::get('default');
    }catch(Exception $e){
-     $this->log('Error in getTeacherDetailsForContent function in Teachers Controller.'
+     $this->log('Error in setContentForLesson function in Teachers Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
    }
    $this->set([
-      'response' => $result,
-      '_serialize' => ['response']
+      'response' => $message,
+       'status' => $status,
+      '_serialize' => ['response','status']
     ]);
   }
   
@@ -363,9 +473,15 @@ class TeachersController extends AppController {
   public function readCsv() {
     try{
       $status = FALSE;
+      $message = '';
       $headers = array('grade', 'subject','lesson','skills', 'sub_skills', 'standard_type', 'standard',
                  'text_title','text_description', 'video_title', 'video_url', 'image_title', 'image_url');
-      $file =  fopen('../src/View/datalink/physics.csv', 'r');
+      if (!isset($this->request->data['csv']) || (@end(explode('/', $csv['type'])) == 'csv')) {
+           $message = 'please upload CSV';
+           throw new Exception('please upload CSV');
+      }
+      $csv = $this->request->data['csv'];
+      $file =  fopen($csv['tmp_name'], 'r');
       $first_row = TRUE;
       $course_detail= TableRegistry::get('CourseContents');
       while ($row = fgetcsv($file,'',':')) {
@@ -421,6 +537,95 @@ class TeachersController extends AppController {
               .$e->getMessage().'(' . __METHOD__ . ')');
     }
     
+  }
+  public function uploadfile() {
+    $file_name = time() . '_' . $_FILES['uploadfile']['name'];
+    move_uploaded_file($_FILES['uploadfile']['tmp_name'], ROOT .'/src/View/datalink/'.$file_name );
+    $this->set([
+      'response' => $file_name ,
+      '_serialize' => ['response']
+    ]);
+  }
+  public function saveTemplate() {
+    $connection = ConnectionManager::get('default');
+    $template_detail= TableRegistry::get('ContentTemplate');
+    if(isset($this->request->data) && !empty($this->request->data)) {
+      if (empty($this->request->data['temp_name'])) {
+        $message = 'Please give template name.';
+      }  else {
+        $standard = implode(',', $this->request->data['standard']);
+        $standard_type = implode(',', $this->request->data['standard_type']);
+        $content = $template_detail->newEntity();
+        $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
+        $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
+        $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
+        $content->standard = $standard;
+        $content->standard_type = $standard_type;
+        $content->course_id = isset($this->request->data['course']) ? $this->request->data['course'] : '';
+        $content->skill_ids = implode(',',  $this->request->data['skills']);
+        $content->sub_skill_ids = implode(',',  $this->request->data['sub_skill']);
+        if($template_detail->save($content)){
+          $message = 'Value Inserted Successfully';
+          $status = TRUE;
+       }
+      }       
+    }
+    $this->set([
+//       'response' => $message,
+      'status' => true ,
+      '_serialize' => ['status']
+    ]);
+  }
+  public function getTemplate($user_id) {
+    try {
+      $content = array();
+      $content_detail = array();
+      $template_detail= TableRegistry::get('ContentTemplate');
+      $template = $template_detail->find('all')->where(['user_id' => $user_id]);
+      foreach ($template as $key => $value) {
+        $content_detail['id'] = $value['id'];
+        $content_detail['template_name'] = $value['template_name'];
+        $content_detail['user_id'] = $value['user_id'];
+        $content_detail['grade'] = $value['grade'];
+        $content_detail['standard'] = explode(',', $value['standard']);
+        $content_detail['standard_type'] = explode(',', $value['standard_type']);
+        $content_detail['course_id'] = $value['course_id'];
+        $content_detail['skills'] = explode(',', $value['skill_ids']);
+        $content_detail['sub_skill'] = explode(',', $value['sub_skill_ids']);
+        $content[] = $content_detail;
+      }
+    } catch (Exception $ex) {
+      $this->log('Error in getTeacherDetailsForContent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'data' => $content,
+      'status' => true ,
+      '_serialize' => ['data','status']
+    ]);
+  }
+  public function deleteTemplate($id) {
+    try {
+      $message = '';
+      $status = FALSE;
+      $connection = ConnectionManager::get('default');
+      $delete_sql = 'DELETE FROM content_template WHERE id =' . $id;
+      if (!$connection->execute($delete_sql)) {
+        $message = "unable to delete template";
+        throw new Exception($message);
+      }  else {
+        $message = "Template deleted successfully.";
+        $status = TRUE;
+      }
+    } catch (Exception $ex) {
+      $this->log('Error in getTeacherDetailsForContent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'message'=> $message,  
+      'status' => $status,
+      '_serialize' => ['message','status']
+    ]);
   }
 }
 
