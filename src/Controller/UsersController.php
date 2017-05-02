@@ -1340,7 +1340,7 @@ class UsersController extends AppController{
                           else{ $to=$postdata['email'];  }
 
                       //1. User Table
-                      $postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $postdata['subscription_days'];
+                      $postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $this->request->data['subscription_days'];
                       $new_user = $this->Users->newEntity($postdata);
                       if ($result=$this->Users->save($new_user)) { 
                           $this->sendEmail($to, $from, $subject,$email_message); 
