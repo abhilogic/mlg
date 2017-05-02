@@ -184,7 +184,7 @@ return [
             'port' => 587,
             'timeout' => 30,
             'username' => 'logicdeveloper7@gmail.com',
-            'password' => 'developlogic',
+            'password' => 'isset()&&empty()',
             'client' => null,
             'tls' => true,
             'url' => env('EMAIL_TRANSPORT_DEFAULT_URL', null),
