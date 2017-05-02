@@ -319,7 +319,7 @@ class UsersController extends AppController{
             throw new Exception('Pregmatch not matched for Username');
           }
           $user['status'] = 0;
-          $user['subscription_end_date'] = time() + 60 * 60 * 24 * $user['subscription_days'];
+          $user['subscription_end_date'] = date('Y-m-d' ,(time() + 60 * 60 * 24 * $user['subscription_days']));
           $user['created'] = $user['modfied'] = time();
           $userroles = TableRegistry::get('UserRoles');
           $userdetails = TableRegistry::get('UserDetails');
