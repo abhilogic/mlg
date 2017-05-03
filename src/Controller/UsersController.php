@@ -9,6 +9,7 @@ use Cake\Auth\DefaultPasswordHasher;
 use Cake\Mailer\Email;
 use Cake\Routing\Router;
 use Cake\Datasource\ConnectionManager;
+use App\Controller\PaymentController;
 
 /**
  * Users Controller
@@ -32,7 +33,7 @@ class UsersController extends AppController{
             'data' => $user,
             '_serialize' => ['data']
         ));
-    }
+      }
 
 
    /*
@@ -68,23 +69,20 @@ class UsersController extends AppController{
         *  U2- getUserDetails,         
         *  Request – Int <UUID>;
     */
-    public function getUserDetails($id = null){        
+    public function getUserDetails($id = null, $function_call = FALSE){
       $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
-        if($user_record>0){
-              $data['user'] = $this->Users->get($id);
-        $this->set([
-          'data' => $data,
-          '_serialize' => ['data']
-        ]);
-
-        }
-        else{
+      if ($user_record > 0) {
+        $data['user'] = $this->Users->get($id);
+      } else {
         $data['response'] = "Record is not found";
-        $this->set([
-          'data' => $data,
-          '_serialize' => ['data']
-        ]);
       }
+      if ($function_call) {
+        return $data;
+      }
+      $this->set([
+        'data' => $data,
+        '_serialize' => ['data']
+      ]);
     }
 
 /*
@@ -1012,14 +1010,17 @@ class UsersController extends AppController{
        /**
         * function paymentbrief().
         */
-       public function getPaymentbrief() {
+       public function getPaymentbrief($params = null) {
          $status = FALSE;
          $message = '';
          $child_info = array();
          $total_amount = 0;
-         if ($this->request->is('post')) {
+         if ($this->request->is('post') || !empty($params)) {
           try {
             $parent_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : '';
+            if (isset($params['user_id']) && !empty($params['user_id'])) {
+              $parent_id = $params['user_id'];
+            }
             if (!empty($parent_id)) {
 
               $user_details = TableRegistry::get('UserDetails');
@@ -1030,7 +1031,7 @@ class UsersController extends AppController{
               }
 
               $connection = ConnectionManager::get('default');
-              $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
+              $sql = "SELECT users.id as user_id, users.first_name as user_first_name, users.last_name as user_last_name,"
                 . " SUM(user_purchase_items.amount) as purchase_amount, packages.name as package_subjects, plans.name as plan_duration"
                 . " FROM users"
                 . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
@@ -1043,6 +1044,7 @@ class UsersController extends AppController{
 
                 foreach ($results as $result) {
                   $child_info[] = array(
+                    'child_id' => $result['user_id'],
                     'child_name' => $result['user_first_name'] . ' ' . $result['user_last_name'],
                     'package_subjects' => $result['package_subjects'],
                     'package_amount' => $result['purchase_amount'],
@@ -1061,6 +1063,9 @@ class UsersController extends AppController{
           } catch (Exception $ex) {
             $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
           }
+         }
+         if (!empty($params)) {
+           return $child_info;
          }
 
          $this->set([
@@ -1601,8 +1606,14 @@ class UsersController extends AppController{
              }
              $user_orders = TableRegistry::get('UserOrders');
              $response = json_decode($response, TRUE);
+             $card_token = $external_cutomer_id = '';
              if  (isset($response['state']) && $response['state'] == 'ok') {
                $message = 'card added successfully';
+               $card_token = $response['id'];
+               $external_cutomer_id = $response['external_customer_id'];
+               $user_id = $this->request->data['user_id'];
+               $payment_controller = new PaymentController();
+               $payment_controller->createBillingPlan($user_id, $data);
                $status = TRUE;
              }
              if (isset($response['name']) && $response['name'] == 'VALIDATION_ERROR') {
@@ -1621,6 +1632,8 @@ class UsersController extends AppController{
                foreach($user_order_data as $user_order) {
                   $user_order->card_response = $message;
                   $user_order->order_date= time();
+                  $user_order->card_token = $card_token;
+                  $user_order->external_cutomer_id = $external_cutomer_id;
                }
              } else {
                $order = array(
@@ -1630,7 +1643,8 @@ class UsersController extends AppController{
                  'order_date' => time(),
                  'trial_period' => 1,
                  'card_response' => $message,
-                 'card_id' => isset($response['id']) ? $response['id'] : '',
+                 'card_token' => $card_token,
+                 'external_cutomer_id' => $external_cutomer_id,
                );
                $user_order = $user_orders->newEntity($order);
              }
