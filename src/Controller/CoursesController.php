@@ -809,10 +809,14 @@ class CoursesController extends AppController{
             $slugs = explode(',' ,$course_detail['slug']);
             foreach ($slugs as $slug) {
               $slug_array = explode('/', $slug);
-              $href_slice = array_slice($slug_array, -3, 3);
-              if (strtoupper($href_slice[1]) == 'V') {
-                $khan_api_slugs[] = @current($href_slice);
-                $khan_api_content_title[] = @end($href_slice);
+              if (count($slug_array) > 1) {
+                $href_slice = array_slice($slug_array, -3, 3);
+                if (strtoupper($href_slice[1]) == 'V') {
+                  $khan_api_slugs[] = @current($href_slice);
+                  $khan_api_content_title[] = @end($href_slice);
+                }
+              } else {
+                $khan_api_slugs[] = @current($slug_array);
               }
             }
           }
