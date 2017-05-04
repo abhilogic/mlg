@@ -792,9 +792,10 @@ class CoursesController extends AppController{
      public function getAllCourseList($parent_id=0, $type=null){
       try{
         $khan_api_slugs = array();
+        $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
         if ($type == null) {
-          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents', 'ContentCategories'])->toArray();
+          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
           $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
         }
@@ -804,17 +805,24 @@ class CoursesController extends AppController{
       }
       if($type == NULL) {
         foreach ($course_details as $course_detail) {
-          if (isset($course_detail['content_category']) && !empty($course_detail['content_category'])) {
-            $content = $course_detail['content_category'];
-            if (trim($content['source']) == 'khan_api') {
-              $khan_api_slugs[] = $content['slug'];
+          if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
+            $slugs = explode(',' ,$course_detail['slug']);
+            foreach ($slugs as $slug) {
+              $slug_array = explode('/', $slug);
+              $href_slice = array_slice($slug_array, -3, 3);
+              if (strtoupper($href_slice[1]) == 'V') {
+                $khan_api_slugs[] = @current($href_slice);
+                $khan_api_content_title[] = @end($href_slice);
+              }
             }
           }
-        } 
+        }
       }
-      
+
       $this->set([
-         'response' => ['course_details' => $course_details, 'khan_api_slugs' => $khan_api_slugs],
+         'response' => ['course_details' => $course_details,
+         'khan_api_slugs' => $khan_api_slugs,
+         'khan_api_content_title' => $khan_api_content_title],
          '_serialize' => ['response']
        ]);
      }
