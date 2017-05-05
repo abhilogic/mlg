@@ -812,7 +812,7 @@ class CoursesController extends AppController{
               if (count($slug_array) > 1) {
                 $href_slice = array_slice($slug_array, -3, 3);
                 if (strtoupper($href_slice[1]) == 'V') {
-                  $khan_api_slugs[] = @current($href_slice);
+                  $khan_api_slugs[@current($href_slice)] = @current($href_slice);
                   $khan_api_content_title[] = @end($href_slice);
                 }
               } else {
