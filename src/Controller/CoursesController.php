@@ -792,6 +792,7 @@ class CoursesController extends AppController{
      public function getAllCourseList($parent_id=0, $type=null){
       try{
         $khan_api_slugs = array();
+        $teacher_contents = array();
         $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
         if ($type == null) {
@@ -820,13 +821,31 @@ class CoursesController extends AppController{
               }
             }
           }
+          if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
+            $course_contents = $course_detail['course_contents'];
+            foreach ($course_contents as $course_content) {
+              $user_id = $course_content['created_by'];
+              $user = $this->getUserRoleByid($user_id);
+              if (strtoupper($user['role_name']) == 'TEACHER') {
+                $teacher_contents[] = array(
+                  'lesson_name' =>  $course_content['lesson_name'],
+                  'url' =>  $course_content['url'],
+                  'name' =>  $course_content['title'],
+                  'kind' =>  $course_content['type'],
+                  'descriptions' =>  $course_content['content'],
+                  'standards' =>  $course_content['standards'],
+                  'standard_type' =>  $course_content['standard_type'],
+                );
+              }
+            }
+          }
         }
       }
-
       $this->set([
          'response' => ['course_details' => $course_details,
          'khan_api_slugs' => $khan_api_slugs,
-         'khan_api_content_title' => $khan_api_content_title],
+         'khan_api_content_title' => $khan_api_content_title,
+         'teacher_contents' => $teacher_contents],
          '_serialize' => ['response']
        ]);
      }
@@ -947,4 +966,33 @@ class CoursesController extends AppController{
          '_serialize' => ['status', 'message']
        ]);
    }
+
+   /*
+    * function getUserRoleByid
+    *
+    * $user_id : User's Id.
+    */
+   protected function getUserRoleByid($user_id = null) {
+    try {
+      $message = '';
+      $user = array('user_id' => '', 'role_id' => '', 'role_name' => '');
+      if ($user_id == null) {
+        $message = 'User_id cannot be null';
+        throw new Exception($message);
+      }
+      $user_roles_table = TableRegistry::get('UserRoles');
+      $role = $user_roles_table->find()->where(['user_id' => $user_id])->contain(['Roles'])->toArray();
+      foreach ($role as $user_role) {
+        $user = array(
+          'user_id' => $user_role->user_id,
+          'role_id' => $user_role->role_id,
+          'role_name' => $user_role->role->name,
+        );
+      }
+    } catch (Exception $ex) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')', 'error');
+    }
+    return $user;
+  }
+
 }
