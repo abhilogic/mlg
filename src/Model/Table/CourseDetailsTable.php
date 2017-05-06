@@ -23,14 +23,7 @@ class CourseDetailsTable extends Table{
 
         $this->addBehavior('Timestamp');
 
-
-        $this->belongsTo('ContentCategories', [
-          'foreignKey' => 'source_id',
-          'joinType'  =>  'LEFT'
-        ]);
-
-
-        $this->hasOne('CourseContents', [
+        $this->hasMany('CourseContents', [
           'foreignKey' => 'course_detail_id',
           'dependent' => true
         ]);
