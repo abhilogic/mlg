@@ -24,9 +24,9 @@ class RolesTable extends Table{
         $this->addBehavior('Timestamp');
 
 
-        $this->belongsTo('UserRoles', [
-            'foreignKey' => 'role_id',
-            'joinType'  =>  'INNER'
+        $this->hasMany('UserRoles', [
+            'foreignKey' => 'id',
+            'dependent' => true
         ]);          
     }
 
