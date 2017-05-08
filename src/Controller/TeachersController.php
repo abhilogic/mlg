@@ -260,8 +260,9 @@ class TeachersController extends AppController {
       if ($role_count == '1' && empty($message)) {
         $level_subject = 'you have not choosen any subject or grade.';
         $connection = ConnectionManager::get('default');
-        $sql =" SELECT level_id,course_id,course_name from courses"
+       $sql =" SELECT level_id,course_id,course_name,name from courses"
                 . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
+               . " INNER JOIN levels ON courses.level_id = levels.id "
                 . " WHERE user_courses.user_id =".$user_id." ORDER BY level_id ";
         $result = $connection->execute($sql)->fetchAll('assoc');
         $count = count($result);
@@ -604,6 +605,8 @@ class TeachersController extends AppController {
       '_serialize' => ['message','status']
     ]);
   }
+
+
   public function getDifficulty() {
     try {
       $status = FALSE;
@@ -706,5 +709,458 @@ class TeachersController extends AppController {
   public function updateContent() {
     
   }
+=======
+
+
+
+public function addStudent() {          
+      try{         
+
+          if($this->request->is('post')) { 
+              //$postdata=$this->request->data;
+             $users=TableRegistry::get('Users');
+            $data['message'][]="";                              
+
+              //username validation ******
+              $postdata['username']=isset($this->request->data['username'])?$this->request->data['username']:"";
+              if(!empty($postdata['username'])){
+                  $username_exist = $users->find()->where(['Users.username' => $this->request->data['username'] ])->count();
+                  if ($username_exist) {
+                      $data['message'][0] = 'Username already exist';                      
+                  }
+              }else{
+                $data['message'][0]="User Name is required to child login";
+              }
+
+              //email validation ********                           
+              $postdata['email']=isset($this->request->data['email'])?$this->request->data['email']:"";
+              if(!empty($postdata['email'])){
+                  $email_exist = $users->find()->where(['Users.email' => $this->request->data['email'] ])->count();
+                  if ($email_exist) {
+                      $data['message'][1] = 'Email is already exist';                      
+                  }
+                  if (!filter_var($postdata['email'], FILTER_VALIDATE_EMAIL)) {
+                     $data['message'][1] = 'Email is not valid';
+               }
+
+              }
+              else{
+                $data['message'][1] = 'Email cannot be empty';
+              }
+              
+
+              //password
+              $pass=isset($this->request->data['password'])?$this->request->data['password']:"";
+              if(!empty($pass)){
+                  // check emailchoice is yes/no 
+                        //$pass= rand(1, 1000000); 
+                        $default_hasher = new DefaultPasswordHasher();
+                        $password=$default_hasher->hash($pass);
+                        $postdata['password']  = $password;
+                        $postdata['open_key'] = bin2hex($pass);  // encrypt a string
+
+              }else{
+                  $data['message'][9] = 'Password cannot be empty';
+              }
+
+
+              if(isset($this->request->data['first_name']) && !empty($this->request->data['first_name'])){ 
+                $postdata['first_name']=$this->request->data['first_name'];
+              }else{ $data['message'][2]="First name is require"; }
+
+              if(isset($this->request->data['last_name']) && !empty($this->request->data['last_name']) ){ $postdata['last_name']=$this->request->data['last_name'];  }
+              else{ $data['message'][3]="Last name is require"; }            
+
+                          
+               
+              $postdata['parent_id']=isset($this->request->data['parent_id'])? $this->request->data['parent_id']:$data['message'][4]="The Parent ID has been expired. please Login Again";                          
+              $postdata['school']=isset($this->request->data['school'])? $this->request->data['school']:$data['message'][5]="School Name is require";        
+             // $postdata['dob']=isset($this->request->data['dob'])? $this->request->data['dob']:'';
+
+              $postdata['role_id']=$this->request->data['role_id'];
+              $postdata['status']=$this->request->data['status'];
+              //$postdata['created']=$this->request->data['created'];
+              //$postdata['modfied']=$this->request->data['created'];
+              //$postdata['order_date']=$this->request->data['created'];
+
+
+
+              $postdata['created']=time();
+              $postdata['modfied']=time();
+              $postdata['order_date']=time();
+
+
+              $postdata['promocode_id']=isset($this->request->data['vcode'])?$this->request->data['vcode']:'0'; 
+
+              /*$postdata['package_id']=isset($this->request->data['package_id'])?$this->request->data['package_id']:$data['message'][7]="Please select package for your child";
+              $postdata['plan_id']=isset($this->request->data['plan_id'])?$this->request->data['plan_id']:$data['message'][8]="Please slelect Plans for your child";
+              $postdata['level_id']=$this->request->data['level_id'];*/
+
+
+              $data['message'] = array_filter($data['message']); // to check array is empty array_filter return(0, null)
+              if(empty($data['message']) || $data['message']=="" ){
+                    
+                     $user_details=TableRegistry::get('UserDetails');
+                     $user_roles=TableRegistry::get('UserRoles');
+                     $user_courses=TableRegistry::get('UserCourses');
+                     $user_purchase_items=TableRegistry::get('UserPurchaseItems');
+                     $subtotal=0;
+                     $count=0;
+                      // parent information by $pid
+                        $parent_records= $users->find('all')->where(["id"=>$postdata['parent_id'] ]);
+                          foreach ($parent_records as $parent_record) {
+                              $parentinfo['email']=$parent_record['email'];
+                              $parentinfo['first_name']=$parent_record['first_name'];
+                              $parentinfo['last_name']=$parent_record['last_name'];
+                          }                  
+
+                   
+
+                       
+
+                        $from = 'logicdeveloper7@gmail.com';
+                            $subject ="Your Child authenticatation";
+                            $email_message="Hello ". $parent_record['first_name']. $parent_record['last_name'].
+                                "
+                                  Your Child Login Credential in My Learning Guru is 
+                                  User Name :".$postdata['username'] ." 
+                                  Password : ".$pass;
+
+                          
+                        $to=$postdata['email']; 
+
+                      //1. User Table
+
+                      //$postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $postdata['subscription_days'];
+                      $new_user = $users->newEntity($postdata);
+                      if ($result=$users->save($new_user)) { 
+                          /*if($this->sendEmail($to, $from, $subject,$email_message)){
+                            $data['message']="mail send";
+                          }else{
+                            $data['message']="mail send";
+                          } */
+                      $postdata['user_id']  = $result->id;
+
+                      //2.  User Details Table
+                      $new_user_details = $user_details->newEntity($postdata);
+                      if ($user_details->save($new_user_details)) {
+
+                          //3. User Roles Table
+                          $new_user_roles = $user_roles->newEntity($postdata);                        
+                        if ($user_roles->save($new_user_roles)) {
+
+                          // Courses and Price calculation
+                          $courses=$this->request->data['courses'];
+                          foreach ($courses as $course_id => $name) {
+                            $postdata['course_id']=$course_id;
+
+                          //4. User Courses Table
+                            $new_user_courses = $user_courses->newEntity($postdata);
+                              if ($user_courses->save($new_user_courses)) {                                 
+                                $data['status']="True";
+                             }
+                            else{
+                              $data['status']='flase';
+                              $data['message']=" Not able to save data in User Courses Table";
+                              throw new Exception("Not able to save data in User Courses Table");
+                          }
+                        }
+
+                      }
+                      else{ 
+                        $data['status']='flase';
+                        $data['message']=" Not able to save data in User Roles Table";
+                        throw new Exception("Not able to save data in User Roles Table");
+                      }
+                    }
+                    else{ 
+                      $data['status']='flase';
+                      $data['message']="Not able to save data in User Details Table";
+                      throw new Exception("Not able to save data in User Details Table");
+                   }                   
+                //$data['status']='True';
+                }else{
+                  $data['status']='flase';
+                  $data['message']="Not Able to add data in user table";
+                  throw new Exception("Not Able to add data in user table");
+
+            }
+          }else{
+              $data['status']="False";
+             // $data['message']="All are validate ";
+          }
+
+        } else{ $data['status']='No data is send/post to save'; }
+
+        }
+        catch (Exception $ex) {
+           $this->log($ex->getMessage());
+        }
+
+          $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);         
+
+       }   
+
+
+       //API to update the student
+       public function updateStudent($sid=null) {
+
+          $data['message'][]=""; 
+            if($this->request->is('post')) { 
+                $users=TableRegistry::get('Users');
+                $connection = ConnectionManager::get('default');
+
+                if(isset($this->request->data['first_name']) && !empty($this->request->data['first_name'])){ 
+                $postdata['first_name']=$this->request->data['first_name'];
+              }else{ $data['message'][2]="First name is require"; }
+
+              if(isset($this->request->data['last_name']) && !empty($this->request->data['last_name']) ){ $postdata['last_name']=$this->request->data['last_name'];  }
+              else{ $data['message'][3]="Last name is require"; } 
+
+
+                $postdata['id']=isset($this->request->data['id'])? $this->request->data['id']:$data['message'][0]="Student id is null. Please check";  
+                $postdata['first_name']=isset($this->request->data['first_name'])? $this->request->data['first_name']:$data['message'][2]="First name is require";             
+                $postdata['last_name']=isset($this->request->data['last_name'])?$this->request->data['last_name']:$data['message'][3]="Last Name is require"; 
+
+                //email validation ********                           
+                $postdata['email']=isset($this->request->data['email'])?$this->request->data['email']:"";
+                if(!empty($postdata['email'])){
+                    //$email_exist = $users->find()->where(['Users.email' => $this->request->data['email'] ])->count();
+
+                    $email_check_str ="SELECT * FROM users WHERE id!=".$postdata['id']."  AND email='".$postdata['email']."'";
+                    $email_check_result = $connection->execute($email_check_str)->fetchAll('assoc');
+                    $email_exist = count($email_check_result);
+                    if ($email_exist >0) {
+                        $data['message'][1] = 'Email is already exist';                      
+                    }
+                    if (!filter_var($postdata['email'], FILTER_VALIDATE_EMAIL)) {
+                       $data['message'][1] = 'Email is not valid';
+                 }
+              }
+              else{
+                  $data['message'][1] = 'Email cannot be empty';
+                }
+              
+
+              //password
+              $pass=isset($this->request->data['password'])?$this->request->data['password']:"";
+              if(!empty($pass)){
+                  // check emailchoice is yes/no 
+                        //$pass= rand(1, 1000000); 
+                        $default_hasher = new DefaultPasswordHasher();
+                        $password=$default_hasher->hash($pass);
+                        $postdata['password']  = $password;
+
+                        $postdata['open_key'] = bin2hex($pass);  // encrypt a string
+              }else{
+                  $data['message'][9] = 'Password cannot be empty';
+              } 
+                      
+              if(empty($data['message']) || $data['message']==[""] ){                   
+                  $upsql ="UPDATE users,user_details    
+                           SET 
+                            users.first_name = '".$postdata['first_name']."', users.last_name = '".$postdata['last_name']."', 
+                            users.email='". $postdata['email']."', users.password = '".$postdata['password']."',
+                            user_details.open_key = '".$postdata['open_key']."'    
+                            WHERE users.id=".$postdata['id']."  AND users.id=user_details.user_id";
+                  
+                  // $student_records = $connection->execute($upsql);
+                    if ($connection->execute($upsql)) {
+                        $data['status']="true";
+                        $data['message']="record is updated successfully";
+                    }else{
+                        $data['status']="false";
+                        $data['message']="record is not updated. Contact Administrator";
+                    }
+              }
+            }else{
+              $data['message']="opps issue in updating the student record. Please try again";
+              $data['status']="false";
+            }  
+
+             $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);  
+       }
+
+
+       // Function to delete the student
+       public function deleteStudent(){
+
+          $postdata['id']=isset($_GET['id'])? $_GET['id']:$data['message'][0]="Student id is null. Please check";
+          if(isset($_GET['id'])) {
+             $dtsql ="DELETE users.*, user_details.* FROM users,user_details,user_courses                             
+                        WHERE users.id=".$postdata['id']."  AND users.id=user_details.user_id AND users.id=user_courses.user_id";
+                   
+                  // $student_records = $connection->execute($upsql);
+                  $connection = ConnectionManager::get('default');
+                    if ($connection->execute($dtsql)) {
+                      $data['status']="true";
+                      $data['message']="The Student records is sucessfully deleted.";
+                    }else{
+                      $data['status']="false";
+                      $data['message']="Opps..The Student records is not deleted.Please Try again";
+                    }
+              }
+
+
+          
+          $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]); 
+
+
+
+       }
+
+       // API to get the teacher added student for a course of perticular class
+       public function getStudentsOfClass($tid=null,$course_id=null){
+
+
+          $tid = isset($_GET['teacher_id'])? $_GET['teacher_id']:$tid;
+           $course_id = isset($_GET['course_id'])? $_GET['course_id']:$course_id;
+
+            if( (!empty($tid)) && (!empty($course_id)) ){  
+                  $connection = ConnectionManager::get('default');
+                   $sql =" SELECT users.id as id,first_name,last_name,username,email,password,open_key from users"
+                        . " INNER JOIN user_details ON users.id = user_details.user_id "
+                        . " INNER JOIN user_courses ON users.id = user_courses.user_id "                       
+                        . " WHERE user_details.parent_id =".$tid. " AND user_courses.course_id=".$course_id
+                        ." ORDER BY users.id ASC "; 
+                  $student_records = $connection->execute($sql)->fetchAll('assoc');
+                  $studentcount = count($student_records);
+
+                  if($studentcount >0 ){
+                      foreach($student_records as $studentrow) { 
+                          $student['id']=$studentrow['id'];
+                          $student['first_name']=$studentrow['first_name'];
+                          $student['last_name']=$studentrow['last_name'];
+                          $student['username']=$studentrow['username'];
+                          $student['email']=$studentrow['email'];
+                          $student['password']=$studentrow['password'];
+                          $open_key=$studentrow['open_key'];
+                          $student['open_key'] = hex2bin($open_key);
+                          $data['students'][]=$student;
+                      }
+                      
+
+                  }else{
+                    $data['status']="true";
+                    $data['message']="Please Add Student in Your Class.";
+                  }                
+
+            }else{
+                $data['status']="false";
+                $data['message']="Either teacher_id or course_id is null. Please check it cannot be null";
+            }
+
+           
+            $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+       }   
+
+
+       public function sendEmailToTeacher($tid=null){
+           if($this->request->is('post')) {
+             
+
+              $teacher_id =isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
+              if($teacher_id!=null && !empty($teacher_id)){
+                  $sids=implode(',',  array_keys($this->request->data['selectedstudent'])) ;   
+                  $connection = ConnectionManager::get('default');
+                  $str="SELECT users.id,first_name,last_name,email,username,open_key FROM users, user_details WHERE users.id IN ($sids,$teacher_id) AND users.id=user_details.user_id";
+
+                  $users_record = $connection->execute($str)->fetchAll('assoc');
+                  $usercount = count($users_record);                 
+                  $index=0;
+
+                  if($usercount >1 ){
+                    $msg = "<table>";
+                    $msg .= "<thead>
+                          <tr>
+                              <th class='sr-no'>Serial Num #</th>
+                              <th class='first-name'>First Name</th>
+                              <th class='last-name'>Last Name</th>
+                              <th class='parent-student-email'>Parent or Student E-mail</th>
+                              <th class='user-name'>User Name</th>
+                              <th class='pasword'>Pasword</th>
+                              <th class='actions'>Actions</th>
+                          </tr>
+                        </thead><tbody><tr>";
+
+                      foreach($users_record as $userrow) { 
+                          if($userrow['id'] == $teacher_id){
+                              $teacher_firstname = $userrow['first_name'];
+                              $teacher_lastname = $userrow['last_name'];
+                              $teacher_email = $userrow['email'];
+                          }else{
+                              $msg .="<td>".$index++."</td>";
+                              $msg .= "<td>".$userrow['first_name']."</td>";
+                              $msg .= "<td>". $userrow['last_name'] . "</td>";
+                              $msg .= "<td>". $userrow['email']. "</td>";
+                              $msg .= "<td>". $userrow['username'] . "</td>";
+                              $msg .= "<td>".$userrow['open_key']. "</td>";
+                            }
+
+                        }
+                    $msg .= "</tr>";
+                    $msg .= "</tbody></table>";
+
+
+                    $to = $teacher_email;
+                    $from = "info@mylearninguru.com";
+                    $subject = "Selected Student Recotds";
+                    $email_message = "Hello  $teacher_firstname  $teacher_lastname".$msg;
+
+                    //sendEmail($to, $from, $subject,$email_message); // send email to teacher 
+                    if($this->sendEmail($to, $from, $subject,$email_message)){
+                            $data['message']="mail send";
+                          }else{
+                            $data['message']="mail is not send";
+                          } 
+                  }else{
+                    $data['message']="Please select student first.";
+                   $data['status']="false";
+                  }
+              }
+              else{
+                   $data['message']="Opps teaccher_id cannot be null. Please try again.";
+                   $data['status']="false";
+              }
+           }else{
+             $data['message']="Opps data is not recieved properly. Please try again.";
+             $data['status']="false";
+           }
+
+       } 
+
+
+
+       protected function sendEmail($to, $from, $subject = null, $email_message = null) {
+          try {
+            $status = FALSE;
+            //send mail
+            $email = new Email();
+            $email->to($to)->from($from);
+            $email->subject($subject);
+            if ($email->send($email_message)) {
+              $status = TRUE;
+            }
+          } catch (Exception $ex) {
+            $this->log($ex->getMessage());
+          }
+          return $status;
+       }
+
+
+
+
 }
 
