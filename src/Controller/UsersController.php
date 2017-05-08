@@ -1326,7 +1326,7 @@ class UsersController extends AppController{
                            if($selected_courses_count==0 ||$selected_courses_count==null){
                             $data['message'][9]="Please select courses";
                             $data['status']="false";                            
-                            throw new Exception("please select courses cannot ");
+                            throw new Exception("please select courses, cannot be null");
                           }
 
                           //promo code Records
@@ -1422,7 +1422,7 @@ class UsersController extends AppController{
                             else{
                               $data['status']='flase';
                               $data['message']=" Not able to save data in User Courses Table";
-                              throw new Exception("Not able to save data in User Roles Table");
+                              throw new Exception("Not able to save data in User Courses Table");
                           }
                         }
 
