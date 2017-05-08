@@ -183,8 +183,9 @@ return [
             'host' => 'smtp.gmail.com',
             'port' => 587,
             'timeout' => 30,
-            'username' => 'logicdeveloper7@gmail.com',
-            'password' => 'isset()&&empty()',
+            'username' => 'anita@apparrant.com',
+            'password' => 'apps@246',
+
             'client' => null,
             'tls' => true,
             'url' => env('EMAIL_TRANSPORT_DEFAULT_URL', null),
@@ -229,7 +230,7 @@ return [
              */
             //'port' => 'non_standard_port_number',
             'username' => 'root',
-            'password' => '',
+            'password' => 'redhat',
             'database' => 'mlg',
             'encoding' => 'utf8',
             'timezone' => 'UTC',

@@ -709,7 +709,7 @@ class TeachersController extends AppController {
   public function updateContent() {
     
   }
-=======
+
 
 
 
