@@ -823,10 +823,13 @@ class CoursesController extends AppController{
           }
           if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
             $course_contents = $course_detail['course_contents'];
+            $root_path = Router::url('/', true);
             foreach ($course_contents as $course_content) {
               $user_id = $course_content['created_by'];
               $user = $this->getUserRoleByid($user_id);
               if (strtoupper($user['role_name']) == 'TEACHER') {
+                $course_content['content'] = (strtoupper($course_content['type']) == 'DOC') ?
+                 '<a href = ' . $root_path . '/upload/' . $course_content['content'] . '></a>' : $course_content['content'];
                 $teacher_contents[] = array(
                   'lesson_name' =>  $course_content['lesson_name'],
                   'url' =>  $course_content['url'],
