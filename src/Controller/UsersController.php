@@ -28,7 +28,7 @@ class UsersController extends AppController{
     /** Index method    */
     public function index(){
 
-        $user = $this->Users->find('all')->contain(['UserDetails']);        
+        $user = $this->Users->find('all')->contain(['UserDetails']);
         $this->set(array(
             'data' => $user,
             '_serialize' => ['data']
@@ -488,7 +488,10 @@ class UsersController extends AppController{
   //          ]
         ]);
         $status = 'false';
-        $token = $message = '';
+        $child_info = array();
+        $token = $message = $role_id = '';
+        $warning = 0;
+
         if ($this->request->is('post')) {
           $user = $this->Auth->identify();
           if ($user) {
@@ -504,6 +507,21 @@ class UsersController extends AppController{
                   $this->Users->query()->update()->set($user)->where(['id' => $user['id']])->execute();
                   $message = 'Your subscription period is over';
                   throw new Exception('subscription period is over, Account Expired for user id: ' .  $user['id']);
+                }
+
+                //check if any of the child has eneded with subcription period.
+                if ($role_id == PARENT_ROLE_ID) {
+
+                  $children = $this->getChildrenDetails($user['id'], null, TRUE);;
+                  if (!empty($children)) {
+                    foreach ($children as $child) {
+                      $subscription_end_date = strtotime($child['subscription_end_date']);
+                      if ((time() - (60 * 60 * 24))  > $subscription_end_date) {
+                        $warning = 1;
+                        $child_info[] = $child;
+                      }
+                    }
+                  }
                 }
 
                 //updating login time.
@@ -534,9 +552,11 @@ class UsersController extends AppController{
         'user' => $user,
         'role_id'=>$role_id,
         'status' => $status,
+        'warning' => $warning,
+        'child_info' => $child_info,
         'response' => ['secure_token' => $token],
         'message' => $message,
-        '_serialize' => ['user', 'status', 'response', 'message','role_id']
+        '_serialize' => ['user', 'status', 'warning', 'child_info', 'response', 'message','role_id']
       ]);
     }
 
@@ -1683,7 +1703,7 @@ class UsersController extends AppController{
         * @param String $pid
         *   parent Id.
         */
-       public function getChildrenDetails($pid, $cid = null) {
+       public function getChildrenDetails($pid, $cid = null, $function_call = FALSE) {
 
         
          $childRecords = TableRegistry::get('UserDetails')->find('all')->where(['parent_id' => $pid])->contain(['Users']);
@@ -1698,6 +1718,7 @@ class UsersController extends AppController{
              'username' => $childRecord['username'],
              'email' => $childRecord['email'],
              'mobile' => $childRecord['mobile'],
+             'subscription_end_date' => $childRecord['user']['subscription_end_date'],
            );
 
          }
@@ -1711,7 +1732,13 @@ class UsersController extends AppController{
                unset($data[$key]);
              }
            }
-           array_unshift($data, $temp_array);
+           if (!empty($temp_array)) {
+             array_unshift($data, $temp_array);
+           }
+         }
+
+         if ($function_call) {
+           return $data;
          }
 
          $this->set([
@@ -1761,7 +1788,7 @@ class UsersController extends AppController{
     *
     * $uid :  user Id
     */
-   public function getUserPurchaseDetails($uid) {
+   public function getUserPurchaseDetails($uid, $recent_order = TRUE, $function_call = FALSE) {
      $status = FALSE;
      $message = '';
      $purchase_details = array();
@@ -1782,6 +1809,12 @@ class UsersController extends AppController{
          . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
          . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
          . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
+       if ($recent_order = TRUE) {
+         $subquery = "(SELECT MAX(order_date) FROM user_purchase_items"
+         . " WHERE user_id = $uid)";
+         $sql.= " AND user_purchase_items.order_date = $subquery";
+       }
+
        $purchase_details_result = $connection->execute($sql)->fetchAll('assoc');
        if (!empty($purchase_details_result)) {
          $status = TRUE;
@@ -1805,6 +1838,9 @@ class UsersController extends AppController{
        }
      } catch(Exception $e) {
        $this->log($e->getMessage(), '(' . __METHOD__ . ')');
+     }
+     if ($function_call) {
+       return $purchase_details;
      }
      $this->set([
       'status' => $status,
