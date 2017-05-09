@@ -497,7 +497,7 @@ class UsersController extends AppController{
           if ($user) {
             $user_roles = TableRegistry::get('UserRoles');
             $valid_user = $user_roles->find('all')->where(['user_id' => $user['id']]);
-            $role_id=$valid_user->first()->role_id;
+            $role_id = $valid_user->first()->role_id;
             if ($user['status'] != 0) {
               $subscription_end_date = !empty($user['subscription_end_date']) ? strtotime($user['subscription_end_date']) : 0;
               if ($user['status'] != 2) {
@@ -506,6 +506,7 @@ class UsersController extends AppController{
                   $user['status'] = 2;
                   $this->Users->query()->update()->set($user)->where(['id' => $user['id']])->execute();
                   $message = 'Your subscription period is over';
+                  $warning = 1;
                   throw new Exception('subscription period is over, Account Expired for user id: ' .  $user['id']);
                 }
 
@@ -535,6 +536,8 @@ class UsersController extends AppController{
                   $user = array();
                   $message = "You are not authenticated to login into this page";
                 }
+              } elseif ($user['status'] == 2 && $role_id == STUDENT_ROLE_ID) {
+                $warning = 1;
               } else {
                 $message = 'Your subscription period is over';
               }
@@ -1326,7 +1329,7 @@ class UsersController extends AppController{
                            if($selected_courses_count==0 ||$selected_courses_count==null){
                             $data['message'][9]="Please select courses";
                             $data['status']="false";                            
-                            throw new Exception("please select courses, cannot be null");
+                            throw new Exception("please select courses cannot ");
                           }
 
                           //promo code Records
@@ -1348,10 +1351,8 @@ class UsersController extends AppController{
                           }         
 
                        // check emailchoice is yes/no 
-                        $pass= rand(1, 1000000); 
-                        $default_hasher = new DefaultPasswordHasher();
-                        $password=$default_hasher->hash($pass);
-                        $postdata['password']  = $password;
+                        $pass= rand(1, 1000000);
+                        $postdata['password']  = $pass;
 
                         $from = 'logicdeveloper7@gmail.com';
                             $subject ="Your Child authenticatation";
@@ -1414,33 +1415,33 @@ class UsersController extends AppController{
                                 $new_user_purchase_items = $user_purchase_items->newEntity($postdata);
                                 if ($user_purchase_items->save($new_user_purchase_items)) {$data['status']="True";}
                                 else{ 
-                                  $data['status']='flase';
+                                  $data['status']='false';
                                   $data['message']="Not able to save data in User Purchase Item Table Table";
                                   throw new Exception("Not able to save data in User Purchase Item Table Table");
                                 }
                              }
                             else{
-                              $data['status']='flase';
+                              $data['status']='false';
                               $data['message']=" Not able to save data in User Courses Table";
-                              throw new Exception("Not able to save data in User Courses Table");
+                              throw new Exception("Not able to save data in User Roles Table");
                           }
                         }
 
                       }
                       else{ 
-                        $data['status']='flase';
+                        $data['status']='false';
                         $data['message']=" Not able to save data in User Roles Table";
                         throw new Exception("Not able to save data in User Roles Table");
                       }
                     }
                     else{ 
-                      $data['status']='flase';
+                      $data['status']='false';
                       $data['message']="Not able to save data in User Details Table";
                       throw new Exception("Not able to save data in User Details Table");
                    }                   
                 //$data['status']='True';
                 }else{
-                  $data['status']='flase';
+                  $data['status']='false';
                   $data['message']="Not Able to add data in user table";
                   throw new Exception("Not Able to add data in user table");
 
@@ -1634,6 +1635,7 @@ class UsersController extends AppController{
                $user_id = $this->request->data['user_id'];
                $payment_controller = new PaymentController();
                $payment_controller->createBillingPlan($user_id, $data);
+//               $payment_controller->createBillingPlan($this->request->data['children_ids'], $data);
                $status = TRUE;
              }
              if (isset($response['name']) && $response['name'] == 'VALIDATION_ERROR') {
