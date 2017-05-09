@@ -524,34 +524,114 @@ class TeachersController extends AppController {
       '_serialize' => ['response']
     ]);
   }
+  
   public function saveTemplate() {
-    $connection = ConnectionManager::get('default');
-    $template_detail= TableRegistry::get('ContentTemplate');
-    if(isset($this->request->data) && !empty($this->request->data)) {
-      if (empty($this->request->data['temp_name'])) {
-        $message = 'Please give template name.';
-      }  else {
-        $standard = implode(',', $this->request->data['standard']);
-        $standard_type = implode(',', $this->request->data['standard_type']);
-        $content = $template_detail->newEntity();
-        $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
-        $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
-        $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
-        $content->standard = $standard;
-        $content->standard_type = $standard_type;
-        $content->course_id = isset($this->request->data['course']) ? $this->request->data['course'] : '';
-        $content->skill_ids = implode(',',  $this->request->data['skills']);
-        $content->sub_skill_ids = implode(',',  $this->request->data['sub_skill']);
-        if($template_detail->save($content)){
-          $message = 'Value Inserted Successfully';
-          $status = TRUE;
-       }
-      }       
-    }
+    try{
+      $connection = ConnectionManager::get('default');
+      $status = FALSE;
+      $template_detail= TableRegistry::get('ContentTemplate');
+      if(isset($this->request->data) && !empty($this->request->data)) {
+        if(!empty($this->request->data['content_type']) && $this->request->data['content_type'] == 'lesson' ) {
+          if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
+            $message = "please select a grade.";
+          }elseif ($this->request->data['course'] == '-1') {
+            $message = "please select a course.";
+          }elseif (empty($this->request->data['standard'])) {
+            $message = "please select a standard.";
+          }elseif (empty($this->request->data['standard_type'])) {
+            $message = "please select a standard type.";
+          }elseif (empty($this->request->data['lesson'])) {
+            $message = "please select a lesson name";
+          }elseif (empty($this->request->data['skills'])) {
+            $message = "please select skills.";
+          }elseif (empty($this->request->data['sub_skill'])) {
+            $message = "please select sub skills.";
+          }else if (empty($this->request->data['temp_name'])) {
+            $message = 'Please give template name.';
+          }  else {
+            $standard = implode(',', $this->request->data['standard']);
+            $standard_type = implode(',', $this->request->data['standard_type']);
+            $content = $template_detail->newEntity();
+            $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
+            $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
+            $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
+            $content->standard = $standard;
+            $content->standard_type = $standard_type;
+            $content->course_id = isset($this->request->data['course']) ? $this->request->data['course'] : '';
+            $content->skill_ids = implode(',',  $this->request->data['skills']);
+            $content->sub_skill_ids = implode(',',  $this->request->data['sub_skill']);
+            if($template_detail->save($content)){
+              $message = 'Value Inserted Successfully';
+              $status = TRUE;
+           }
+          } 
+        }else if(!empty ($this->request->data['content_type']) && $this->request->data['content_type'] == 'question') {
+          if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
+            $message[0] = "please select a grade.";
+          }elseif ($this->request->data['course'] == '-1') {
+            $message[1] = "please select a course.";
+          }elseif (empty($this->request->data['standard'])) {
+            $message[2] = "please select a standard.";
+          }elseif (empty($this->request->data['standard_type'])) {
+            $message[3] = "please select a standard type.";
+          }elseif (empty($this->request->data['skills'])) {
+            $message[4] = "please select skills.";
+          }elseif (empty($this->request->data['sub_skill'])) {
+            $message[5] = "please select sub skills.";
+          }else if (empty($this->request->data['ques_diff'])) {
+            $message[6] = 'Please select difficulity level of question.';
+          }else if (empty($this->request->data['claim'])) {
+            $message[7] = 'Please give claim.';
+          }else if (empty($this->request->data['scope'])) {
+            $message[8] = 'Please give scope.';
+          }else if (empty($this->request->data['dok'])) {
+            $message[9] = 'Please provide depth of knowledge.';
+          }else if (empty($this->request->data['ques_passage'])) {
+            $message[10] = 'Please give passage.';
+          }else if (empty($this->request->data['ques_target'])) {
+            $message[11] = 'Please give question target.';
+          }else if (empty($this->request->data['task'])) {
+            $message[12] = 'Please give task.';
+          }else if (empty($this->request->data['ques_complexity'])) {
+            $message[13] = 'Please give question complexity.';
+          }else if (empty($this->request->data['temp_name'])) {
+            $message[14] = 'Please give template name.';
+          }else {
+            $standard = implode(',', $this->request->data['standard']);
+            $standard_type = implode(',', $this->request->data['standard_type']);
+            $content = $template_detail->newEntity();
+            $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
+            $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
+            $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
+            $content->standard = $standard;
+            $content->standard_type = $standard_type;
+            $content->course_id = isset($this->request->data['course']) ? $this->request->data['course'] : '';
+            $content->skill_ids = implode(',',  $this->request->data['skills']);
+            $content->sub_skill_ids = implode(',',  $this->request->data['sub_skill']);
+            $content->difficulity_level = isset($this->request->data['ques_diff']) ? $this->request->data['ques_diff'] : '';
+            $content->claim = isset($this->request->data['claim']) ? $this->request->data['claim'] : '';
+            $content->scope = isset($this->request->data['scope']) ? $this->request->data['scope'] : '';
+            $content->depth_of_knowledge = isset($this->request->data['dok']) ? $this->request->data['dok'] : '';
+            $content->passage = isset($this->request->data['ques_passage']) ? $this->request->data['ques_passage'] : '';
+            $content->secondary_target = isset($this->request->data['ques_target']) ? $this->request->data['ques_target'] : '';
+            $content->task_noties = isset($this->request->data['task']) ? $this->request->data['task'] : '';
+            $content->text_compexity = isset($this->request->data['ques_complexity']) ? $this->request->data['ques_complexity'] : '';
+            $content->question = isset($this->request->data['ques_type']) ? $this->request->data['ques_type'] : '';
+            $content->content_type = isset($this->request->data['cont_type']) ? $this->request->data['cont_type'] : '';
+            if($template_detail->save($content)){
+              $message[15] = 'Template Saved.';
+              $status = TRUE;
+            }
+          }
+        }       
+      }
+    } catch (Exception $e) {
+      
+    }  
     $this->set([
-//       'response' => $message,
-      'status' => true ,
-      '_serialize' => ['status']
+      'message' => $message,
+      'status' => $status ,
+      '_serialize' => ['status','message']
     ]);
   }
   public function getTemplate($user_id) {
@@ -706,13 +786,69 @@ class TeachersController extends AppController {
       '_serialize' => ['skill','subject','sub_skill','message']
     ]);
   }
-  public function updateContent() {
-    
+  public function updateUserContent() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if($this->request->is('post')) {
+        $course_content = TableRegistry::get('CourseContents');
+        if(isset($this->request->data['id']) && empty($this->request->data['id'])){
+          $message = 'Some Error Occurred in updation.';
+          throw new Exception('Content id not found');
+        }else if(isset($this->request->data['updated_content']) && empty($this->request->data['updated_content'])) {
+          $message = 'Please add some content.';
+          throw new Exception('Updated content is empty');
+        }elseif(isset($this->request->data['title']) && empty($this->request->data['title'])) {
+          $message = 'Please give title for content.';
+          throw new Exception('Title can not be empty.');   
+        }elseif(isset($this->request->data['type']) && empty($this->request->data['type'])) {
+          $message = 'Please add some content.';
+          throw new Exception('Type cannot be empty.');   
+        }
+        if($message == '') {
+          $type = $this->request->data['type'];
+          if(!empty($this->request->data['updated_content'])){
+              if($this->request->data['type']== 'text'){
+                $content = $this->request->data['updated_content'];
+              }else{
+                $temp_data = explode(',',$this->request->data['updated_content']);
+                foreach($temp_data as $key=>$value) {
+                  $temp = explode(': "', $value);
+                  $temp_string = explode('"', $temp[1]);
+                  if($key == 0) {
+                    $content = $temp_string[0];
+                  }else{
+                    $content = $content.','.$temp_string[0];
+                  }  
+                }
+                $content = $this->request->data['pre_content'].','.$content; 
+              }         
+          }
+          $query = $course_content->query();
+          $result = $query->update()->set([
+              'content'=> $content
+          ])->where(['id' => $this->request->data['id'] ])->execute();
+          $row_count = $result->rowCount();
+          if($row_count == 1){
+            $message = 'Lesson content updated successfully.';
+            $status = TRUE;
+          }  else {
+            $message = 'Failed into update lesson content.';
+            throw new Exception('Failed to update lesson content.');
+          }
+        }  
+      }  
+    } catch (Exception $e) {
+      $this->log('Error in updateUserContent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+    }
+    $this->set([
+       'status' => $status,
+       'message' => $message,
+      '_serialize' => ['status','message'] 
+    ]);
   }
-
-
-
-
+  
 public function addStudent() {          
       try{         
 
@@ -1064,13 +1200,11 @@ public function addStudent() {
               'response' => $data,
                '_serialize' => ['response']
           ]);
-       }   
-
-
+       } 
+       
+       
        public function sendEmailToTeacher($tid=null){
            if($this->request->is('post')) {
-             
-
               $teacher_id =isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
               if($teacher_id!=null && !empty($teacher_id)){
                   $sids=implode(',',  array_keys($this->request->data['selectedstudent'])) ;   
@@ -1158,9 +1292,5 @@ public function addStudent() {
           }
           return $status;
        }
-
-
-
-
 }
 
