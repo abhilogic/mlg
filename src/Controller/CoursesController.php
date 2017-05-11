@@ -795,7 +795,7 @@ class CoursesController extends AppController{
         $teacher_contents = array();
         $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
-        if ($type == null) {
+        if ($type == 'type') {
           $connection = ConnectionManager::get('default');
           $sql = "SELECT * FROM course_details WHERE parent_id = $parent_id";
           $course_details = $connection->execute($sql)->fetchAll('assoc');
@@ -807,7 +807,7 @@ class CoursesController extends AppController{
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
-      if($type == null) {
+      if($type == 'type') {
         foreach ($course_details as $course_detail) {
           if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
             $slugs = explode(',' ,$course_detail['slug']);
@@ -817,7 +817,7 @@ class CoursesController extends AppController{
                 $href_slice = array_slice($slug_array, -3, 3);
                 if (strtoupper($href_slice[1]) == 'V') {
                   $khan_api_slugs[@current($href_slice)] = @current($href_slice);
-                  $khan_api_content_title[@end($href_slice)] = @end($href_slice);
+                  $khan_api_content_title[] = @end($href_slice);
                 }
               } else {
                 $khan_api_slugs[] = @current($slug_array);
@@ -826,7 +826,7 @@ class CoursesController extends AppController{
           }
           if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
             $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
-            $course_details['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
+            $course_detail['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
           }
           if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
             $course_contents = $course_detail['course_contents'];
