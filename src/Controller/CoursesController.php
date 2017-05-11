@@ -789,7 +789,7 @@ class CoursesController extends AppController{
 
      }
        
-     public function getAllCourseList($parent_id=0, $type=null){
+     public function getAllCourseList($parent_id=0, $type=null, $course_id = null){
       try{
         $khan_api_slugs = array();
         $teacher_contents = array();
@@ -807,7 +807,7 @@ class CoursesController extends AppController{
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
-      if($type == NULL) {
+      if($type == null) {
         foreach ($course_details as $course_detail) {
           if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
             $slugs = explode(',' ,$course_detail['slug']);
@@ -823,6 +823,8 @@ class CoursesController extends AppController{
                 $khan_api_slugs[] = @current($slug_array);
               }
             }
+          }
+          if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
             $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
             $course_details['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
           }
