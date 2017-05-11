@@ -6,7 +6,7 @@ use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
 use Cake\Core\Exception\Exception;
 use Cake\Routing\Router;
-//use Cake\Datasource\ConnectionManager;
+use Cake\Datasource\ConnectionManager;
 
 /**
  * Courses Controller
@@ -796,7 +796,10 @@ class CoursesController extends AppController{
         $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
         if ($type == null) {
-          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
+          $connection = ConnectionManager::get('default');
+          $sql = "SELECT * FROM course_details WHERE parent_id = $parent_id";
+          $course_details = $connection->execute($sql)->fetchAll('assoc');
+//          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
           $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
         }
@@ -814,12 +817,14 @@ class CoursesController extends AppController{
                 $href_slice = array_slice($slug_array, -3, 3);
                 if (strtoupper($href_slice[1]) == 'V') {
                   $khan_api_slugs[@current($href_slice)] = @current($href_slice);
-                  $khan_api_content_title[] = @end($href_slice);
+                  $khan_api_content_title[@end($href_slice)] = @end($href_slice);
                 }
               } else {
                 $khan_api_slugs[] = @current($slug_array);
               }
             }
+            $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
+            $course_details['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
           }
           if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
             $course_contents = $course_detail['course_contents'];
