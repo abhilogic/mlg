@@ -529,9 +529,10 @@ class TeachersController extends AppController {
     try{
       $connection = ConnectionManager::get('default');
       $status = FALSE;
+      $message = '';
       $template_detail= TableRegistry::get('ContentTemplate');
       if(isset($this->request->data) && !empty($this->request->data)) {
-        if(!empty($this->request->data['content_type']) && $this->request->data['content_type'] == 'lesson' ) {
+        if(!empty($this->request->data['cont_type']) && $this->request->data['cont_type'] == 'lesson' ) {
           if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
             $message = "please select a grade.";
           }elseif ($this->request->data['course'] == '-1') {
@@ -560,51 +561,51 @@ class TeachersController extends AppController {
             $content->course_id = isset($this->request->data['course']) ? $this->request->data['course'] : '';
             $content->skill_ids = implode(',',  $this->request->data['skills']);
             $content->sub_skill_ids = implode(',',  $this->request->data['sub_skill']);
+            $content->content_type = isset($this->request->data['cont_type']) ? $this->request->data['cont_type'] : '';
             if($template_detail->save($content)){
               $message = 'Value Inserted Successfully';
               $status = TRUE;
            }
           } 
-        }else if(!empty ($this->request->data['content_type']) && $this->request->data['content_type'] == 'question') {
+        }else if(!empty ($this->request->data['cont_type']) && $this->request->data['cont_type'] == 'question') {
           if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
-            $message[0] = "please select a grade.";
+            $message = "please select a grade.";
           }elseif ($this->request->data['course'] == '-1') {
-            $message[1] = "please select a course.";
+            $message = "please select a course.";
           }elseif (empty($this->request->data['standard'])) {
-            $message[2] = "please select a standard.";
-          }elseif (empty($this->request->data['standard_type'])) {
-            $message[3] = "please select a standard type.";
+            $message = "please select a standard.";
           }elseif (empty($this->request->data['skills'])) {
-            $message[4] = "please select skills.";
+            $message = "please select skills.";
           }elseif (empty($this->request->data['sub_skill'])) {
-            $message[5] = "please select sub skills.";
+            $message = "please select sub skills.";
           }else if (empty($this->request->data['ques_diff'])) {
-            $message[6] = 'Please select difficulity level of question.';
+            $message = 'Please select difficulity level of question.';
           }else if (empty($this->request->data['claim'])) {
-            $message[7] = 'Please give claim.';
+            $message = 'Please give claim.';
           }else if (empty($this->request->data['scope'])) {
-            $message[8] = 'Please give scope.';
+            $message = 'Please give scope.';
           }else if (empty($this->request->data['dok'])) {
-            $message[9] = 'Please provide depth of knowledge.';
+            $message = 'Please provide depth of knowledge.';
           }else if (empty($this->request->data['ques_passage'])) {
-            $message[10] = 'Please give passage.';
+            $message = 'Please give passage.';
           }else if (empty($this->request->data['ques_target'])) {
-            $message[11] = 'Please give question target.';
+            $message = 'Please give question target.';
           }else if (empty($this->request->data['task'])) {
-            $message[12] = 'Please give task.';
+            $message = 'Please give task.';
           }else if (empty($this->request->data['ques_complexity'])) {
-            $message[13] = 'Please give question complexity.';
+            $message = 'Please give question complexity.';
           }else if (empty($this->request->data['temp_name'])) {
-            $message[14] = 'Please give template name.';
+            $message = 'Please give template name.';
           }else {
             $standard = implode(',', $this->request->data['standard']);
-            $standard_type = implode(',', $this->request->data['standard_type']);
+            //$standard_type = implode(',', $this->request->data['standard_type']);
+            $question = implode(',',$this->request->data['ques_type']);
             $content = $template_detail->newEntity();
             $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
             $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
             $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
             $content->standard = $standard;
-            $content->standard_type = $standard_type;
+            //$content->standard_type = $standard_type;
             $content->course_id = isset($this->request->data['course']) ? $this->request->data['course'] : '';
             $content->skill_ids = implode(',',  $this->request->data['skills']);
             $content->sub_skill_ids = implode(',',  $this->request->data['sub_skill']);
@@ -616,11 +617,13 @@ class TeachersController extends AppController {
             $content->secondary_target = isset($this->request->data['ques_target']) ? $this->request->data['ques_target'] : '';
             $content->task_noties = isset($this->request->data['task']) ? $this->request->data['task'] : '';
             $content->text_compexity = isset($this->request->data['ques_complexity']) ? $this->request->data['ques_complexity'] : '';
-            $content->question = isset($this->request->data['ques_type']) ? $this->request->data['ques_type'] : '';
+            $content->question = $question;
             $content->content_type = isset($this->request->data['cont_type']) ? $this->request->data['cont_type'] : '';
             if($template_detail->save($content)){
-              $message[15] = 'Template Saved.';
+              $message = 'Template Saved.';
               $status = TRUE;
+            }else{
+             $message='Template Not Saved.';
             }
           }
         }       
@@ -634,22 +637,36 @@ class TeachersController extends AppController {
       '_serialize' => ['status','message']
     ]);
   }
-  public function getTemplate($user_id) {
+  public function getTemplate($user_id,$type) {
     try {
       $content = array();
       $content_detail = array();
       $template_detail= TableRegistry::get('ContentTemplate');
-      $template = $template_detail->find('all')->where(['user_id' => $user_id]);
+      $template = $template_detail->find('all')->where(['user_id' => $user_id ,'content_type'=>$type]);
       foreach ($template as $key => $value) {
         $content_detail['id'] = $value['id'];
         $content_detail['template_name'] = $value['template_name'];
         $content_detail['user_id'] = $value['user_id'];
         $content_detail['grade'] = $value['grade'];
         $content_detail['standard'] = explode(',', $value['standard']);
+        if($type == 'lesson'){
+			
+	    }
         $content_detail['standard_type'] = explode(',', $value['standard_type']);
         $content_detail['course_id'] = $value['course_id'];
         $content_detail['skills'] = explode(',', $value['skill_ids']);
         $content_detail['sub_skill'] = explode(',', $value['sub_skill_ids']);
+        if($type == 'question'){
+		  $content_detail['ques_diff'] = $value['difficulity_level'];
+	      $content_detail['claim'] = $value['claim'];
+		  $content_detail['scope'] = $value['scope'];
+		  $content_detail['dok'] = $value['depth_of_knowledge'];
+		  $content_detail['ques_passage'] = explode(',', $value['passage']);
+		  $content_detail['ques_target'] = explode(',', $value['secondary_target']);
+		  $content_detail['task'] = $value['task_noties'];
+		  $content_detail['ques_complexity'] = explode(',', $value['text_compexity']);
+		  $content_detail['ques_type'] = explode(',', $value['question']);
+		}
         $content[] = $content_detail;
       }
     } catch (Exception $ex) {
@@ -1420,5 +1437,24 @@ public function addStudent() {
           }
           return $status;
        }
+   /**
+    * create an api for save question.
+    * 
+    **/
+    public function saveQuestion() {
+	  try{
+	    $message = '';
+	    $status = FALSE;
+      if($this->request->is('post')) {
+        print_r($this->request->data);
+      }
+	    
+	  }catch(Exception $e) {
+	     
+	  }	
+	}
+    
+    
+    
 }
 

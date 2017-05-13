@@ -6,7 +6,7 @@ use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
 use Cake\Core\Exception\Exception;
 use Cake\Routing\Router;
-//use Cake\Datasource\ConnectionManager;
+use Cake\Datasource\ConnectionManager;
 
 /**
  * Courses Controller
@@ -789,14 +789,17 @@ class CoursesController extends AppController{
 
      }
        
-     public function getAllCourseList($parent_id=0, $type=null){
+     public function getAllCourseList($parent_id=0, $type=null, $course_id = null){
       try{
         $khan_api_slugs = array();
         $teacher_contents = array();
         $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
-        if ($type == null) {
-          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
+        if ($type == 'type') {
+          $connection = ConnectionManager::get('default');
+          $sql = "SELECT * FROM course_details WHERE parent_id = $parent_id";
+          $course_details = $connection->execute($sql)->fetchAll('assoc');
+//          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
           $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
         }
@@ -804,7 +807,7 @@ class CoursesController extends AppController{
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
-      if($type == NULL) {
+      if($type == 'type') {
         foreach ($course_details as $course_detail) {
           if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
             $slugs = explode(',' ,$course_detail['slug']);
@@ -820,6 +823,10 @@ class CoursesController extends AppController{
                 $khan_api_slugs[] = @current($slug_array);
               }
             }
+          }
+          if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
+            $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
+            $course_detail['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
           }
           if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
             $course_contents = $course_detail['course_contents'];
