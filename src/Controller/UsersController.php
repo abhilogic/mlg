@@ -1650,7 +1650,10 @@ class UsersController extends AppController{
                $payment_controller = new PaymentController();
                $user_ids = $this->request->data['children_ids'];
                foreach ($user_ids as $child_id) {
-                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, TRUE);
+//                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, TRUE);
+                 
+                 //omit
+                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, FALSE);
                  if (!empty($billing_plan['plan_id'])) {
                    $plan_id = $billing_plan['plan_id'];
 
@@ -1678,8 +1681,8 @@ class UsersController extends AppController{
 
                        // Updated user purchase items table.
                        $query->update()->set([
-                         'billing_id' => $billing_response['id'],
-                         'billing_state' => $billing_response['state']
+                         'billing_id' => $billing_response['result']['id'],
+                         'billing_state' => $billing_response['result']['state']
                        ])->where(['user_id' => $child_id, 'order_date' => $order_date])->execute();
 
                        // update user orders table.
