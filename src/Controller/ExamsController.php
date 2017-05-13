@@ -790,7 +790,7 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
                         $answerArray[]=array('value'=>$answerRow['answers'],'score'=>1);
                         $quiz_marks = $quiz_marks +1;
                       } 
-                      $question_info['answers'] =  $answerArray; 
+                     // $question_info['answers'] =  $answerArray; 
                       $answerArray =[];                   
                    }else{
                     $question_info ['answer_message'] = "No Answer Found for this question";
