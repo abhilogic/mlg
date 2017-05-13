@@ -185,7 +185,7 @@ return [
             'port' => 587,
             'timeout' => 30,
             'username' => 'anita@apparrant.com',
-            'password' => 'apps@246',
+            'password' => 'aniapparrant@246',
 
             'client' => null,
             'tls' => true,
