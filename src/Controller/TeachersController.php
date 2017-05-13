@@ -1126,7 +1126,6 @@ public function addStudent() {
 
        // Function to delete the student
        public function deleteStudent(){
-
           $postdata['id']=isset($_GET['id'])? $_GET['id']:$data['message'][0]="Student id is null. Please check";
           if(isset($_GET['id'])) {
              $dtsql ="DELETE users.*, user_details.* FROM users,user_details,user_courses                             
@@ -1142,21 +1141,96 @@ public function addStudent() {
                       $data['message']="Opps..The Student records is not deleted.Please Try again";
                     }
               }
-
-
-          
           $this->set([           
               'response' => $data,
                '_serialize' => ['response']
           ]); 
-
-
-
        }
+
+
+       public function createGroup($tid=null){        
+          if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
+              $students = $this->request->data['selectedstudent'];
+              $student_groups= TableRegistry::get('StudentGroups'); 
+              $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
+
+              if(isset($this->request->data['group_image'])){
+                $gp_img = json_decode($this->request->data['group_image']);
+                $postdata['group_icon'] = $gp_img->response;
+              }
+
+              $postdata['title'] = $this->request->data['groupname'];
+
+               
+                if(!empty($postdata['teacher_id']) && $postdata['teacher_id']!=null){                    
+                    
+                    $postdata['created_by'] = time();
+                    $postdata['modified_by'] = time();
+
+                    foreach ($students as $id => $value) {
+                        $postdata['student_id'] = $id;
+                        $new_rowEntry = $student_groups->newEntity($postdata);
+                        if ($student_groups->save($new_rowEntry)) {
+                          $data['status']="true";
+                          $data['message']="Group- ' ". $postdata['title'] ." ' has been created.";                
+                        }else{
+                          $data['status']="false";
+                          $data['message']="Please login First. No Teacher UID get.";
+                        }
+                    }
+                }else{
+                    $data['status']="false";
+                    $data['message']="Please login First. No Teacher UID get.";
+                }
+          }else{
+              $data['status']="false";
+              $data['message']="Opps....Either students are not selected or Group Title is not entered .";
+          }
+
+
+          $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]); 
+       }
+
+
+       //Get groups of a teacher
+       public function getGroups($tid=null){
+          $teacher_id = isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
+
+          if(!empty($teacher_id) || $teacher_id!=null || $teacher_id!='null'){
+             $student_groups= TableRegistry::get('StudentGroups')->find('all')->where(['teacher_id'=>$teacher_id])->group('group_icon')->toArray();
+
+                if(count($student_groups) > 0){
+                     foreach ($student_groups as $stgroup) {
+                        if(!empty($stgroup['group_icon'] || $stgroup['group_icon'] !="")){
+                          $data['groups'][] = $stgroup;
+                        }
+                        else{
+                          $stgroup['group_icon']="group_images/default_group.png";
+                          $data['groups'][] = $stgroup;
+
+                        }
+                                          
+                     }
+                }
+                $data['status']="true";
+          }else{
+              $data['status']="false";
+              $data['message']="Opps. Please login again. Teacher Id cannot be null.";
+          }
+
+          $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+
+
+      }
 
        // API to get the teacher added student for a course of perticular class
        public function getStudentsOfClass($tid=null,$course_id=null){
-
 
           $tid = isset($_GET['teacher_id'])? $_GET['teacher_id']:$tid;
            $course_id = isset($_GET['course_id'])? $_GET['course_id']:$course_id;
@@ -1183,10 +1257,10 @@ public function addStudent() {
                           $student['open_key'] = hex2bin($open_key);
                           $data['students'][]=$student;
                       }
-                      
+                      $data['status']="true";
 
                   }else{
-                    $data['status']="true";
+                    $data['status']="false";
                     $data['message']="Please Add Student in Your Class.";
                   }                
 
@@ -1200,9 +1274,63 @@ public function addStudent() {
               'response' => $data,
                '_serialize' => ['response']
           ]);
+
+       }  
+
+
+       public function getStudentOfTeacher($tid=null){
+
+          $tid = isset($_GET['teacher_id'])? $_GET['teacher_id']:$tid;          
+            if( (!empty($tid)) ){  
+                  $connection = ConnectionManager::get('default');
+                   $sql =" SELECT users.id as id,first_name,last_name,username,email,password,open_key,profile_pic from users"
+                        . " INNER JOIN user_details ON users.id = user_details.user_id "
+                        . " INNER JOIN user_courses ON users.id = user_courses.user_id "                       
+                        . " WHERE user_details.parent_id =".$tid
+                        ." ORDER BY users.id ASC "; 
+                  $student_records = $connection->execute($sql)->fetchAll('assoc');
+                  $studentcount = count($student_records);
+
+                  if($studentcount >0 ){
+                      foreach($student_records as $studentrow) { 
+                          $student['id']=$studentrow['id'];
+                          $student['first_name']=$studentrow['first_name'];
+                          $student['last_name']=$studentrow['last_name'];
+                          $student['username']=$studentrow['username'];
+                          $student['email']=$studentrow['email'];
+                          $student['password']=$studentrow['password'];
+                          $open_key=$studentrow['open_key'];
+                          $student['open_key'] = hex2bin($open_key);
+                          if( $studentrow['profile_pic']==NULL ){
+                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                          }else{
+                            $student['profile_pic'] = $studentrow['profile_pic'];
+                          }
+                          $data['students'][]=$student;
+                      }    
+                      $data['status']="true";                  
+
+                  }else{
+                    $data['status']="false";
+                    $data['message']="No student is added yet by teacher.";
+                  }                
+
+            }else{
+                $data['status']="false";
+                $data['message']="teacher_id cannot be null. Please check it";
+            }
+
+           
+            $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+
+
+
        } 
-       
-       
+
+
        public function sendEmailToTeacher($tid=null){
            if($this->request->is('post')) {
               $teacher_id =isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
