@@ -622,6 +622,7 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
 
      }
 
+  $data= base64_encode(serialize($data));
       $this->set(array(
         'response' => $data,
         '_serialize' => ['response']
