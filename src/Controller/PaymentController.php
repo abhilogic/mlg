@@ -29,48 +29,54 @@ class PaymentController extends AppController {
   /**
    * Create Paypal Billing Plan.
    */
-  public function createBillingPlan($user_id = null, $card_detail = null) {
+  public function createBillingPlan($user_id = null, $access_token = null, $trial_period = TRUE) {
     try {
-      $turn = 1;
-      $user_controller = new UsersController();
-      $response = $user_controller->getPaymentbrief(array('user_id' => $user_id));
-      foreach ($response as $child) {
+        $user_controller = new UsersController();
+        $response = $user_controller->getUserPurchaseDetails($user_id, TRUE);
         $frequency = 'MONTH';
-        $cycles = (strtoupper($child['plan_duration']) == 'QUATERLY') ? 3 : 1;
-        if (strtoupper($child['plan_duration']) == 'YEARLY') {
+        $cycles = (strtoupper($response['plan_duration']) == 'QUATERLY') ? 3 : 1;
+        if (strtoupper($response['plan_duration']) == 'YEARLY') {
           $frequency = 'YEAR';
         }
 
         $fixed_name = 'Deduction For  Subscription';
-        $fixed_description = 'You will be charged ' . $child['package_amount'] . ' for ' . $child['plan_duration'];
+        $fixed_description = 'You will be charged ' . $response['package_amount'] . ' for ' . $response['plan_duration'];
 
         $fixed_payment_name = 'Regular payment defination';
         $fixed_payment_type = 'REGULAR';
-        $fixed_payment_frequency = $frequency;
+//        $fixed_payment_frequency = $frequency;
+
+        //omit
+        $fixed_payment_frequency = 'DAY';
         $fixed_payment_frequency_interval = 1;
 
-        $fixed_amount_value = $child['package_amount'];
+        $fixed_amount_value = $response['package_amount'];
 
-        $fixed_amount_currency = 'USD';
-        $fixed_cycles = $cycles;
+        $fixed_amount_currency = PAYPAL_CURRENCY;
+
+//        $fixed_cycles = $cycles;
+
+        //omit
+        $fixed_cycles = 2;
+
         $fixed_charged_shipping_amount_value = 0;
-        $fixed_charged_shipping_amount_currency = 'USD';
+        $fixed_charged_shipping_amount_currency = PAYPAL_CURRENCY;
         $fixed_charged_tax_amount_value = 0;
-        $fixed_charged_tax_amount_currency = 'USD';
+        $fixed_charged_tax_amount_currency = PAYPAL_CURRENCY;
 
         $trial_name = 'Subcription on trial';
         $trial_frequency = 'MONTH';
         $trial_frequency_interval = 1;
         $trial_amount_value = 0;
-        $trial_amount_currency = 'USD';
+        $trial_amount_currency = PAYPAL_CURRENCY;
         $trial_cycles = 1;
         $trial_charged_shipping_amount_value = 0;
-        $trial_charged_shipping_amount_currency = 'USD';
+        $trial_charged_shipping_amount_currency = PAYPAL_CURRENCY;
         $trial_charged_tax_amount_value = 0;
-        $trial_charged_tax_amount_currency = 'USD';
+        $trial_charged_tax_amount_currency = PAYPAL_CURRENCY;
 
         $merchant_setup_fee_value = 0;
-        $merchant_setup_fee_currency = 'USD';
+        $merchant_setup_fee_currency = PAYPAL_CURRENCY;
         $return_url = 'http://www.paypal.com';
         $cancel_url = 'http://www.paypal.com/cancel';
         $auto_bill_amount = 'NO';
@@ -108,33 +114,6 @@ class PaymentController extends AppController {
                   )
                 )
               )
-            ),
-            array(
-              "name" => $trial_name,
-              "type" => "TRIAL",
-              "frequency" => $trial_frequency,
-              "frequency_interval" => $trial_frequency_interval,
-              "amount" => array(
-                "value" => $trial_amount_value,
-                "currency" => $trial_amount_currency
-              ),
-              "cycles" => $trial_cycles,
-              "charge_models" => array(
-                array(
-                  "type" => "SHIPPING",
-                  "amount" => array(
-                    "value" => $trial_charged_shipping_amount_value,
-                    "currency" => $trial_charged_shipping_amount_currency
-                  )
-                ),
-                array(
-                  "type" => "TAX",
-                  "amount" => array(
-                    "value" => $trial_charged_tax_amount_value,
-                    "currency" => $trial_charged_tax_amount_currency
-                  )
-                )
-              )
             )
           ),
           "merchant_preferences" => array(
@@ -150,10 +129,45 @@ class PaymentController extends AppController {
           )
         );
 
-        $user_controller = new UsersController();
-        $access_token = $user_controller->paypalAccessToken();
+        if ($trial_period == TRUE) {
+          $trial_payment_definitions = array(
+            "name" => $trial_name,
+            "type" => "TRIAL",
+            "frequency" => $trial_frequency,
+            "frequency_interval" => $trial_frequency_interval,
+            "amount" => array(
+              "value" => $trial_amount_value,
+              "currency" => $trial_amount_currency
+            ),
+            "cycles" => $trial_cycles,
+            "charge_models" => array(
+              array(
+                "type" => "SHIPPING",
+                "amount" => array(
+                  "value" => $trial_charged_shipping_amount_value,
+                  "currency" => $trial_charged_shipping_amount_currency
+                )
+              ),
+              array(
+                "type" => "TAX",
+                "amount" => array(
+                  "value" => $trial_charged_tax_amount_value,
+                  "currency" => $trial_charged_tax_amount_currency
+                )
+              )
+            )
+          );
+          $post_fields['payment_definitions'][] = $trial_payment_definitions;
+        }
+        $url = 'https://api.sandbox.paypal.com/v1/payments/billing-plans/';
+        if (USE_SANDBOX_ACCOUNT == FALSE) {
+          $url = 'https://api.paypal.com/v1/payments/billing-plans/';
+        }
+        if ($access_token == null) {
+          $access_token = $user_controller->paypalAccessToken();
+        }
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/payments/billing-plans/");
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_fields));
         curl_setopt($ch, CURLOPT_POST, 1);
@@ -169,35 +183,19 @@ class PaymentController extends AppController {
         }
         curl_close($ch);
         $result = json_decode($result, TRUE);
-        $plan_id = $result['id'];
-        $plan_status = $this->activatePayaplPlan($plan_id, $access_token);
-        //      $billing_response = $this->billingAgreementViaCreditCard($user_id, $card_detail, $plan_id, $access_token);
-
-        $user_purchase_items_table = TableRegistry::get('UserPurchaseItems');
-        $order_date = '';
-        $user_purchase_item = $user_purchase_items_table->find('all')
-          ->select('order_date')
-          ->where(['user_id' => $child['child_id']])
-          ->orderDesc('id')->limit(1);
-        foreach ($user_purchase_item as $item) {
-          $item_order_date = (array)$item->order_date;
-          $order_date = $item_order_date['date'];
+        $error = FALSE;
+        $plan_id = isset($result['id']) ? $result['id'] : '';
+        if (isset($result['name']) && ($result['name'] == 'VALIDATION_ERROR')) {
+          $error = TRUE;
+          throw new Exception('Exception occured: ' . json_encode($result));
         }
-        $query = $user_purchase_items_table->query();
-        //      $update_purchase_items =  $query->update()->set([
-        //        'paypal_plan_id'=> $plan_id,
-        //        'plan_status' => $plan_status,
-        //        'billing_id' => $billing_response['id'],
-        //        'billing_state' => $billing_response['state']
-        //        ])->where(['user_id' => $child['child_id']])->execute();
-        $update_purchase_items = $query->update()->set([
-            'paypal_plan_id' => $plan_id,
-            'paypal_plan_status' => $plan_status,
-        ])->where(['user_id' => $child['child_id'], 'order_date' => $order_date])->execute();
-      }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
+    return array('plan_id' => $plan_id,
+      'order_date' => $response['db_order_date'],
+      'total_amount' => $response['package_amount'],
+      'error' => $error);
   }
 
   /*
@@ -225,7 +223,11 @@ class PaymentController extends AppController {
       );
       $ch = curl_init();
 
-      curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/payments/billing-plans/$plan_id/");
+      $url = "https://api.sandbox.paypal.com/v1/payments/billing-plans/$plan_id/";
+      if (USE_SANDBOX_ACCOUNT == FALSE) {
+        $url = "https://api.paypal.com/v1/payments/billing-plans/$plan_id/";
+      }
+      curl_setopt($ch, CURLOPT_URL, $url);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
       curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_fields));
       curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PATCH");
@@ -257,23 +259,17 @@ class PaymentController extends AppController {
    */
   public function billingAgreementViaCreditCard($user_id = null, $card_details = null, $plan_id = null, $access_token = null) {
     try {
+      $result = array();
       $user_controller = new UsersController();
       if ($access_token == null) {
         $access_token = $user_controller->paypalAccessToken();
       }
-      $user = $user_controller->getUserDetails($user_id, TRUE);
-
-      $payment_method = 'credit_card';
-      $payer_email = $user['email'];
-      if ($card_details != null) {
-        foreach ($card_details as $detail) {
-          $card_number = $detail['number'];
-          $expire_month = $detail['expire_month'];
-          $expire_year = $detail['expire_year'];
-          $cvv = $detail['cvv2'];
-          $card_type = $detail['visa'];
-        }
+      $payer_email = '';
+      $user_info = $user_controller->getUserDetails($user_id, TRUE);
+      foreach ($user_info as $user) {
+        $payer_email = $user['email'];
       }
+      $payment_method = 'credit_card';
 
       $billing_address_exist = FALSE;
       $post_fields = array(
@@ -287,19 +283,23 @@ class PaymentController extends AppController {
           'funding_instruments' => array(
             array(
               'credit_card' => array(
-                'type' => $card_type,
-                'number' => $card_number,
-                'expire_month' => $expire_month,
-                'expire_year' => $expire_year,
-                'cvv2' => $cvv,
+                'type' => isset($card_details['card_type']) ? $card_details['card_type'] : 'visa',
+                'number' => $card_details['number'],
+                'expire_month' => $card_details['expire_month'],
+                'expire_year' => $card_details['expire_year'],
+                'cvv2' => $card_details['cvv2'],
               )
             )
           )
         )
       );
 
+      $url = "https://api.sandbox.paypal.com/v1/payments/billing-agreements/";
+      if (USE_SANDBOX_ACCOUNT == FALSE) {
+        $url = "https://api.paypal.com/v1/payments/billing-agreements/";
+      }
       $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/payments/billing-agreements/");
+      curl_setopt($ch, CURLOPT_URL, $url);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
       curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_fields));
       curl_setopt($ch, CURLOPT_POST, 1);
@@ -310,14 +310,20 @@ class PaymentController extends AppController {
       curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
       $result = curl_exec($ch);
+      $result = json_decode($result, TRUE);
       if (curl_errno($ch)) {
         echo 'Error:' . curl_error($ch);
       }
       curl_close($ch);
+      $error = FALSE;
+      if (isset($result['name'])) {
+        $error = TRUE;
+        throw new Exception('Exception occured: ' . json_encode($result));
+      }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
-    return json_decode($result);
+    return array('result' => $result, 'error' => $error);
   }
 
 }
