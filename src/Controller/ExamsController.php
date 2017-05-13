@@ -427,7 +427,109 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
       ));
 
   }
-
+// Function for get the corect answer
+  public function getAnsForExam() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if($this->request->is('post')) {
+      $corr_ans = array();
+      if(empty($this->request->data['user_response'])){
+        $message = 'please select a answer';
+      }
+      if($message == '') {
+        $question = TableRegistry::get('question_master');
+      $answer = TableRegistry::get('answer_master');
+      $user_quiz = TableRegistry::get('user_quiz_responses');
+      $ques = $question->find('all')->where(['id' => $this->request->data['question_id']]);
+      foreach ($ques as $key => $value) {
+       $unique_id = $value['uniqueId'];
+      }
+      $correct_answer = $answer->find('all')->where(['uniqueId' => $unique_id]);
+      $corr_ans_count = 0;
+      foreach ($correct_answer as $key => $value) {
+        $id[] = $value['id'];
+        $corr_ans[] = $value['answers'];
+        $corr_ans_count++;
+      }
+      $correct_count = 0; // for check the count the given ans of user are same as actual answer.
+      $user_response = $this->request->data['user_response'];
+      $count_user_response = count($user_response);
+      $response = $user_quiz->newEntity();
+      $response->id = '';
+      $response->user_id = $this->request->data['user_id'];
+      $response->exam_id = $this->request->data['exam_id'];
+      $response->item_id = $this->request->data['question_id'];
+      foreach ($user_response as $key => $value) {
+        foreach ($corr_ans as $ki => $val) {
+          if(strcmp($val, $value['value'])) {
+            $correct_count++;
+          }
+        }
+        if($key == 0){
+          $user_res = $value['value'];
+        }else {
+          $user_res = $user_res.':'.$value['value'];
+        }
+      }
+      if($correct_count == $corr_ans_count) {
+        $response->score= 1;
+        $response->correct= 1;
+      }else{
+        $response->score= 0;
+        $response->correct = 0;
+      }
+      $response->response = $user_res;
+      if($user_quiz->save($response)) {
+        $status = TRUE;
+        $message = 'data saved successfully.';
+      }
+      }
+      }
+      
+    } catch (Exception $exc) {
+      echo $exc->getTraceAsString();
+    }
+    $this->set(array(
+        'status' => $status,
+        'message' => $message,
+        '_serialize' => ['status','message']
+      ));
+  }
+  public function getQuizUserId($user_name='') {
+    try {
+      $id = '';
+      $user_id = '';
+      $message = '';
+      $status = FALSE;
+      if($user_name == '') {
+        $message = 'please fill the user name';
+      }  else {
+        $user_quiz = TableRegistry::get('external_users');
+        $result = $user_quiz->find()->where(['username' => $user_name]);
+        foreach ($result as $key => $value) {
+          $id = $value['id'];
+        }
+        $user_detail = TableRegistry::get('user_details');
+        $res = $user_detail->find()->where(['external_user_id'=>$id]);
+        foreach ($res as $ki => $val) {
+          $user_id = $val['user_id'];
+        }
+        if($user_id == ''){
+          $message = 'user not exist.';
+        }  else {
+          $status = TRUE;
+        }
+      }       
+    } catch (Exception $exc) {
+      echo $exc->getTraceAsString();
+    }
+    $this->set(array(
+        'user_id' => $user_id,
+         'message' => $message,
+        '_serialize' => ['user_id','message']
+    ));
+  }
 
 
 
