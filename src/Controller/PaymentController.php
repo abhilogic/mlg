@@ -283,11 +283,23 @@ class PaymentController extends AppController {
           'funding_instruments' => array(
             array(
               'credit_card' => array(
+                'first_name' => $card_details['first_name'],
+                'last_name' => $card_details['last_name'],
                 'type' => isset($card_details['card_type']) ? $card_details['card_type'] : 'visa',
                 'number' => $card_details['number'],
                 'expire_month' => $card_details['expire_month'],
                 'expire_year' => $card_details['expire_year'],
                 'cvv2' => $card_details['cvv2'],
+                //omit
+                'billing_address' => array (
+                  'line1' => '065769 Holcomb Bridge Road #141',
+                  'line2' => '5713 E Dimond Boulevard #B9',
+                  'city' => 'Wichita',
+                  'state' => 'KS',
+                  'postal_code' => '67202',
+                  'country_code' => 'US',
+                  'phone' => '+1 6202311026',
+                )
               )
             )
           )
