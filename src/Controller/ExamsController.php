@@ -539,11 +539,16 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
      /*$curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]);*/
 
      $vendor_authenticate =$this->externalUsersAuthVerification() ;
-     if($vendor_authenticate['status']="true"){
+
+    
+     if($vendor_authenticate['status']=="true"){
         $data['status'] = true;
-        $data['authenticate'] ='Yes';
+        $data['authenticate'] ='Yes';       
         $data['message'] = $vendor_authenticate['message'];
         $course_ids=array();
+
+
+        $user_id = isset($vendor_authenticate['key'] ) ? $vendor_authenticate['key'] :null;
 
 
         // to get the question list
@@ -596,9 +601,10 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
                      }
                 }
                 $subj = $course_ids;
-                $grade = $grade_id; 
+                $grade = $grade_id;
+                
              
-                $data['questions']=$this->getQuestionsList($subj,$grade,$standard,$limit,$skills,$target,$dok,$difficulty,$type);
+                $data['questions']=$this->getQuestionsList($subj,$grade,$standard,$limit,$skills,$target,$dok,$difficulty,$type,$user_id);
               
               }
               else{
@@ -625,9 +631,7 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
 
 
 
-    public function createQuiz($limit=null,$itemsIds=array(),$quiz_marks=null){
-
-
+    public function createQuiz($limit=null,$itemsIds=array(),$quiz_marks=null,$user_id=null){
         if(!empty($itemsIds) && !empty($limit) && !empty($quiz_marks) ){
             $date=date("Y-m-d H:i:s");    
             $epoch=date("YmdHis");
@@ -638,6 +642,7 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
             $quiz_info['max_questions'] = count($itemsIds);
             $quiz_info['duration'] = '1'; 
             $quiz_info['status'] = 1;
+            $quiz_info['created_by'] = $user_id;
             $quiz_info['created'] = time();
             $quiz_info['modified'] = time();
 
@@ -680,10 +685,10 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
 
     }
 
-    public function getQuestionsList($subj,$grade,$standard,$limit,$skills,$target,$dok,$difficulty,$type){
+    public function getQuestionsList($subj,$grade,$standard,$limit,$skills,$target,$dok,$difficulty,$type,$user_id){
 
       $subj= '('.implode(',', $subj).')';
-      $connection = ConnectionManager::get('default'); 
+      $connection = ConnectionManager::get('default');     
       
 
       $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard, qm.docId, qm.uniqueId, questionName,  qm.level,
@@ -744,15 +749,16 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
         //if($skills !== NULL){ $sql.=" and skills = '".$skills."'";  }
         if($target !== NULL){ $sql.=" and target ='".$target."'";   }
         if($dok !== NULL){    $sql.=" and hm.DOK ='".$dok."'";      }
-        if($limit !== -1){ $sql.=" limit ".$limit; }
+
+        if($limit !== -1){ $sql.="ORDER BY RAND() limit ".$limit; }
 
         $question_info=array();
         $quiz_marks = 0;
+        $ques_ids = array();
          $questionRecords = $connection->execute($sql)->fetchAll('assoc');              
-              if($questionRecords > 0){ 
-                $data['status'] = "true";              
-                foreach ($questionRecords as $questionRow) {
-                   
+              if($questionRecords){ 
+                $data['status'] = "true";                             
+                foreach ($questionRecords as $questionRow) {                  
                    $ques_ids[] = $questionRow ['id']; 
                    
                    foreach ($questionRow as $key => $value) {                    
@@ -797,8 +803,8 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
 
                  }      
            
-                  // Create Quiz
-                   $quiz= $this->createQuiz($limit,$ques_ids,$quiz_marks);
+                  // Create Quiz                
+                   $quiz= $this->createQuiz($limit,$ques_ids,$quiz_marks,$user_id);
                    if($quiz['status']=="true"){
                       $quiz_id =$quiz['quiz_id'];
                    }else{
@@ -829,6 +835,9 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
     }
 
 
+
+// API - Pass either username/plateform
+
 public function externalUsersAuthVerification(){
    
 
@@ -842,7 +851,7 @@ public function externalUsersAuthVerification(){
               if($users->count() ){          
                   foreach ($users as $vrow) {                     
                     $data['status']="true"; 
-                    $data['Pkey'] = $vrow['id'];
+                    $data['vendor_key'] = $vrow['id'];
                     $data['message']="You are authenticated";                    
                 }
                 
@@ -855,18 +864,34 @@ public function externalUsersAuthVerification(){
         }
         // users of the vendor
         elseif($username!=null && $access_token!=null){
+         
             $ExternalUsers =TableRegistry::get('external_users');
             $exusers= $ExternalUsers->find('all')->where(['username'=> $username, 'access_token'=>$access_token]);
 
-              if($exusers->count() ){          
+              if($exusers->count() > 0 ){          
                   foreach ($exusers as $vrow) {                     
                     $data['status']="true";
-                    $data['key'] = $vrow['id']; 
-                    $data['message']="You are authenticated";                    
-                }
+                    //$data['key'] = $vrow['id']; 
+                    $data['message']="You are authenticated"; 
+
+                    // get user id in users table
+                  $external_userid = $vrow['id'];
+                    $udetails = TableRegistry::get('UserDetails')->find()->where(['external_user_id' => $external_userid]);
+
+                    if($udetails->count() > 0){
+                            foreach ($udetails as $user_detail) {                     
+                                  $data['key'] = $user_detail->user_id;                                                 
+                            }           
+                          
+                      }else{
+                          $data['message']="No record Found in external user";
+                          $data['status']="false";
+                          $user_id = null ;
+                      }                   
+                }              
                 
               }
-              else{
+              else{                
                     
                    $user_vendor =TableRegistry::get('vendors')->find('all')->where(['access_token'=>$access_token]);
                    if($user_vendor->count() >0 ){
@@ -884,7 +909,7 @@ public function externalUsersAuthVerification(){
                       // Insert/add Records in External Users                      
                       $new_ExternalUsers = $ExternalUsers->newEntity($extUser);
                       if ($exSavedUser= $ExternalUsers->save($new_ExternalUsers)) {
-                          $extUser['external_user']  = $exSavedUser->id;                          
+                          $extUser['external_user_id']  = $exSavedUser->id;                          
                           
                           //save data in users
                           $Users = TableRegistry::get('Users');
@@ -929,6 +954,99 @@ public function externalUsersAuthVerification(){
       }
 
        return($data);    
+
+  }
+
+
+
+// External API to get the user Quiz Response
+  public function getMenifestQuizResponse($username=null, $quiz_id=null){
+
+      $vendor_authenticate =$this->externalUsersAuthVerification() ; 
+      if($vendor_authenticate['status']="true"){
+          //$data['status']="true";
+          $data['message'] = $vendor_authenticate['message'] ;
+          $user_id = isset( $vendor_authenticate['key']) ? $vendor_authenticate['key'] : 0;
+
+           $quiz_id=isset($_REQUEST['quiz_id'])?$_REQUEST['quiz_id']:$quiz_id;
+
+          if(!empty($user_id) && !empty($quiz_id) ){
+
+              $data['status']="true";
+              $UserQuizResponses = TableRegistry::get('UserQuizResponses') ;         
+              $userQuizResults = $UserQuizResponses->find()->where(['user_id' => $user_id,'exam_id'=>$quiz_id]);
+              $numRecords=$userQuizResults->count();
+
+
+              if($numRecords>0){
+                  foreach ($userQuizResults as $qresult) {                     
+                      $data['results'][]=$qresult;                     
+                  }           
+                
+            }else{
+                $data['message']="No record Found for quiz response";
+                $data['status']="false";
+            }            
+           }
+          else{
+            $data['status']="false";
+           $data['message'] = "No record exits on username , token and quiz_id" ;
+          }
+
+      }else{
+          $data['status']="false";
+          $data['message'] = $vendor_authenticate['message'] ;
+
+      }
+      
+  
+
+      $this->set(array(
+        'response' => $data,
+        '_serialize' => ['response']
+      ));
+
+
+  }
+
+
+  //ApI to get vendor students
+  public function getVendorUsers($plateform=null, $token=null){
+      
+      $vendor_authenticate =$this->externalUsersAuthVerification() ;
+      if($vendor_authenticate['status']="true"){
+          $data['status']="true";
+          $data['message'] = $vendor_authenticate['message'] ;
+          $vendor_id = isset( $vendor_authenticate['vendor_key']) ? $vendor_authenticate['vendor_key'] : null; 
+
+          if(!empty($vendor_id) ){
+
+            $Vendors = TableRegistry::get('ExternalUsers')->find()->where(['vendor_id' => $vendor_id]);         
+            $numRecords=$Vendors->count();
+
+              if($numRecords>0){
+                  foreach ($Vendors as $Vendor) {                     
+                      $data['vendor_users'][]=$Vendor;                     
+                  } 
+                }
+
+          }else{
+              $data['status']="false";
+              $data['message'] = 'Plateform id is not valid' ;
+          }
+      }
+      else{
+          $data['status']="false";
+          $data['message'] = $vendor_authenticate['message'] ;
+      }
+
+
+      $this->set(array(
+        'response' => $data,
+        '_serialize' => ['response']
+      ));
+
+
 
   }
 
