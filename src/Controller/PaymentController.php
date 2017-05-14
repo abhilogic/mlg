@@ -194,6 +194,7 @@ class PaymentController extends AppController {
     }
     return array('plan_id' => $plan_id,
       'order_date' => $response['db_order_date'],
+      'order_timestamp' => $response['order_timestamp'],
       'total_amount' => $response['package_amount'],
       'error' => $error);
   }
@@ -275,7 +276,8 @@ class PaymentController extends AppController {
       $post_fields = array(
         'name' => 'Credit Card Payment',
         'description' => 'Recurring credit card payment',
-        'start_date' => date('Y-m-d\TH:i:s\Z', strtotime('+1 day')),
+//        'start_date' => date('Y-m-d\TH:i:s\Z', strtotime('+1 day')),
+        'start_date' => gmdate("Y-m-d\TH:i:s\Z"),
         'plan' => array('id' => $plan_id),
         'payer' => array(
           'payment_method' => $payment_method,

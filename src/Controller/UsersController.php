@@ -1236,7 +1236,7 @@ class UsersController extends AppController{
           if($this->request->is('post')) { 
               //$postdata=$this->request->data;
             $data['message'][]="";                              
-
+            $time = time();
               //username validation ******
               $postdata['username']=isset($this->request->data['username'])?$this->request->data['username']:"";
               if(!empty($postdata['username'])){
@@ -1413,6 +1413,7 @@ class UsersController extends AppController{
                                   if($pcode_discountType=="percent"){
                                   $postdata['amount']= $postdata['amount']-($postdata['amount']*($pcode_discount*0.01));
                                   }
+                                  $postdata['order_timestamp'] = $time;
                                 //5. User Purchase Item Table
                                 $new_user_purchase_items = $user_purchase_items->newEntity($postdata);
                                 if ($user_purchase_items->save($new_user_purchase_items)) {$data['status']="True";}
@@ -1659,31 +1660,25 @@ class UsersController extends AppController{
 
                    //total amount.
                    $data['total_amount'] = $billing_plan['total_amount'];
-
                    $plan_status = $payment_controller->activatePayaplPlan($plan_id, $access_token);
                    if ($plan_status == 'ACTIVE') {
                      $user_id = $this->request->data['user_id'];
 
                      //same order date and time will be saved on user orders tabl.
                      $order_date = $data['order_date'] = $billing_plan['order_date'];
+                     $order_timestamp = $data['order_timestamp'] = $billing_plan['order_timestamp'];
                      $data['trial_period'] = 1;
 
-                     $user_purchase_items_table = TableRegistry::get('UserPurchaseItems');
-                     $query = $user_purchase_items_table->query();
-                     $query->update()->set([
-                        'paypal_plan_id'=> $plan_id,
-                        'paypal_plan_status' => $plan_status,
-                      ])->where(['user_id' => $child_id, 'order_date' => $order_date])->execute();
                      $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
                      if (!$billing_response['error']) {
                        $payment_status = TRUE;
                        $status = TRUE;
 
                        // Updated user purchase items table.
-                       $query->update()->set([
-                         'billing_id' => $billing_response['result']['id'],
-                         'billing_state' => $billing_response['result']['state']
-                       ])->where(['user_id' => $child_id, 'order_date' => $order_date])->execute();
+                       $data['paypal_plan_id'] = $plan_id;
+                       $data['paypal_plan_status'] = $plan_status;
+                       $data['billing_id'] = $billing_response['result']['id'];
+                       $data['billing_state'] = $billing_response['result']['state'];
 
                        // update user orders table.
                        $this->setUserOrders($user_id, $child_id, $data);
@@ -1844,8 +1839,10 @@ class UsersController extends AppController{
        $connection = ConnectionManager::get('default');
        $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
          . " user_purchase_items.amount as purchase_amount, user_purchase_items.level_id as level_id,"
-         . " user_purchase_items.course_id, user_purchase_items.order_date as order_date, packages.name as package_subjects,"
-         . " packages.id as package_id, plans.id as plan_id, plans.name as plan_duration,"
+         . " user_purchase_items.course_id, user_purchase_items.order_date as order_date,"
+         . " user_purchase_items.order_timestamp as order_timestamp,"
+         . " packages.name as package_subjects, packages.id as package_id, "
+         . " plans.id as plan_id, plans.name as plan_duration,"
          . " courses.course_name"
          . " FROM users"
          . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
@@ -1854,9 +1851,9 @@ class UsersController extends AppController{
          . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
          . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
        if ($recent_order = TRUE) {
-         $subquery = "(SELECT MAX(order_date) FROM user_purchase_items"
+         $subquery = "(SELECT MAX(order_timestamp) FROM user_purchase_items"
          . " WHERE user_id = $uid)";
-         $sql.= " AND user_purchase_items.order_date = $subquery";
+         $sql.= " AND user_purchase_items.order_timestamp = $subquery";
        }
 
        $purchase_details_result = $connection->execute($sql)->fetchAll('assoc');
@@ -1873,6 +1870,7 @@ class UsersController extends AppController{
            $purchase_details['level_id'] = $purchase_result['level_id'];
            $purchase_details['order_date'] = @current(explode(' ', $purchase_result['order_date']));
            $purchase_details['db_order_date'] = $purchase_result['order_date'];
+           $purchase_details['order_timestamp'] = $purchase_result['order_timestamp'];
            $total_amount = $total_amount + $purchase_result['purchase_amount'];
            $purchase_details['package_amount'] = $total_amount;
            $purchase_details['purchase_detail'][] = array(
@@ -2067,6 +2065,11 @@ class UsersController extends AppController{
         'card_response' => isset($order_details['card_response']) ? $order_details['card_response'] : '',
         'card_token' => isset($order_details['card_token']) ? $order_details['card_token'] : '',
         'external_cutomer_id' => isset($order_details['external_cutomer_id']) ? $order_details['external_cutomer_id'] : '',
+        'paypal_plan_id' => $order_details['paypal_plan_id'],
+        'paypal_plan_status' => $order_details['paypal_plan_status'],
+        'billing_id' => $order_details['billing_id'],
+        'billing_state' => $order_details['billing_state'],
+        'order_timestamp' => $order_details['order_timestamp'],
         );
         $user_order = $user_orders->newEntity($order);
         if ($user_orders->save($user_order)) {
