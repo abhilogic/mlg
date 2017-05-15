@@ -276,8 +276,8 @@ class PaymentController extends AppController {
       $post_fields = array(
         'name' => 'Credit Card Payment',
         'description' => 'Recurring credit card payment',
-//        'start_date' => date('Y-m-d\TH:i:s\Z', strtotime('+1 day')),
-        'start_date' => gmdate("Y-m-d\TH:i:s\Z"),
+        'start_date' => date('Y-m-d\TH:i:s\Z', strtotime('+1 day')),
+//        'start_date' => gmdate("Y-m-d\TH:i:s\Z"),
         'plan' => array('id' => $plan_id),
         'payer' => array(
           'payment_method' => $payment_method,
@@ -286,7 +286,7 @@ class PaymentController extends AppController {
             array(
               'credit_card' => array(
                 'first_name' => $card_details['first_name'],
-                'last_name' => $card_details['last_name'],
+                'last_name' => isset($card_details['last_name']) ? $card_details['last_name'] : '',
                 'type' => isset($card_details['card_type']) ? $card_details['card_type'] : 'visa',
                 'number' => $card_details['number'],
                 'expire_month' => $card_details['expire_month'],
