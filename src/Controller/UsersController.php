@@ -9,6 +9,7 @@ use Cake\Auth\DefaultPasswordHasher;
 use Cake\Mailer\Email;
 use Cake\Routing\Router;
 use Cake\Datasource\ConnectionManager;
+use App\Controller\PaymentController;
 
 /**
  * Users Controller
@@ -27,12 +28,12 @@ class UsersController extends AppController{
     /** Index method    */
     public function index(){
 
-        $user = $this->Users->find('all')->contain(['UserDetails']);        
+        $user = $this->Users->find('all')->contain(['UserDetails']);
         $this->set(array(
             'data' => $user,
             '_serialize' => ['data']
         ));
-    }
+      }
 
 
    /*
@@ -68,23 +69,20 @@ class UsersController extends AppController{
         *  U2- getUserDetails,         
         *  Request – Int <UUID>;
     */
-    public function getUserDetails($id = null){        
+    public function getUserDetails($id = null, $function_call = FALSE){
       $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
-        if($user_record>0){
-              $data['user'] = $this->Users->get($id);
-        $this->set([
-          'data' => $data,
-          '_serialize' => ['data']
-        ]);
-
-        }
-        else{
+      if ($user_record > 0) {
+        $data['user'] = $this->Users->get($id);
+      } else {
         $data['response'] = "Record is not found";
-        $this->set([
-          'data' => $data,
-          '_serialize' => ['data']
-        ]);
       }
+      if ($function_call) {
+        return $data;
+      }
+      $this->set([
+        'data' => $data,
+        '_serialize' => ['data']
+      ]);
     }
 
 /*
@@ -490,13 +488,16 @@ class UsersController extends AppController{
   //          ]
         ]);
         $status = 'false';
-        $token = $message = '';
+        $child_info = array();
+        $token = $message = $role_id = '';
+        $warning = 0;
+
         if ($this->request->is('post')) {
           $user = $this->Auth->identify();
           if ($user) {
             $user_roles = TableRegistry::get('UserRoles');
             $valid_user = $user_roles->find('all')->where(['user_id' => $user['id']]);
-            $role_id=$valid_user->first()->role_id;
+            $role_id = $valid_user->first()->role_id;
             if ($user['status'] != 0) {
               $subscription_end_date = !empty($user['subscription_end_date']) ? strtotime($user['subscription_end_date']) : 0;
               if ($user['status'] != 2) {
@@ -505,7 +506,23 @@ class UsersController extends AppController{
                   $user['status'] = 2;
                   $this->Users->query()->update()->set($user)->where(['id' => $user['id']])->execute();
                   $message = 'Your subscription period is over';
+                  $warning = 1;
                   throw new Exception('subscription period is over, Account Expired for user id: ' .  $user['id']);
+                }
+
+                //check if any of the child has eneded with subcription period.
+                if ($role_id == PARENT_ROLE_ID) {
+
+                  $children = $this->getChildrenDetails($user['id'], null, TRUE);;
+                  if (!empty($children)) {
+                    foreach ($children as $child) {
+                      $subscription_end_date = strtotime($child['subscription_end_date']);
+                      if ((time() - (60 * 60 * 24))  > $subscription_end_date) {
+                        $warning = 1;
+                        $child_info[] = $child;
+                      }
+                    }
+                  }
                 }
 
                 //updating login time.
@@ -519,6 +536,8 @@ class UsersController extends AppController{
                   $user = array();
                   $message = "You are not authenticated to login into this page";
                 }
+              } elseif ($user['status'] == 2 && $role_id == STUDENT_ROLE_ID) {
+                $warning = 1;
               } else {
                 $message = 'Your subscription period is over';
               }
@@ -526,8 +545,10 @@ class UsersController extends AppController{
               $message = 'Please activate your account';
             }
           } else {
-            $message = 'You entered either wrong email id or password';
+            $message = 'You entered either wrong user id or password';
           }
+        } else {
+          $message = 'Either Usename or password is null';
         }
       } catch (Exception $ex) {
         $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
@@ -536,9 +557,11 @@ class UsersController extends AppController{
         'user' => $user,
         'role_id'=>$role_id,
         'status' => $status,
+        'warning' => $warning,
+        'child_info' => $child_info,
         'response' => ['secure_token' => $token],
         'message' => $message,
-        '_serialize' => ['user', 'status', 'response', 'message','role_id']
+        '_serialize' => ['user', 'status', 'warning', 'child_info', 'response', 'message','role_id']
       ]);
     }
 
@@ -1012,14 +1035,17 @@ class UsersController extends AppController{
        /**
         * function paymentbrief().
         */
-       public function getPaymentbrief() {
+       public function getPaymentbrief($params = null) {
          $status = FALSE;
          $message = '';
          $child_info = array();
          $total_amount = 0;
-         if ($this->request->is('post')) {
+         if ($this->request->is('post') || !empty($params)) {
           try {
             $parent_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : '';
+            if (isset($params['user_id']) && !empty($params['user_id'])) {
+              $parent_id = $params['user_id'];
+            }
             if (!empty($parent_id)) {
 
               $user_details = TableRegistry::get('UserDetails');
@@ -1030,7 +1056,7 @@ class UsersController extends AppController{
               }
 
               $connection = ConnectionManager::get('default');
-              $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
+              $sql = "SELECT users.id as user_id, users.first_name as user_first_name, users.last_name as user_last_name,"
                 . " SUM(user_purchase_items.amount) as purchase_amount, packages.name as package_subjects, plans.name as plan_duration"
                 . " FROM users"
                 . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
@@ -1043,6 +1069,7 @@ class UsersController extends AppController{
 
                 foreach ($results as $result) {
                   $child_info[] = array(
+                    'child_id' => $result['user_id'],
                     'child_name' => $result['user_first_name'] . ' ' . $result['user_last_name'],
                     'package_subjects' => $result['package_subjects'],
                     'package_amount' => $result['purchase_amount'],
@@ -1061,6 +1088,9 @@ class UsersController extends AppController{
           } catch (Exception $ex) {
             $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
           }
+         }
+         if (!empty($params)) {
+           return $child_info;
          }
 
          $this->set([
@@ -1206,7 +1236,7 @@ class UsersController extends AppController{
           if($this->request->is('post')) { 
               //$postdata=$this->request->data;
             $data['message'][]="";                              
-
+            $time = time();
               //username validation ******
               $postdata['username']=isset($this->request->data['username'])?$this->request->data['username']:"";
               if(!empty($postdata['username'])){
@@ -1323,10 +1353,8 @@ class UsersController extends AppController{
                           }         
 
                        // check emailchoice is yes/no 
-                        $pass= rand(1, 1000000); 
-                        $default_hasher = new DefaultPasswordHasher();
-                        $password=$default_hasher->hash($pass);
-                        $postdata['password']  = $password;
+                        $pass= rand(1, 1000000);
+                        $postdata['password']  = $pass;
 
                         $from = 'logicdeveloper7@gmail.com';
                             $subject ="Your Child authenticatation";
@@ -1385,17 +1413,18 @@ class UsersController extends AppController{
                                   if($pcode_discountType=="percent"){
                                   $postdata['amount']= $postdata['amount']-($postdata['amount']*($pcode_discount*0.01));
                                   }
+                                  $postdata['order_timestamp'] = $time;
                                 //5. User Purchase Item Table
                                 $new_user_purchase_items = $user_purchase_items->newEntity($postdata);
                                 if ($user_purchase_items->save($new_user_purchase_items)) {$data['status']="True";}
                                 else{ 
-                                  $data['status']='flase';
+                                  $data['status']='false';
                                   $data['message']="Not able to save data in User Purchase Item Table Table";
                                   throw new Exception("Not able to save data in User Purchase Item Table Table");
                                 }
                              }
                             else{
-                              $data['status']='flase';
+                              $data['status']='false';
                               $data['message']=" Not able to save data in User Courses Table";
                               throw new Exception("Not able to save data in User Roles Table");
                           }
@@ -1403,19 +1432,19 @@ class UsersController extends AppController{
 
                       }
                       else{ 
-                        $data['status']='flase';
+                        $data['status']='false';
                         $data['message']=" Not able to save data in User Roles Table";
                         throw new Exception("Not able to save data in User Roles Table");
                       }
                     }
                     else{ 
-                      $data['status']='flase';
+                      $data['status']='false';
                       $data['message']="Not able to save data in User Details Table";
                       throw new Exception("Not able to save data in User Details Table");
                    }                   
                 //$data['status']='True';
                 }else{
-                  $data['status']='flase';
+                  $data['status']='false';
                   $data['message']="Not Able to add data in user table";
                   throw new Exception("Not Able to add data in user table");
 
@@ -1498,37 +1527,46 @@ class UsersController extends AppController{
         *   To generate paypal Acess Token.
         */
        public function  paypalAccessToken() {
+         try {
+           $url = "https://api.sandbox.paypal.com/v1/oauth2/token";
+           $credential = PAYPAL_SANDBOX_CREDENTIAL;
+           if (USE_SANDBOX_ACCOUNT == FALSE) {
+             $url = "https://api.paypal.com/v1/oauth2/token";
+             $credential = PAYPAL_LIVE_CREDENTIAL;
+           }
+           $ch = curl_init();
+           curl_setopt($ch, CURLOPT_URL, $url);
+           curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+           curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=client_credentials");
+           curl_setopt($ch, CURLOPT_POST, 1);
+           curl_setopt($ch, CURLOPT_USERPWD, $credential);
 
-         $ch = curl_init();
-         curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/oauth2/token");
-         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-         curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=client_credentials");
-         curl_setopt($ch, CURLOPT_POST, 1);
-         curl_setopt($ch, CURLOPT_USERPWD, "AX-eb2b8qhYpvLJs_kw6vnDIYoWYcCzV8-mby7q7gHFA452lqrO95Qm2ivu4hYCt2VDTRTDy5jzLAscD" . ":" . "EC1WXNHIEoBMMvswkRw6LTASVcs5IWX8WV5LSlbQIrnTfTgdBJAZCj8vlwxHraq3SI-c6Pqe_ETpDAii");
+           $headers = array();
+           $headers[] = "Accept: application/json";
+           $headers[] = "Accept-Language: en_US";
+           $headers[] = "Content-Type: application/x-www-form-urlencoded";
+           curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-         $headers = array();
-         $headers[] = "Accept: application/json";
-         $headers[] = "Accept-Language: en_US";
-         $headers[] = "Content-Type: application/x-www-form-urlencoded";
-         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-         $result = curl_exec($ch);
-         if (curl_errno($ch)) {
-           echo 'Error:' . curl_error($ch);
+           $result = curl_exec($ch);
+           if (curl_errno($ch)) {
+             echo 'Error:' . curl_error($ch);
+           }
+           curl_close($ch);
+           $result = json_decode($result, TRUE);
+         } catch (Exception $ex) {
+           $this->log($ex->getMessage() . "\n". curl_error($ch) . '(' . __METHOD__ . ')');
          }
-         curl_close ($ch);
-         $result = json_decode($result, TRUE);
          return $result['access_token'];
        }
 
-       /*
+  /*
        * function saveCardToPaypal().
        */
        public function saveCardToPaypal() {
          $message = $response = '';
-         $status = FALSE;
+         $status = $payment_status = FALSE;
          $data = $name = array();
-         $Acess_token = $this->paypalAccessToken();
+         $access_token = $this->paypalAccessToken();
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
@@ -1544,7 +1582,7 @@ class UsersController extends AppController{
                $data['last_name'] = @end($name);
              }
              if (isset($this->request->data['card_number']) && !empty($this->request->data['card_number'])) {
-               $data['number'] = $this->request->data['card_number'];
+               $data['number'] = trim($this->request->data['card_number']);
              } else {
                $message = 'Card Number is required';
                throw new Exception($message);
@@ -1574,14 +1612,19 @@ class UsersController extends AppController{
              $data['type'] = isset($this->request->data['card_type']) && !empty($this->request->data['card_type']) ?
                $this->request->data['card_type'] : 'visa';
              $data['external_customer_id'] = 'customer' . '_' . time();
+
+             $url = "https://api.sandbox.paypal.com/v1/vault/credit-cards/";
+             if (USE_SANDBOX_ACCOUNT == FALSE) {
+               $url = "https://api.paypal.com/v1/vault/credit-cards/";
+             }
              $ch = curl_init();
-             curl_setopt($ch, CURLOPT_URL, "https://api.sandbox.paypal.com/v1/vault/credit-cards/");
+             curl_setopt($ch, CURLOPT_URL, $url);
              curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
              curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
              curl_setopt($ch, CURLOPT_POST, 1);
              $headers = array();
              $headers[] = "Content-Type: application/json";
-             $headers[] = "Authorization: Bearer $Acess_token";
+             $headers[] = "Authorization: Bearer $access_token";
              curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
              $response = curl_exec($ch);
              $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1599,11 +1642,60 @@ class UsersController extends AppController{
                           throw new Exception('Internal Server Error Occured');
                  break;
              }
-             $user_orders = TableRegistry::get('UserOrders');
              $response = json_decode($response, TRUE);
+             $card_token = $external_cutomer_id = '';
              if  (isset($response['state']) && $response['state'] == 'ok') {
-               $message = 'card added successfully';
-               $status = TRUE;
+               $data['card_response'] = $message;
+               $data['card_token'] = $response['id'];
+               $data['external_cutomer_id'] = $response['external_customer_id'];
+               $payment_controller = new PaymentController();
+               $user_ids = $this->request->data['children_ids'];
+               foreach ($user_ids as $child_id) {
+//                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, TRUE);
+                 
+                 //omit
+                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, FALSE);
+                 if (!empty($billing_plan['plan_id'])) {
+                   $plan_id = $billing_plan['plan_id'];
+
+                   //total amount.
+                   $data['total_amount'] = $billing_plan['total_amount'];
+                   $plan_status = $payment_controller->activatePayaplPlan($plan_id, $access_token);
+                   if ($plan_status == 'ACTIVE') {
+                     $user_id = $this->request->data['user_id'];
+
+                     //same order date and time will be saved on user orders tabl.
+                     $order_date = $data['order_date'] = $billing_plan['order_date'];
+                     $order_timestamp = $data['order_timestamp'] = $billing_plan['order_timestamp'];
+                     $data['trial_period'] = 1;
+
+                     $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
+                     if (!$billing_response['error']) {
+                       $payment_status = TRUE;
+                       $status = TRUE;
+
+                       // Updated user purchase items table.
+                       $data['paypal_plan_id'] = $plan_id;
+                       $data['paypal_plan_status'] = $plan_status;
+                       $data['billing_id'] = $billing_response['result']['id'];
+                       $data['billing_state'] = $billing_response['result']['state'];
+
+                       // update user orders table.
+                       $this->setUserOrders($user_id, $child_id, $data);
+                       $message = 'card added successfully';
+                     } else {
+                       $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2Bill";
+                       throw new Exception('Unable to process billing agreement');
+                     }
+                   } else {
+                     $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2ACTPLN";
+                     throw new Exception('unable to activate plan');
+                   }
+                 } else {
+                   $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2CTEPLN";
+                   throw new Exception('Unable to create Plan');
+                 }
+               }
              }
              if (isset($response['name']) && $response['name'] == 'VALIDATION_ERROR') {
                $message = $response['details'][0]['issue'];
@@ -1615,28 +1707,9 @@ class UsersController extends AppController{
                  }
                }
              }
-             $user_order_data = $user_orders->find()->where(['user_id' => $this->request->data['user_id']]);
-             $user_order = array();
-             if ($user_order_data->count()) {
-               foreach($user_order_data as $user_order) {
-                  $user_order->card_response = $message;
-                  $user_order->order_date= time();
-               }
-             } else {
-               $order = array(
-                 'user_id' => $this->request->data['user_id'],
-                 'amount' => $this->request->data['amount'],
-                 'discount' => isset($this->request->data['discount']) ? $this->request->data['discount'] : '',
-                 'order_date' => time(),
-                 'trial_period' => 1,
-                 'card_response' => $message,
-                 'card_id' => isset($response['id']) ? $response['id'] : '',
-               );
-               $user_order = $user_orders->newEntity($order);
-             }
-             if (!$user_orders->save($user_order)) {
+             if (!$payment_status) {
                $status = FALSE;
-               throw new Exception('unable to save data, Kindly retry again');
+               throw new Exception('Payment not compleated succesfully');
              } else {
                // start- update the user state
                $user_details = TableRegistry::get('UserDetails');
@@ -1669,7 +1742,7 @@ class UsersController extends AppController{
         * @param String $pid
         *   parent Id.
         */
-       public function getChildrenDetails($pid, $cid = null) {
+       public function getChildrenDetails($pid, $cid = null, $function_call = FALSE) {
 
         
          $childRecords = TableRegistry::get('UserDetails')->find('all')->where(['parent_id' => $pid])->contain(['Users']);
@@ -1684,6 +1757,7 @@ class UsersController extends AppController{
              'username' => $childRecord['username'],
              'email' => $childRecord['email'],
              'mobile' => $childRecord['mobile'],
+             'subscription_end_date' => $childRecord['user']['subscription_end_date'],
            );
 
          }
@@ -1697,7 +1771,13 @@ class UsersController extends AppController{
                unset($data[$key]);
              }
            }
-           array_unshift($data, $temp_array);
+           if (!empty($temp_array)) {
+             array_unshift($data, $temp_array);
+           }
+         }
+
+         if ($function_call) {
+           return $data;
          }
 
          $this->set([
@@ -1714,7 +1794,7 @@ class UsersController extends AppController{
     * @copyright (c) 2017, Incaendo Technology Pvt Ltd.
     * 
     * **/    
-   public function getOffers() { 
+   public function getOffers() {
      try{
       $offer_list = array();
       $current_date = Time::now();
@@ -1722,9 +1802,9 @@ class UsersController extends AppController{
       $offers_detail = $offers->find('all')->where(['validity >=' => $current_date])->toArray();
       $i=0;
       foreach ($offers_detail as $offersDetails) {
-        if(isset($offersDetails->title) && !empty($offersDetails->title) ) {
+        if (isset($offersDetails->title) && !empty($offersDetails->title) ) {
           $offer_list[$i]['title'] = $offersDetails->title;
-      $offer_list[$i]['description'] = $offersDetails->description;
+          $offer_list[$i]['description'] = $offersDetails->description;
           $offer_list[$i]['image'] = $offersDetails->image;
           $date = explode(' ',$offersDetails->validity);
           $offer_list[$i]['validity'] = date('d M Y',strtotime($date[0]));
@@ -1747,7 +1827,7 @@ class UsersController extends AppController{
     *
     * $uid :  user Id
     */
-   public function getUserPurchaseDetails($uid) {
+   public function getUserPurchaseDetails($uid, $function_call = FALSE, $recent_order = TRUE) {
      $status = FALSE;
      $message = '';
      $purchase_details = array();
@@ -1759,8 +1839,10 @@ class UsersController extends AppController{
        $connection = ConnectionManager::get('default');
        $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
          . " user_purchase_items.amount as purchase_amount, user_purchase_items.level_id as level_id,"
-         . " user_purchase_items.course_id, user_purchase_items.order_date as order_date, packages.name as package_subjects,"
-         . " packages.id as package_id, plans.id as plan_id, plans.name as plan_duration,"
+         . " user_purchase_items.course_id, user_purchase_items.order_date as order_date,"
+         . " user_purchase_items.order_timestamp as order_timestamp,"
+         . " packages.name as package_subjects, packages.id as package_id, "
+         . " plans.id as plan_id, plans.name as plan_duration,"
          . " courses.course_name"
          . " FROM users"
          . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
@@ -1768,9 +1850,16 @@ class UsersController extends AppController{
          . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
          . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
          . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
+       if ($recent_order = TRUE) {
+         $subquery = "(SELECT MAX(order_timestamp) FROM user_purchase_items"
+         . " WHERE user_id = $uid)";
+         $sql.= " AND user_purchase_items.order_timestamp = $subquery";
+       }
+
        $purchase_details_result = $connection->execute($sql)->fetchAll('assoc');
        if (!empty($purchase_details_result)) {
          $status = TRUE;
+         $total_amount = 0;
          foreach ($purchase_details_result as $purchase_result) {
            $purchase_details['user_first_name'] = $purchase_result['user_first_name'];
            $purchase_details['user_last_name'] = $purchase_result['user_last_name'];
@@ -1780,6 +1869,10 @@ class UsersController extends AppController{
            $purchase_details['plan_duration'] = $purchase_result['plan_duration'];
            $purchase_details['level_id'] = $purchase_result['level_id'];
            $purchase_details['order_date'] = @current(explode(' ', $purchase_result['order_date']));
+           $purchase_details['db_order_date'] = $purchase_result['order_date'];
+           $purchase_details['order_timestamp'] = $purchase_result['order_timestamp'];
+           $total_amount = $total_amount + $purchase_result['purchase_amount'];
+           $purchase_details['package_amount'] = $total_amount;
            $purchase_details['purchase_detail'][] = array(
               'purchase_amount' => $purchase_result['purchase_amount'],
               'course_id' => $purchase_result['course_id'],
@@ -1791,6 +1884,9 @@ class UsersController extends AppController{
        }
      } catch(Exception $e) {
        $this->log($e->getMessage(), '(' . __METHOD__ . ')');
+     }
+     if ($function_call) {
+       return $purchase_details;
      }
      $this->set([
       'status' => $status,
@@ -1941,5 +2037,48 @@ class UsersController extends AppController{
         '_serialize' => ['user', 'user_id', 'status', 'message']
       ]);
     }
+
+    /**
+     * function setUserOrders.
+     *
+     * This function is used to store user order to table
+     *
+     * $user_id : Integer
+     *
+     * $child_id : Integer
+     *   if user type is teacher, then child id will be null
+     *
+     * $order_details : Array
+     *    contains the order details
+     */
+    public function setUserOrders($user_id, $child_id = 0, $order_details = array()) {
+    try {
+      $status = FALSE;
+      $user_orders = TableRegistry::get('UserOrders');
+      $order = array(
+        'user_id' => $user_id,
+        'child_id' => !empty($child_id) ? $child_id : 0,
+        'amount' => isset($order_details['total_amount']) ? $order_details['total_amount'] : 0,
+        'discount' => isset($order_details['discount']) ? $order_details['discount'] : '',
+        'order_date' => isset($order_details['order_date']) ? $order_details['order_date'] : '',
+        'trial_period' => $order_details['trial_period'],
+        'card_response' => isset($order_details['card_response']) ? $order_details['card_response'] : '',
+        'card_token' => isset($order_details['card_token']) ? $order_details['card_token'] : '',
+        'external_cutomer_id' => isset($order_details['external_cutomer_id']) ? $order_details['external_cutomer_id'] : '',
+        'paypal_plan_id' => $order_details['paypal_plan_id'],
+        'paypal_plan_status' => $order_details['paypal_plan_status'],
+        'billing_id' => $order_details['billing_id'],
+        'billing_state' => $order_details['billing_state'],
+        'order_timestamp' => $order_details['order_timestamp'],
+        );
+        $user_order = $user_orders->newEntity($order);
+        if ($user_orders->save($user_order)) {
+          $status = TRUE;
+        }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $status;
+  }
 
 }

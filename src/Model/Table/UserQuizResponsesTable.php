@@ -7,7 +7,7 @@ use Cake\ORM\Table;
 use Cake\Validation\Validator;
 
 
-class RolesTable extends Table{
+class UserQuizResponsesTable extends Table{
 
     /**
      * Initialize method
@@ -17,17 +17,17 @@ class RolesTable extends Table{
      */
     public function initialize(array $config){
         
-        $this->table('roles');
+        $this->table('user_quiz_responses');
         $this->displayField('id');
         $this->primaryKey('id');
 
         $this->addBehavior('Timestamp');
 
 
-        $this->hasMany('UserRoles', [
-            'foreignKey' => 'id',
-            'dependent' => true
-        ]);          
+        /*$this->belongsTo('Courses', [
+            'foreignKey' => 'course_id',
+            'joinType'  =>  'INNER'
+        ]); */        
     }
 
   

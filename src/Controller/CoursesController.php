@@ -6,7 +6,7 @@ use Cake\ORM\TableRegistry;
 use Cake\I18n\Time;
 use Cake\Core\Exception\Exception;
 use Cake\Routing\Router;
-//use Cake\Datasource\ConnectionManager;
+use Cake\Datasource\ConnectionManager;
 
 /**
  * Courses Controller
@@ -764,7 +764,8 @@ class CoursesController extends AppController{
      public function getCourseListForLevel($grade=null){
         if($grade!=null){
           $courses_count= $this->Courses->find('all')->where(['level_id'=>$grade])->count();
-          $courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails'=>['CourseContents'] ]);
+         // $courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails'=>['CourseContents'] ]);
+          $courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails']);
           if($courses_count>0){
               foreach ($courses as $course) {
                 $data['message']="Records to course level $grade ";
@@ -789,12 +790,17 @@ class CoursesController extends AppController{
 
      }
        
-     public function getAllCourseList($parent_id=0, $type=null){
+     public function getAllCourseList($parent_id=0, $type=null, $course_id = null){
       try{
         $khan_api_slugs = array();
+        $teacher_contents = array();
+        $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
-        if ($type == null) {
-          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents', 'ContentCategories'])->toArray();
+        if ($type == 'type') {
+          $connection = ConnectionManager::get('default');
+          $sql = "SELECT * FROM course_details WHERE parent_id = $parent_id";
+          $course_details = $connection->execute($sql)->fetchAll('assoc');
+//          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
           $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
         }
@@ -802,19 +808,55 @@ class CoursesController extends AppController{
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
-      if($type == NULL) {
+      if($type == 'type') {
         foreach ($course_details as $course_detail) {
-          if (isset($course_detail['content_category']) && !empty($course_detail['content_category'])) {
-            $content = $course_detail['content_category'];
-            if (trim($content['source']) == 'khan_api') {
-              $khan_api_slugs[] = $content['slug'];
+          if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
+            $slugs = explode(',' ,$course_detail['slug']);
+            foreach ($slugs as $slug) {
+              $slug_array = explode('/', $slug);
+              if (count($slug_array) > 1) {
+                $href_slice = array_slice($slug_array, -3, 3);
+                if (strtoupper($href_slice[1]) == 'V') {
+                  $khan_api_slugs[@current($href_slice)] = @current($href_slice);
+                  $khan_api_content_title[] = @end($href_slice);
+                }
+              } else {
+                $khan_api_slugs[] = @current($slug_array);
+              }
             }
           }
-        } 
+          if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
+            $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
+            $course_detail['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
+          }
+          if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
+            $course_contents = $course_detail['course_contents'];
+            $root_path = Router::url('/', true);
+            foreach ($course_contents as $course_content) {
+              $user_id = $course_content['created_by'];
+              $user = $this->getUserRoleByid($user_id);
+              if (strtoupper($user['role_name']) == 'TEACHER') {
+                $course_content['content'] = (strtoupper($course_content['type']) == 'DOC') ?
+                 '<a href = ' . $root_path . '/upload/' . $course_content['content'] . '></a>' : $course_content['content'];
+                $teacher_contents[] = array(
+                  'lesson_name' =>  $course_content['lesson_name'],
+                  'url' =>  $course_content['url'],
+                  'name' =>  $course_content['title'],
+                  'kind' =>  $course_content['type'],
+                  'descriptions' =>  $course_content['content'],
+                  'standards' =>  $course_content['standards'],
+                  'standard_type' =>  $course_content['standard_type'],
+                );
+              }
+            }
+          }
+        }
       }
-      
       $this->set([
-         'response' => ['course_details' => $course_details, 'khan_api_slugs' => $khan_api_slugs],
+         'response' => ['course_details' => $course_details,
+         'khan_api_slugs' => $khan_api_slugs,
+         'khan_api_content_title' => $khan_api_content_title,
+         'teacher_contents' => $teacher_contents],
          '_serialize' => ['response']
        ]);
      }
@@ -935,4 +977,33 @@ class CoursesController extends AppController{
          '_serialize' => ['status', 'message']
        ]);
    }
+
+   /*
+    * function getUserRoleByid
+    *
+    * $user_id : User's Id.
+    */
+   protected function getUserRoleByid($user_id = null) {
+    try {
+      $message = '';
+      $user = array('user_id' => '', 'role_id' => '', 'role_name' => '');
+      if ($user_id == null) {
+        $message = 'User_id cannot be null';
+        throw new Exception($message);
+      }
+      $user_roles_table = TableRegistry::get('UserRoles');
+      $role = $user_roles_table->find()->where(['user_id' => $user_id])->contain(['Roles'])->toArray();
+      foreach ($role as $user_role) {
+        $user = array(
+          'user_id' => $user_role->user_id,
+          'role_id' => $user_role->role_id,
+          'role_name' => $user_role->role->name,
+        );
+      }
+    } catch (Exception $ex) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')', 'error');
+    }
+    return $user;
+  }
+
 }
