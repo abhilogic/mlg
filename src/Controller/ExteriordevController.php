@@ -570,7 +570,7 @@ public function externalUsersAuthVerification(){
                                         if ($user_details->save($new_user_details)) {
                                           $data['status']="Ture";
                                          // $data['key'] = $userSaved->id; 
-                                          $data['records'][]="user $username -  saved";
+                                          $data['records'][]="user $username -  saved/enroll with MLG";
                                       }
                                       else{
                                           $data['status']="False"; 
@@ -653,7 +653,7 @@ public function externalUsersAuthVerification(){
                               
                                $query = $ExternalUsers->query();
                                $result=  $query->update()
-                                    ->set(['subscription_start_date' => $sub_startdate, 'subscription_end_date'=>$sub_enddate, 'status' =>1 ])
+                                    ->set(['subscription_start_date' => $sub_startdate, 'subscription_end_date'=>$sub_enddate, 'status' =>1, 'modfied'=>time() ])
                                     ->where(['username' => $username, 'vendor_id' => $vendor_id])
                                     ->execute();
                                 $affectedRows = $result->rowCount();
@@ -727,14 +727,14 @@ public function externalUsersAuthVerification(){
                         if(!empty($username) ){                              
                                $query = $ExternalUsers->query();
                                $result=  $query->update()
-                                    ->set(['status' =>0 ])
+                                    ->set(['status' =>0, 'modfied' => time() ])
                                     ->where(['username' => $username, 'vendor_id' => $vendor_id])
                                     ->execute();
                                 $affectedRows = $result->rowCount();
 
                                 if($affectedRows>0){
                                     $data['status']="Ture";
-                                    $data['records'][] = "$username - updated for Activation/Renewal";
+                                    $data['records'][] = "$username - updated for Canellation/Deactiveation";
                                 }
                                 else{
                                     $data['status']="False";
