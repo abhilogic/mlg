@@ -425,7 +425,7 @@ public function externalUsersAuthVerification(){
            }
           else{
             $data['status']="False";
-           $data['message'] = "$quiz_id cannot be null. Please post quiz_id" ;
+           $data['message'] = "quiz_id cannot be null. Please post quiz_id" ;
           }
 
       }else{
