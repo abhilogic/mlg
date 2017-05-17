@@ -253,7 +253,8 @@ class ExteriordevController extends AppController{
                    foreach ($questionRow as $key => $value) {                    
                      $question_info[$key] = $value;
                    }
-                   $question_info['id'] = 'response_id-'.$questionRow['id'];                   
+                   $question_info['id'] = 'response_id-'.$questionRow['id'];
+                   $question_info['question_id'] = $questionRow['id'];                   
                    $question_info['questionName']=$questionRow['questionName'];                  
 
 
@@ -773,74 +774,113 @@ public function externalUsersAuthVerification(){
 
 
 // Function for get the corect answer
-  public function setUserQuizOption() {
+  public function setUserAttemptOption() {
     try {
-          $status = FALSE;
-          $message = '';
-          if($this->request->is('post')) {
-              $corr_ans = array();
-              if(empty($this->request->data['user_response'])){
-                    $message = 'please select a answer';
-              }
-      
-              if($message == '') {
-                  $question = TableRegistry::get('question_master');
+
+        $vendor_authenticate =$this->externalUsersAuthVerification() ;
+
+      if($vendor_authenticate['status']=="Ture"){          
+          $data['auth_status'] = $vendor_authenticate['message'] ;
+          $user_id = isset( $vendor_authenticate['key']) ? $vendor_authenticate['key'] : null; 
+
+          if(!empty($user_id) ){
+
+
+              $question_id = isset( $_REQUEST['question_id'] ) ? $_REQUEST['question_id'] :null;
+              $exam_id = isset( $_REQUEST['exam_id'] ) ? $_REQUEST['exam_id'] :null;
+              $user_seletced_options = isset( $_REQUEST['user_seletced_option'] ) ? $_REQUEST['user_seletced_option'] :null ;
+              $time_taken = isset( $_REQUEST['time_taken'] ) ? $_REQUEST['time_taken'] : 0 ;
+
+             
+            if( !empty($question_id) && !empty($exam_id)  && !empty($user_seletced_options) ){               
+
+                $question = TableRegistry::get('question_master');
                   $answer = TableRegistry::get('answer_master');
-                  $user_quiz = TableRegistry::get('user_quiz_responses');
-                  $ques = $question->find('all')->where(['id' => $this->request->data['question_id']]);
-            
+                  $user_quiz_response = TableRegistry::get('user_quiz_responses');
+                  
+                  $ques = $question->find('all')->where(['id' => $question_id ]);
                   foreach ($ques as $key => $value) {
                       $unique_id = $value['uniqueId'];
                   }
-                $correct_answer = $answer->find('all')->where(['uniqueId' => $unique_id]);
-                $corr_ans_count = 0;
-      foreach ($correct_answer as $key => $value) {
-        $id[] = $value['id'];
-        $corr_ans[] = $value['answers'];
-        $corr_ans_count++;
-      }
-      $correct_count = 0; // for check the count the given ans of user are same as actual answer.
-      $user_response = $this->request->data['user_response'];
-      $count_user_response = count($user_response);
-      $response = $user_quiz->newEntity();
-      $response->id = '';
-      $response->user_id = $this->request->data['user_id'];
-      $response->exam_id = $this->request->data['exam_id'];
-      $response->item_id = $this->request->data['question_id'];
-      foreach ($user_response as $key => $value) {
-        foreach ($corr_ans as $ki => $val) {
-          if(strcmp($val, $value['value'])) {
-            $correct_count++;
+
+                  $user_quiz_response_info['user_id'] = $user_id ;
+                  $user_quiz_response_info['exam_id'] = $exam_id ;
+                  $user_quiz_response_info['item_id'] = $question_id ;
+                  $user_quiz_response_info['time_taken'] = $time_taken ;
+
+                  $correct_answers = $answer->find('all')->where(['uniqueId' => $unique_id]);
+                  if($correct_answers->count() >0 ){
+
+                    // check user option with correct answer
+                    foreach ($user_seletced_options as $useroption) {
+                       
+                       //$user_quiz_response_info['option_key'] = $useroption['key'] ;
+                        $user_quiz_response_info['response'] = $useroption['value'] ; 
+                        $user_response = $useroption['value'];
+  
+                        foreach ($correct_answers as $correct_answer) { 
+                           $correctAnswer= $correct_answer->answers;
+
+                           if($user_response == $correctAnswer){
+                                $user_quiz_response_info['score'] = 1;
+                                $user_quiz_response_info['correct'] = 1;
+                                $user_quiz_response_info['item_marks'] = 1;
+                                $user_quiz_response_info['skip'] = 0;
+                                $user_quiz_response_info['exam_date'] = time();                             
+                           } else{
+                                $user_quiz_response_info['score'] = 0;
+                                $user_quiz_response_info['correct'] = 0;
+                                $user_quiz_response_info['item_marks'] = 0;
+                                $user_quiz_response_info['skip'] = 0;
+                                $user_quiz_response_info['exam_date'] = time();
+                           }                           
+                           
+                            $new_user_quiz_response = $user_quiz_response->newEntity($user_quiz_response_info);
+                           if ($user_quiz_response->save($new_user_quiz_response)) {
+                              $data ['report'][] = "User option -- $user_response saved ";                              
+                           }else{
+                             $data['message'] = "Opps somthing is wrong.";
+                           }
+                      }                                        
+                    }
+
+                    $data['status'] = "True";                
+                   
+              }else{
+                  $data['status']="False";
+                  $data['message'] = 'Answer value is not set in our database. Please inform to our administrator' ;
+              }
+                    
+              }else{
+                $data['status'] ="False";
+                $data['message'] ="question_id, exam_id and user_response cannot be null. Please set all parameters in POST Request."; 
+              }            
+           
+          }else{
+              $data['status']="False";
+              $data['message'] = 'username id is not valid.' ;
           }
-        }
-        if($key == 0){
-          $user_res = $value['value'];
-        }else {
-          $user_res = $user_res.':'.$value['value'];
-        }
+
+
+        }else{
+          $data['status']="False";
+          $data['message'] = $vendor_authenticate['message'] ;
       }
-      if($correct_count == $corr_ans_count) {
-        $response->score= 1;
-        $response->correct= 1;
-      }else{
-        $response->score= 0;
-        $response->correct = 0;
-      }
-      $response->response = $user_res;
-      if($user_quiz->save($response)) {
-        $status = TRUE;
-        $message = 'data saved successfully.';
-      }
-      }
-      }
-      
+
+
+
+
+
+
+
+
+          
     } catch (Exception $exc) {
       echo $exc->getTraceAsString();
     }
     $this->set(array(
-        'status' => $status,
-        'message' => $message,
-        '_serialize' => ['status','message']
+        'response' => $data,       
+        '_serialize' => ['response']
       ));
   }
 
