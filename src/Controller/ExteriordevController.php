@@ -102,7 +102,7 @@ class ExteriordevController extends AppController{
                   $data['status']="False";
               }            
         }else{
-          $data['message'] = "Subject, Grade, Standard and limit (number of question) cannot be null. ";
+          $data['message'] = "Subject, Grade, Standard and limit (number of question) cannot be null. Please set these parameters in Post request.";
           $data['status']="False";
         }       
      }else{
@@ -734,7 +734,7 @@ public function externalUsersAuthVerification(){
 
                                 if($affectedRows>0){
                                     $data['status']="Ture";
-                                    $data['records'][] = "$username - updated for Canellation/Deactiveation";
+                                    $data['records'][] = "$username - updated for Cancellation/Deactivation";
                                 }
                                 else{
                                     $data['status']="False";
