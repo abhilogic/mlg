@@ -36,6 +36,73 @@ class UsersController extends AppController{
       }
 
 
+       /** site_landing method    */
+    public function contactUs(){
+
+        if ($this->request->is('post')) {
+
+             $user_name= isset($this->request->data['name'])? $this->request->data['name']:null;
+             $user_email= isset($this->request->data['email'])? $this->request->data['email']:null;
+             $user_phone= isset($this->request->data['phone'])? $this->request->data['phone']:null;
+             $user_message= isset($this->request->data['contact_text'])?$this->request->data['contact_text']:null;
+
+            $data['message'][] = "";
+
+            if( !empty($user_name)  &&  !empty($user_email) && !empty($user_phone) && !empty($user_message) ){
+
+                $user_email = filter_var($user_email, FILTER_SANITIZE_EMAIL);
+                // Validate e-mail
+                    if (!filter_var($user_email, FILTER_VALIDATE_EMAIL) === false) {
+                        $to="anita@apparrant.com";
+                        $subject="Contact Us";
+                        $headers = "From: info@mylearninguru.com" . "\r\n" .
+                          "CC: $user_email";
+                        $user_message= "Hi 
+
+                         $user_name is trying to contact with you for his query. Please Find the detail below :
+
+                          Email : $user_email
+                          Mobile: $user_phone
+
+                          Query:
+                          ".$user_message;
+
+                        $sent_mail=mail($to,$subject,$user_message,$headers=null);
+                        if($sent_mail){ 
+                            $data['status'] = "True";
+                          $data['message']= "Thank You for contacting us."; 
+                        }
+                        else{ 
+                              $data['status'] = "False";
+                              $data['message']= "Oppss mail is not send";                         
+                      }       
+                    }else {
+                      $data['status'] = 'False';
+                      $data['message'] ="$email is not a valid email address";                    
+                    }
+            }else{
+               $data['status'] = 'False';
+               $data['message'] = "Please fill all contact information properly. No field can be empty.";
+            }
+
+        }
+        else {
+            $data['status'] = 'False';
+            $data['message'] = "Please fill contact form information.";
+        }
+
+        $this->set(array(
+            'data' => $data,
+            '_serialize' => array('data')
+        ));
+
+
+        
+      }
+
+
+
+
    /*
         ** U1 - IsUserExists
         ** Request – String <Email> / String <Username>;
@@ -2249,5 +2316,52 @@ class UsersController extends AppController{
       '_serialize' => ['status', 'message']
     ]);
   }
+
+
+  public function setpreTestStatus(){
+    $test_status = isset($this->request->data['pretestStatus'] ) ? $this->request->data['pretestStatus'] : 0;
+    $user_id = isset( $this->request->data['user_id'] ) ? $this->request->data['user_id'] : 0;
+
+     $userdetails = TableRegistry::get('UserDetails');
+     $result =$userdetails->query()->update()->set(['preTestStatus' => $test_status])->where(['user_id' => $user_id] )->execute();
+
+     $affectedRows = $result->rowCount();
+     if($affectedRows>0){
+          $data['status'] = "True";
+          $data['message'] ="updated;";
+      }else{
+            $data['status'] = "False";
+            $data['message'] ="not updated;";
+       }
+    
+      $this->set([
+      'response' => $data,      
+      '_serialize' => ['response']
+    ]);
+  }
+
+
+  public function getpreTestStatus(){
+    $user_id = isset( $_REQUEST['user_id'] ) ? $_REQUEST['user_id'] : 0;
+   
+     $user_detail =TableRegistry::get('UserDetails')->find('all')->where(['user_id'=>$user_id]);
+        if($user_detail->count() >0 ){
+              foreach ($user_detail as $userdetail) {                 
+                  $data['preTestStatus'] = $userdetail->preTestStatus;
+              }
+          $data['status'] = "True";          
+      }else{
+            $data['status'] = "False";
+            $data['message'] ="No records;";
+       }
+    
+      $this->set([
+      'response' => $data,      
+      '_serialize' => ['response']
+    ]);
+  }
+
+
+  
 
 }
