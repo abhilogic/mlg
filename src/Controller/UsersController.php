@@ -2161,6 +2161,13 @@ class UsersController extends AppController{
       if (isset($param['user_id']) && !empty($param['user_id'])) {
         $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
         $coupons_status_result = $coupon_avail_status_table->find('all')->where(['user_id' => $param['user_id']]);
+        $coupons_status_result->join([
+          'table' => 'coupons',
+          'type' => 'INNER',
+          'conditions' => 'coupons.id = coupon_avail_status.coupon_id'
+        ])->select([ 'coupons.id', 'coupons.title', 'coupons.description', 'coupons.image','coupons.user_type',
+          'coupon_avail_status.id','coupon_avail_status.user_id', 'coupon_avail_status.coupon_id',
+          'coupon_avail_status.date', 'coupon_avail_status.status', 'coupon_avail_status.updated_by']);
         if ($coupons_status_result->count()) {
           $status = TRUE;
         }
@@ -2186,6 +2193,9 @@ class UsersController extends AppController{
       $status = FALSE;
       $message = '';
       $param = $this->request->data;
+      if (!isset($param['updated_by_user_id'])) {
+        throw new Exception('Kindly login to update coupons');
+      }
       if (isset($param['user_id']) && !empty($param['user_id'])) {
        if (isset($param['coupon_id']) && !empty($param['coupon_id'])) {
           $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
@@ -2222,9 +2232,11 @@ class UsersController extends AppController{
             $status = TRUE;
           }
        } else {
+         $message = 'Coupon Id cannot be empty';
          throw new Exception('Coupon Id cannot be empty');
        }
       } else {
+        $message = 'user id cannot be empty';
         throw new Exception('user id cannot be empty');
       }
     } catch (Exception $ex) {
