@@ -73,6 +73,7 @@ class UsersController extends AppController{
       $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
       if ($user_record > 0) {
         $data['user'] = $this->Users->get($id);
+        $data['user_all_details'] = $this->Users->find('all')->where(['user_id' => $id])->contain(['UserDetails']);
       } else {
         $data['response'] = "Record is not found";
       }
