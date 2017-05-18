@@ -487,17 +487,19 @@ class UsersController extends AppController{
   //            'action' => 'login'
   //          ]
         ]);
-        $status = 'false';
+        $status = $first_time_login = 'false';
         $child_info = array();
         $token = $message = $role_id = '';
-        $warning = 0;
-
+        $warning = $no_of_child = 0;
         if ($this->request->is('post')) {
           $user = $this->Auth->identify();
           if ($user) {
             $user_roles = TableRegistry::get('UserRoles');
             $valid_user = $user_roles->find('all')->where(['user_id' => $user['id']]);
             $role_id = $valid_user->first()->role_id;
+            if (strtotime($user['created']) == strtotime($user['modfied'])) {
+              $first_time_login = TRUE;
+            }
             if ($user['status'] != 0) {
               $subscription_end_date = !empty($user['subscription_end_date']) ? strtotime($user['subscription_end_date']) : 0;
               if ($user['status'] != 2) {
@@ -515,6 +517,7 @@ class UsersController extends AppController{
 
                   $children = $this->getChildrenDetails($user['id'], null, TRUE);;
                   if (!empty($children)) {
+                    $no_of_child = count($children);
                     foreach ($children as $child) {
                       $subscription_end_date = strtotime($child['subscription_end_date']);
                       if ((time() - (60 * 60 * 24))  > $subscription_end_date) {
@@ -559,9 +562,11 @@ class UsersController extends AppController{
         'status' => $status,
         'warning' => $warning,
         'child_info' => $child_info,
+        'no_of_child' => $no_of_child,
+        'first_time_login' => $first_time_login,
         'response' => ['secure_token' => $token],
         'message' => $message,
-        '_serialize' => ['user', 'status', 'warning', 'child_info', 'response', 'message','role_id']
+        '_serialize' => ['user', 'status', 'warning', 'no_of_child', 'child_info', 'response', 'message','role_id' , 'first_time_login']
       ]);
     }
 
@@ -1654,7 +1659,7 @@ class UsersController extends AppController{
 //                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, TRUE);
                  
                  //omit
-                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, FALSE);
+                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, TRUE);
                  if (!empty($billing_plan['plan_id'])) {
                    $plan_id = $billing_plan['plan_id'];
 
@@ -2079,6 +2084,157 @@ class UsersController extends AppController{
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
     return $status;
+  }
+
+  /*
+   * function getCouponByUserType()
+   */
+  public function getCouponByUserType() {
+    try {
+      $status = FALSE;
+      $message = $user_type = '';
+      $coupon_results = array();
+      if ($this->request->is('post')) {
+        $param = $this->request->data;
+        if (isset($param['user_type']) && !empty($param['user_type'])) {
+          $connection = ConnectionManager::get('default');
+          $user_type = strtoupper($param['user_type']);
+          $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'";
+          $coupon_results = $connection->execute($sql)->fetchAll('assoc');
+          $conditional_coupons = array();
+          if (isset($param['condition_key']) && isset($param['condition_value']) &&
+            (strtolower($param['condition_key']) == 'points' )) {
+            $sql_coupon = 'SELECT * FROM coupons'
+              . ' INNER JOIN coupon_conditions ON coupons.id = coupon_conditions.coupon_id'
+              . ' WHERE  condition_key = ' . "'" . $param['condition_key']  . "'"
+              . ' AND condition_value <= ' . "'" . $param['condition_value']  . "'";
+            $conditional_coupons = $connection->execute($sql_coupon)->fetchAll('assoc');
+          }
+          if (!empty($coupon_results)) {
+            $status = TRUE;
+            if (!empty($conditional_coupons)) {
+              $conditional_array = array();
+              foreach ($conditional_coupons as $conditional_coupon) {
+                $conditional_array[$conditional_coupon['id']] = $conditional_coupon;
+              }
+              foreach ($coupon_results as &$coupon_result) {
+                if (isset($conditional_array[$coupon_result['id']])) {
+                  $coupon_result['conditional_value'] = isset($conditional_array[$coupon_result['id']]['condition_value']) ?
+                  $conditional_array[$coupon_result['id']]['condition_value'] : 0;
+                  $coupon_result['visibility'] = 'visible';
+                } else {
+                  $coupon_result['conditional_value'] = 0;
+                  $coupon_result['visibility'] = 'hidden';
+                }
+              }
+            }
+          } else {
+            $message = 'No Record Found';
+          }
+        } else {
+          throw new Exception('User Type is mandatory');
+        }
+      } else {
+        throw new Exception('Request is not using POST');
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'user_type' => $user_type,
+      'result' => $coupon_results,
+      '_serialize' => ['status', 'message', 'user_type', 'result']
+    ]);
+  }
+
+  /*
+   * function getUsedCoupons()
+   */
+  public function getUsedCoupon() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $coupons_status_result = array();
+      $param = $this->request->data;
+      if (isset($param['user_id']) && !empty($param['user_id'])) {
+        $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
+        $coupons_status_result = $coupon_avail_status_table->find('all')->where(['user_id' => $param['user_id']]);
+        if ($coupons_status_result->count()) {
+          $status = TRUE;
+        }
+      } else {
+        throw new Exception('user Id cannot be empty');
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'result' => $coupons_status_result,
+      '_serialize' => ['status', 'message', 'result']
+    ]);
+  }
+
+  /*
+   * function setAvailableCoupon
+   */
+  public function setAvailableCoupon() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $param = $this->request->data;
+      if (isset($param['user_id']) && !empty($param['user_id'])) {
+       if (isset($param['coupon_id']) && !empty($param['coupon_id'])) {
+          $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
+          $coupon = $coupon_avail_status_table->find()->where(['user_id' => $param['user_id'],
+            'coupon_id' => $param['coupon_id']]);
+          if ($coupon->count()) {
+          $entry_status = $coupon_avail_status_table->query()->update()
+            ->set(['status' => $param['status'], 'updated_by' => $param['updated_by_user_id']])
+            ->where(['coupon_id' => $param['coupon_id'], 'user_id' => $param['user_id']])->execute();
+          } else {
+            $coupon_entry = $coupon_avail_status_table->newEntity(array(
+              'user_id' => $param['user_id'],
+              'coupon_id' => $param['coupon_id'],
+              'date' => date('Y-m-d'),
+              'status' => $param['status'],
+              'updated_by' => $param['updated_by_user_id'],
+              )
+            );
+           $entry_status = $coupon_avail_status_table->save($coupon_entry);
+          }
+          if (!empty($entry_status)) {
+            $coupon_avail_transactions = TableRegistry::get('coupon_avail_transactions');
+            $new_transaction_entity = $coupon_avail_transactions->newEntity(array(
+              'user_id' => $param['user_id'],
+              'coupon_id' => $param['coupon_id'],
+              'date' => date('Y-m-d'),
+              'status' => $param['status'],
+              'updated_by' => $param['updated_by_user_id'],
+            ));
+            if (!$coupon_avail_transactions->save($new_transaction_entity)) {
+              $message = "Some error occured while updating Information";
+              throw new Exception('unable to save in coupon availble transactions');
+            }
+            $status = TRUE;
+          }
+       } else {
+         throw new Exception('Coupon Id cannot be empty');
+       }
+      } else {
+        throw new Exception('user id cannot be empty');
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+     $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
   }
 
 }

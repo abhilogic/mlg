@@ -312,8 +312,9 @@ class TeachersController extends AppController {
       'response' => $level_subject,
       'grade' => $level,
       'subject' => $subject,
-      'urlData' => $urldata, 
-      '_serialize' => ['status','response','grade','subject','urlData']
+      'urlData' => $urldata,
+      'url' =>Router::url('/', true),
+      '_serialize' => ['status','response','grade','subject','urlData','url']
     ]);
   }
   /**
@@ -625,6 +626,7 @@ class TeachersController extends AppController {
             $content->task_noties = isset($this->request->data['task']) ? $this->request->data['task'] : '';
             $content->text_compexity = isset($this->request->data['ques_complexity']) ? $this->request->data['ques_complexity'] : '';
             $content->question = $question;
+            $content->assignment = isset($this->request->data['assignment']) ? $this->request->data['assignment'] : '';
             $content->content_type = isset($this->request->data['cont_type']) ? $this->request->data['cont_type'] : '';
             if($template_detail->save($content)){
               $message = 'Template Saved.';
@@ -664,15 +666,16 @@ class TeachersController extends AppController {
         $content_detail['skills'] = explode(',', $value['skill_ids']);
         $content_detail['sub_skill'] = explode(',', $value['sub_skill_ids']);
         if($type == 'question'){
-		  $content_detail['ques_diff'] = $value['difficulity_level'];
-	      $content_detail['claim'] = $value['claim'];
-		  $content_detail['scope'] = $value['scope'];
-		  $content_detail['dok'] = $value['depth_of_knowledge'];
-		  $content_detail['ques_passage'] = explode(',', $value['passage']);
-		  $content_detail['ques_target'] = explode(',', $value['secondary_target']);
-		  $content_detail['task'] = $value['task_noties'];
-		  $content_detail['ques_complexity'] = explode(',', $value['text_compexity']);
-		  $content_detail['ques_type'] = explode(',', $value['question']);
+          $content_detail['ques_diff'] = $value['difficulity_level'];
+          $content_detail['claim'] = $value['claim'];
+          $content_detail['scope'] = $value['scope'];
+          $content_detail['dok'] = $value['depth_of_knowledge'];
+          $content_detail['ques_passage'] = explode(',', $value['passage']);
+          $content_detail['ques_target'] = explode(',', $value['secondary_target']);
+          $content_detail['task'] = $value['task_noties'];
+          $content_detail['ques_complexity'] = explode(',', $value['text_compexity']);
+          $content_detail['ques_type'] = explode(',', $value['question']);
+          $content_detail['assignment'] = $value['assignment'];
 		}
         $content[] = $content_detail;
       }
@@ -1493,7 +1496,8 @@ public function addStudent() {
         }else if (empty($this->request->data['correctanswer'])) {
           $message = 'Please select an answer.';
         }
-        $answer_list = explode(',', $this->request->data['answer']);
+        if($message == '') {
+         $answer_list = explode(',', $this->request->data['answer']);
         $sql = 'SELECT MAX( id )FROM question_master';
         $result = $connection->execute($sql)->fetchAll('assoc');
         $last_inserted_id = 0;
@@ -1504,8 +1508,8 @@ public function addStudent() {
         $question_master = TableRegistry::get('question_master');
         $question = $question_master->newEntity();
         $question->questionName = $this->request->data['question'];
-        $question->grade = $this->request->data['grade'];
-        $question->subject = $this->request->data['course'];
+        $question->grade_id = $this->request->data['grade'];
+        $question->courde_id = $this->request->data['course'];
         $question->level = $this->request->data['ques_diff'];
         $question->type = implode(',',$this->request->data['ques_type']);
         $question->standard = implode(',',$this->request->data['standard']);
@@ -1515,7 +1519,11 @@ public function addStudent() {
             $option_master = TableRegistry::get('option_master');
             $option = $option_master->newEntity();
             $option->uniqueId  = $unique_id;
-            $option->options  = $value;
+            if($this->request->data['type'] == 'image') {
+              $option->options  = 'upload/'.$value;
+            }else{
+              $option->options  = $value;
+            }
             if($option_master->save($option)) {
               if($key+1 == $this->request->data['correctanswer']) {
                 $answer_master = TableRegistry::get('answer_master');
@@ -1533,6 +1541,7 @@ public function addStudent() {
           $status = TRUE;
         }else{
           $message = 'unable to save question.';
+        } 
         }                 
       }else{
         $message = 'please define correct method.';

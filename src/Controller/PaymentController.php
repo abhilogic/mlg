@@ -23,7 +23,7 @@ class PaymentController extends AppController {
     parent::initialize();
    // $conn = ConnectionManager::get('default');
     $this->loadComponent('RequestHandler');
-     $this->RequestHandler->renderAs($this, 'json');
+    $this->RequestHandler->renderAs($this, 'json');
   }
 
   /**
@@ -32,7 +32,7 @@ class PaymentController extends AppController {
   public function createBillingPlan($user_id = null, $access_token = null, $trial_period = TRUE) {
     try {
         $user_controller = new UsersController();
-        $response = $user_controller->getUserPurchaseDetails($user_id, TRUE);
+        $response = $user_controller->getUserPurchaseDetails($user_id, TRUE, TRUE);
         $frequency = 'MONTH';
         $cycles = (strtoupper($response['plan_duration']) == 'QUATERLY') ? 3 : 1;
         if (strtoupper($response['plan_duration']) == 'YEARLY') {
@@ -75,7 +75,7 @@ class PaymentController extends AppController {
         $trial_charged_tax_amount_value = 0;
         $trial_charged_tax_amount_currency = PAYPAL_CURRENCY;
 
-        $merchant_setup_fee_value = 0;
+        $merchant_setup_fee_value =  ($trial_period == TRUE) ? 0 : $fixed_amount_value;
         $merchant_setup_fee_currency = PAYPAL_CURRENCY;
         $return_url = 'http://www.paypal.com';
         $cancel_url = 'http://www.paypal.com/cancel';
@@ -277,7 +277,6 @@ class PaymentController extends AppController {
         'name' => 'Credit Card Payment',
         'description' => 'Recurring credit card payment',
         'start_date' => date('Y-m-d\TH:i:s\Z', strtotime('+1 day')),
-//        'start_date' => gmdate("Y-m-d\TH:i:s\Z"),
         'plan' => array('id' => $plan_id),
         'payer' => array(
           'payment_method' => $payment_method,
@@ -286,7 +285,7 @@ class PaymentController extends AppController {
             array(
               'credit_card' => array(
                 'first_name' => $card_details['first_name'],
-                'last_name' => isset($card_details['last_name']) ? $card_details['last_name'] : '',
+                'last_name' => isset($card_details['last_name']) ? $card_details['last_name'] : $card_details['first_name'],
                 'type' => isset($card_details['card_type']) ? $card_details['card_type'] : 'visa',
                 'number' => $card_details['number'],
                 'expire_month' => $card_details['expire_month'],
