@@ -69,7 +69,7 @@ class UsersController extends AppController{
 
                        // $sent_mail=mail($to,$subject,$user_message,$headers=null);
 
-                        $sent_mail = sendEmail($to, $user_email, $subject, $user_message);
+                        $sent_mail = $this->sendEmail($to, $user_email, $subject, $user_message);
                         if($sent_mail==TRUE){ 
                             $data['status'] = "True";
                           $data['message']= "Thank You for contacting us."; 
