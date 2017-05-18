@@ -67,8 +67,10 @@ class UsersController extends AppController{
                           Query:
                           ".$user_message;
 
-                        $sent_mail=mail($to,$subject,$user_message,$headers=null);
-                        if($sent_mail){ 
+                       // $sent_mail=mail($to,$subject,$user_message,$headers=null);
+
+                        $sent_mail = sendEmail($to, $user_email, $subject, $user_message);
+                        if($sent_mail==TRUE){ 
                             $data['status'] = "True";
                           $data['message']= "Thank You for contacting us."; 
                         }
@@ -899,6 +901,8 @@ class UsersController extends AppController{
             $email->subject($subject);
             if ($email->send($email_message)) {
               $status = TRUE;
+            }else{
+              $status = FALSE;
             }
           } catch (Exception $ex) {
             $this->log($ex->getMessage());
