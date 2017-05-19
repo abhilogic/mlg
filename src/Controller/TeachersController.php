@@ -1520,8 +1520,8 @@ public function addStudent() {
               $header_master = TableRegistry::get('header_master');
               $header = $header_master->newEntity();
               $header->uniqueId = $unique_id;
-              $header->claim = $this->request->data['claim'];
-              $header->dok = $this->request->data['dok'];
+              $header->Claim = $this->request->data['claim'];
+              $header->DOK = $this->request->data['dok'];
               $header_master->save($header);
               foreach($answer_list as $key=>$value) {
                 $option_master = TableRegistry::get('option_master');
