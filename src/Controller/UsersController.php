@@ -71,6 +71,7 @@ class UsersController extends AppController{
     */
     public function getUserDetails($id = null, $function_call = FALSE){
       $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
+      $data['user_all_details'] = array();
       if ($user_record > 0) {
         $data['user'] = $this->Users->get($id);
         $data['user_all_details'] = $this->Users->find('all')->where(['user_id' => $id])->contain(['UserDetails']);
@@ -78,6 +79,12 @@ class UsersController extends AppController{
         $data['response'] = "Record is not found";
       }
       if ($function_call) {
+        if (!empty($data['user_all_details'])) {
+          $temp = $data['user_all_details'];
+          foreach ($temp as $user_details) {
+            $data['user_all_details'] = $user_details->toArray();
+          }
+        }
         return $data;
       }
       $this->set([
@@ -2199,6 +2206,37 @@ class UsersController extends AppController{
       }
       if (isset($param['user_id']) && !empty($param['user_id'])) {
        if (isset($param['coupon_id']) && !empty($param['coupon_id'])) {
+
+         // When coupon is acquired, the point will be updated
+         if (strtolower($param['status']) == 'acquired') {
+           $coupon_condition_key = isset($param['coupon_condition_key']) ? $coupon_condition_key : 'points';
+           $condition_response = $this->_getCondtionsDetailsOnCoupon($param['coupon_id'], $coupon_condition_key);
+           if ($condition_response['status'] == TRUE) {
+             $user_details = $this->getUserDetails($param['user_id'], TRUE);
+             $user_current_points = $user_details['user_all_details']['user_detail']['points'];
+
+             if ($user_current_points > 0) {
+               $user_new_points = $user_current_points - $condition_response['result']['condition_value'];
+               if ($user_new_points < 0) {
+                 $message = 'Insufficient Points';
+                 throw new Exception('User points are less');
+               }
+               $user_details_table = TableRegistry::get('UserDetails');
+               $query_updated = $user_details_table->query()->update()->set(['points' => $user_new_points])->where(['user_id' => $param['user_id']])->execute();
+               if (!$query_updated) {
+                 $message = 'Some Error occured. Please contact to administrator';
+                 throw new Exception('unable to update points to user details table');
+               }
+             } else {
+               $message = 'Insufficient Points';
+               throw new Exception('User points are below Zero');
+             }
+           } else {
+             $message = "Unable to get points";
+             throw new Exception('Error in coupon condition table. Message: ' . $condition_response['message']);
+           }
+         }
+
           $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
           $coupon = $coupon_avail_status_table->find()->where(['user_id' => $param['user_id'],
             'coupon_id' => $param['coupon_id']]);
@@ -2217,6 +2255,7 @@ class UsersController extends AppController{
             );
            $entry_status = $coupon_avail_status_table->save($coupon_entry);
           }
+
           if (!empty($entry_status)) {
             $coupon_avail_transactions = TableRegistry::get('coupon_avail_transactions');
             $new_transaction_entity = $coupon_avail_transactions->newEntity(array(
@@ -2232,6 +2271,7 @@ class UsersController extends AppController{
             }
             $status = TRUE;
           }
+
        } else {
          $message = 'Coupon Id cannot be empty';
          throw new Exception('Coupon Id cannot be empty');
@@ -2250,4 +2290,30 @@ class UsersController extends AppController{
     ]);
   }
 
+
+  /*
+   * function _getCondtionsDetailsOnCoupon().
+   */
+  private function _getCondtionsDetailsOnCoupon($coupon_id = NULL, $coupon_condition_key = 'points') {
+    try {
+      $response = array('status' => FALSE, 'message' => '', 'result' => array());
+      if (empty($coupon_id)) {
+        $response['message'] = 'coupon id cannot be blank';
+        throw new Exception($response['message']);
+      }
+      $coupon_condition_table = TableRegistry::get('coupon_conditions');
+      $query_results = $coupon_condition_table->find('all')->where(['condition_key' => $coupon_condition_key, 'coupon_id' => $coupon_id]);
+      if ($query_results->count()) {
+        $response['status'] = TRUE;
+        foreach ($query_results as $query_result) {
+          $response['result'] = $query_result->toArray();
+        }
+      } else {
+        $response['message'] = 'No record found';
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $response;
+  }
 }
