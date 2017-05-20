@@ -2432,5 +2432,93 @@ class UsersController extends AppController{
     ]);
   }
 
-}
+  /*
+   * function getUserSetting().
+   */
+  public function getUserSetting() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $user_setting = array();
+      if ($this->request->is('post')) {
+        $data = $this->request->data;
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['setting_key'])) {
+          $message = 'Setting key missing';
+          throw new Exception('setting key not found');
+        }
+        $user_setting = TableRegistry::get('settings')
+           ->find()->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']]);
+        if ($user_setting->count()) {
+          $status = TRUE;
+        } else {
+          $message = 'user setting not found';
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'result' => $user_setting->first(),
+      '_serialize' => ['status', 'message', 'result']
+    ]);
+  }
 
+  /*
+   * function setUserSetting().
+   */
+  public function setUserSetting() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $data = $this->request->data;
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['setting_key'])) {
+          $message = 'Setting key missing';
+          throw new Exception('setting key not found');
+        }
+        if (!isset($data['setting_value'])) {
+          $message = 'Setting value missing';
+          throw new Exception('setting value not found');
+        }
+        $user_setting_table = TableRegistry::get('settings');
+        $user_setting = $user_setting_table->find('all')->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']]);
+        if ($user_setting->count()) {
+          $user_setting = $user_setting_table->query()->update()->set(['setting_value' => $data['setting_value']])->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']])->execute();
+          if ($user_setting) {
+            $status = TRUE;
+          } else {
+            $message = 'unable to update your settings';
+          }
+        } else {
+          $user_setting = $user_setting_table->newEntity(array(
+           'user_id' => $data['user_id'],
+           'setting_key' => $data['setting_key'],
+           'setting_value' => $data['setting_value'],
+          ));
+          if ($user_setting_table->save($user_setting)) {
+            $status = TRUE;
+          } else {
+            $message = 'Unable to save your settings';
+          }
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message', 'result']
+    ]);
+  }
+}
