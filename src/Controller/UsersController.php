@@ -2188,23 +2188,23 @@ class UsersController extends AppController{
               . ' WHERE  condition_key = ' . "'" . $param['condition_key']  . "'"
               . ' AND condition_value <= ' . "'" . $param['condition_value']  . "'";
             $conditional_coupons = $connection->execute($sql_coupon)->fetchAll('assoc');
-          }
+            }
+          $conditional_array = array();
           if (!empty($coupon_results)) {
             $status = TRUE;
             if (!empty($conditional_coupons)) {
-              $conditional_array = array();
               foreach ($conditional_coupons as $conditional_coupon) {
                 $conditional_array[$conditional_coupon['id']] = $conditional_coupon;
               }
-              foreach ($coupon_results as &$coupon_result) {
-                if (isset($conditional_array[$coupon_result['id']])) {
-                  $coupon_result['conditional_value'] = isset($conditional_array[$coupon_result['id']]['condition_value']) ?
-                  $conditional_array[$coupon_result['id']]['condition_value'] : 0;
-                  $coupon_result['visibility'] = 'visible';
-                } else {
-                  $coupon_result['conditional_value'] = 0;
-                  $coupon_result['visibility'] = 'hidden';
-                }
+            }
+            foreach ($coupon_results as &$coupon_result) {
+              if (isset($conditional_array[$coupon_result['id']])) {
+                $coupon_result['conditional_value'] = isset($conditional_array[$coupon_result['id']]['condition_value']) ?
+                $conditional_array[$coupon_result['id']]['condition_value'] : 0;
+                $coupon_result['visibility'] = 'visible';
+              } else {
+                $coupon_result['conditional_value'] = 0;
+                $coupon_result['visibility'] = 'hidden';
               }
             }
           } else {
@@ -2277,6 +2277,26 @@ class UsersController extends AppController{
       }
       if (isset($param['user_id']) && !empty($param['user_id'])) {
        if (isset($param['coupon_id']) && !empty($param['coupon_id'])) {
+         $user_details_table = TableRegistry::get('UserDetails');
+
+        //if automatic approval turned on by parent
+         $user_data = $user_details_table->find()->where(['user_id' => $param['user_id']]);
+         foreach ($user_data as $user_info) {
+           $parent_id = $user_info->parent_id;
+           if (!empty($parent_id)) {
+             $this->request->data['user_id'] = $parent_id;
+             $this->request->data['setting_key'] = 'automatic_approval';
+             $this->request->data['requested'] = TRUE;
+             $setting_response = $this->getUserSetting();
+             foreach ($setting_response as $user_setting) {
+               if ($user_setting->setting_value == 1 || $user_setting->setting_value == TRUE) {
+                 $param['status'] = (strtolower($param['status']) == 'approval pending') ? 'acquired' : $param['status'];
+               }
+               break;
+             }
+           }
+           break;
+         }
 
          // When coupon is acquired, the point will be updated
          if (strtolower($param['status']) == 'acquired') {
@@ -2292,7 +2312,7 @@ class UsersController extends AppController{
                  $message = 'Insufficient Points';
                  throw new Exception('User points are less');
                }
-               $user_details_table = TableRegistry::get('UserDetails');
+
                $query_updated = $user_details_table->query()->update()->set(['points' => $user_new_points])->where(['user_id' => $param['user_id']])->execute();
                if (!$query_updated) {
                  $message = 'Some Error occured. Please contact to administrator';
@@ -2357,7 +2377,8 @@ class UsersController extends AppController{
      $this->set([
       'status' => $status,
       'message' => $message,
-      '_serialize' => ['status', 'message']
+      'coupon_status' => ucfirst($param['status']),
+      '_serialize' => ['status', 'coupon_status', 'message']
     ]);
   }
 
@@ -2440,8 +2461,8 @@ class UsersController extends AppController{
       $status = FALSE;
       $message = '';
       $user_setting = array();
-      if ($this->request->is('post')) {
-        $data = $this->request->data;
+      $data = $this->request->data;
+      if ($this->request->is('post') || isset($data['requested'])) {
         if (!isset($data['user_id']) || empty($data['user_id'])) {
           $message = 'Kindly login';
           throw new Exception('User Id cannot be null');
@@ -2460,6 +2481,9 @@ class UsersController extends AppController{
       }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    if (isset($data['requested'])) {
+      return $user_setting;
     }
     $this->set([
       'status' => $status,
