@@ -2270,7 +2270,7 @@ class UsersController extends AppController{
   public function setAvailableCoupon() {
     try {
       $status = FALSE;
-      $message = '';
+      $message = $error_code = '';
       $param = $this->request->data;
       if (!isset($param['updated_by_user_id'])) {
         throw new Exception('Kindly login to update coupons');
@@ -2309,6 +2309,7 @@ class UsersController extends AppController{
              if ($user_current_points > 0) {
                $user_new_points = $user_current_points - $condition_response['result']['condition_value'];
                if ($user_new_points < 0) {
+                 $error_code = 'LESS_POINT';
                  $message = 'Insufficient Points';
                  throw new Exception('User points are less');
                }
@@ -2319,10 +2320,12 @@ class UsersController extends AppController{
                  throw new Exception('unable to update points to user details table');
                }
              } else {
+               $error_code = 'ZERO_POINT';
                $message = 'Insufficient Points';
                throw new Exception('User points are below Zero');
              }
            } else {
+             $error_code = 'POINT_GET_ERROR';
              $message = "Unable to get points";
              throw new Exception('Error in coupon condition table. Message: ' . $condition_response['message']);
            }
@@ -2340,7 +2343,7 @@ class UsersController extends AppController{
               'user_id' => $param['user_id'],
               'coupon_id' => $param['coupon_id'],
               'date' => date('Y-m-d'),
-              'status' => $param['status'],
+              'status' => ucfirst($param['status']),
               'updated_by' => $param['updated_by_user_id'],
               )
             );
@@ -2377,8 +2380,9 @@ class UsersController extends AppController{
      $this->set([
       'status' => $status,
       'message' => $message,
+      'error_code' => $error_code,
       'coupon_status' => ucfirst($param['status']),
-      '_serialize' => ['status', 'coupon_status', 'message']
+      '_serialize' => ['status', 'coupon_status', 'message', 'error_code']
     ]);
   }
 
