@@ -199,7 +199,7 @@ class TeachersController extends AppController {
     ]);
   }
  /**
-  * This api is used for get student detail. 
+  * This api is used for get student detail of a class and subject. 
   **/ 
   public function getStudentDetail($grade='',$subject='',$type) {
     try{
@@ -237,6 +237,8 @@ class TeachersController extends AppController {
       '_serialize' => ['data'] 
     ]);
   }
+
+
  /**
   * This api is used for get teacher subject with grade.
   * 
@@ -885,6 +887,8 @@ class TeachersController extends AppController {
     ]);
   }
   
+
+  // add student of a teacher
 public function addStudent() {          
       try{         
 
@@ -943,9 +947,10 @@ public function addStudent() {
               if(isset($this->request->data['last_name']) && !empty($this->request->data['last_name']) ){ $postdata['last_name']=$this->request->data['last_name'];  }
               else{ $data['message'][3]="Last name is require"; }            
 
-                          
-               
-              $postdata['parent_id']=isset($this->request->data['parent_id'])? $this->request->data['parent_id']:$data['message'][4]="The Parent ID has been expired. please Login Again";                          
+                               
+              $postdata['teacher_id']=isset($this->request->data['teacher_id'])? $this->request->data['teacher_id']:$data['message'][4]="The your has been expired. please Login Again"; 
+
+
               $postdata['school']=isset($this->request->data['school'])? $this->request->data['school']:$data['message'][5]="School Name is require";        
              // $postdata['dob']=isset($this->request->data['dob'])? $this->request->data['dob']:'';
 
@@ -955,12 +960,9 @@ public function addStudent() {
               //$postdata['modfied']=$this->request->data['created'];
               //$postdata['order_date']=$this->request->data['created'];
 
-
-
               $postdata['created']=time();
               $postdata['modfied']=time();
               $postdata['order_date']=time();
-
 
               $postdata['promocode_id']=isset($this->request->data['vcode'])?$this->request->data['vcode']:'0'; 
 
@@ -975,20 +977,18 @@ public function addStudent() {
                      $user_details=TableRegistry::get('UserDetails');
                      $user_roles=TableRegistry::get('UserRoles');
                      $user_courses=TableRegistry::get('UserCourses');
+                     $student_teachers=TableRegistry::get('StudentTeachers');
                      $user_purchase_items=TableRegistry::get('UserPurchaseItems');
                      $subtotal=0;
                      $count=0;
+                      
                       // parent information by $pid
-                        $parent_records= $users->find('all')->where(["id"=>$postdata['parent_id'] ]);
+                        $parent_records= $users->find('all')->where(["id"=>$postdata['teacher_id'] ]);
                           foreach ($parent_records as $parent_record) {
                               $parentinfo['email']=$parent_record['email'];
                               $parentinfo['first_name']=$parent_record['first_name'];
                               $parentinfo['last_name']=$parent_record['last_name'];
-                          }                  
-
-                   
-
-                       
+                          }                      
 
                         $from = 'logicdeveloper7@gmail.com';
                             $subject ="Your Child authenticatation";
@@ -997,7 +997,6 @@ public function addStudent() {
                                   Your Child Login Credential in My Learning Guru is 
                                   User Name :".$postdata['username'] ." 
                                   Password : ".$pass;
-
                           
                         $to=$postdata['email']; 
 
@@ -1012,6 +1011,7 @@ public function addStudent() {
                             $data['message']="mail send";
                           } */
                       $postdata['user_id']  = $result->id;
+                      $postdata['student_id']  = $result->id;
 
                       //2.  User Details Table
                       $new_user_details = $user_details->newEntity($postdata);
@@ -1021,22 +1021,38 @@ public function addStudent() {
                           $new_user_roles = $user_roles->newEntity($postdata);                        
                         if ($user_roles->save($new_user_roles)) {
 
-                          // Courses and Price calculation
-                          $courses=$this->request->data['courses'];
-                          foreach ($courses as $course_id => $name) {
-                            $postdata['course_id']=$course_id;
+                          //4. Student-Teacher table
+                          $new_student_teachers = $student_teachers->newEntity($postdata);                        
+                        if ($student_teachers->save($new_student_teachers)) {
 
-                          //4. User Courses Table
-                            $new_user_courses = $user_courses->newEntity($postdata);
-                              if ($user_courses->save($new_user_courses)) {                                 
-                                $data['status']="True";
-                             }
-                            else{
-                              $data['status']='flase';
-                              $data['message']=" Not able to save data in User Courses Table";
-                              throw new Exception("Not able to save data in User Courses Table");
+                               //5.  User Courses Table
+                            $courses=$this->request->data['courses'];
+                            foreach ($courses as $course_id => $name) {
+                              $postdata['course_id']=$course_id;
+
+                            
+                              $new_user_courses = $user_courses->newEntity($postdata);
+                                if ($user_courses->save($new_user_courses)) {                                 
+                                  $data['status']="True";
+                                  $data['message']=" Studen- teacher relationship is added.";
+                               }
+                              else{
+                                $data['status']='flase';
+                                $data['message']=" Not able to save data in User Courses Table";
+                                throw new Exception("Not able to save data in User Courses Table");
+                            }
                           }
+
+
+
+                        }else{
+                              $data['status'] = "False";
+                              $data['message']=" Not able to save data in Student Teacher Table";
+                              throw new Exception("Not able to save data in Student Teacher Table");
                         }
+
+
+                       
 
                       }
                       else{ 
@@ -1184,38 +1200,43 @@ public function addStudent() {
        }
 
 
-       public function createGroup($tid=null){        
+       // API to create group of a teacher for a subject
+       public function createGroupInSubjectByTeacher($tid=null,$course_id=null){        
           if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
               $students = $this->request->data['selectedstudent'];
-              $student_groups= TableRegistry::get('StudentGroups'); 
+             
               $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
+              $postdata['course_id'] = isset($_GET['course_id'])? $_GET['course_id'] : $course_id;
+              $postdata['title'] = $this->request->data['groupname']; 
+              $postdata['created_by'] = time();
+              $postdata['modified_by'] = time();
+
+
 
               if(isset($this->request->data['group_image'])){
                 $gp_img = json_decode($this->request->data['group_image']);
                 $postdata['group_icon'] = $gp_img->response;
               }
 
-              $postdata['title'] = $this->request->data['groupname'];
+              if(!empty($postdata['teacher_id']) && $postdata['teacher_id']!=null){
+                  $student_ids=array();                     
+                
+                  foreach ($students as $id => $value) {
+                    $student_ids[] = array_push($student_ids, $id) ;                     
+                  }
 
-               
-                if(!empty($postdata['teacher_id']) && $postdata['teacher_id']!=null){                    
-                    
-                    $postdata['created_by'] = time();
-                    $postdata['modified_by'] = time();
-
-                    foreach ($students as $id => $value) {
-                        $postdata['student_id'] = $id;
-                        $new_rowEntry = $student_groups->newEntity($postdata);
-                        if ($student_groups->save($new_rowEntry)) {
+                    $postdata['student_id'] = implode(',',$student_ids);
+                    $student_groups= TableRegistry::get('StudentGroups');
+                    $new_rowEntry = $student_groups->newEntity($postdata);
+                    if ($student_groups->save($new_rowEntry)) {
                           $data['status']="true";
                           $data['message']="Group- ' ". $postdata['title'] ." ' has been created.";                
-                        }else{
-                          $data['status']="false";
-                          $data['message']="Please login First. No Teacher UID get.";
-                        }
-                    }
+                    }else{
+                           $data['status']="False";
+                          $data['message']="Opps Issue in adding the group.";
+                      }                  
                 }else{
-                    $data['status']="false";
+                    $data['status']="False";
                     $data['message']="Please login First. No Teacher UID get.";
                 }
           }else{
@@ -1232,29 +1253,28 @@ public function addStudent() {
 
 
        //Get groups of a teacher
-       public function getGroups($tid=null){
+       public function getGroupsOfSubjectForTeacher($tid=null, $course_id=null){
           $teacher_id = isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
+          $course_id = isset($_GET['course_id'])?$_GET['course_id']:$course_id;
 
-          if(!empty($teacher_id) || $teacher_id!=null || $teacher_id!='null'){
-             $student_groups= TableRegistry::get('StudentGroups')->find('all')->where(['teacher_id'=>$teacher_id])->group('group_icon')->toArray();
+          if(!empty($teacher_id) && !empty($course_id)){
+             $student_groups= TableRegistry::get('StudentGroups')->find('all')->where(['teacher_id'=>$teacher_id, 'course_id'=>$course_id])->group('group_icon')->toArray();
 
-                if(count($student_groups) > 0){
-                     foreach ($student_groups as $stgroup) {
-                        if(!empty($stgroup['group_icon']) || $stgroup['group_icon'] !=""){
-                          $data['groups'][] = $stgroup;
-                        }
-                        else{
-                          $stgroup['group_icon']="group_images/default_group.png";
-                          $data['groups'][] = $stgroup;
-
-                        }
-                                          
-                     }
+              if(count($student_groups) > 0){
+                  foreach ($student_groups as $stgroup) {
+                      if(!empty($stgroup['group_icon']) || $stgroup['group_icon'] !=""){
+                        $data['groups'][] = $stgroup;
+                      }
+                      else{
+                        $stgroup['group_icon']="group_images/default_group.png";
+                        $data['groups'][] = $stgroup;
+                      }
+                  }
                 }
                 $data['status']="true";
           }else{
               $data['status']="false";
-              $data['message']="Opps. Please login again. Teacher Id cannot be null.";
+              $data['message']="Either your login session has expired or course is not set.";
           }
 
           $this->set([           
@@ -1265,19 +1285,21 @@ public function addStudent() {
 
       }
 
-       // API to get the teacher added student for a course of perticular class
-       public function getStudentsOfClass($tid=null,$course_id=null){
+       // API to get the student of a subject Added by a teacher
+       public function getStudentsOfSubjectForTeacher($tid=null,$course_id=null){
 
           $tid = isset($_GET['teacher_id'])? $_GET['teacher_id']:$tid;
            $course_id = isset($_GET['course_id'])? $_GET['course_id']:$course_id;
 
             if( (!empty($tid)) && (!empty($course_id)) ){  
                   $connection = ConnectionManager::get('default');
-                   $sql =" SELECT users.id as id,first_name,last_name,username,email,password,open_key from users"
+                   $sql =" SELECT users.id as id,first_name,last_name,username,email,password,open_key, profile_pic from users"
                         . " INNER JOIN user_details ON users.id = user_details.user_id "
-                        . " INNER JOIN user_courses ON users.id = user_courses.user_id "                       
-                        . " WHERE user_details.parent_id =".$tid. " AND user_courses.course_id=".$course_id
+                        . " INNER JOIN user_courses ON users.id = user_courses.user_id "
+                        . " INNER JOIN student_teachers ON users.id = student_teachers.student_id "                       
+                        . " WHERE student_teachers.teacher_id =".$tid. " AND user_courses.course_id=".$course_id
                         ." ORDER BY users.id ASC "; 
+                      
                   $student_records = $connection->execute($sql)->fetchAll('assoc');
                   $studentcount = count($student_records);
 
@@ -1291,20 +1313,24 @@ public function addStudent() {
                           $student['password']=$studentrow['password'];
                           $open_key=$studentrow['open_key'];
                           $student['open_key'] = hex2bin($open_key);
+                          
+                          if( $studentrow['profile_pic']==NULL ){
+                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                          }else{
+                            $student['profile_pic'] = $studentrow['profile_pic'];
+                          }
+
                           $data['students'][]=$student;
                       }
                       $data['status']="true";
-
                   }else{
                     $data['status']="false";
                     $data['message']="Please Add Student in Your Class.";
-                  }                
-
+                  }   
             }else{
                 $data['status']="false";
                 $data['message']="Either teacher_id or course_id is null. Please check it cannot be null";
             }
-
            
             $this->set([           
               'response' => $data,
@@ -1314,6 +1340,7 @@ public function addStudent() {
        }  
 
 
+       // The function to show all students of a teacher for his/her all subjects
        public function getStudentOfTeacher($tid=null){
 
           $tid = isset($_GET['teacher_id'])? $_GET['teacher_id']:$tid;          
@@ -1321,8 +1348,9 @@ public function addStudent() {
                   $connection = ConnectionManager::get('default');
                    $sql =" SELECT users.id as id,first_name,last_name,username,email,password,open_key,profile_pic from users"
                         . " INNER JOIN user_details ON users.id = user_details.user_id "
+                        . " INNER JOIN student_teachers ON users.id = student_teachers.student_id " 
                         . " INNER JOIN user_courses ON users.id = user_courses.user_id "                       
-                        . " WHERE user_details.parent_id =".$tid
+                        . " WHERE student_teachers.teacher_id =".$tid
                         ." ORDER BY users.id ASC "; 
                   $student_records = $connection->execute($sql)->fetchAll('assoc');
                   $studentcount = count($student_records);
