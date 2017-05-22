@@ -36,6 +36,75 @@ class UsersController extends AppController{
       }
 
 
+       /** site_landing method    */
+    public function contactUs(){
+
+        if ($this->request->is('post')) {
+
+             $user_name= isset($this->request->data['name'])? $this->request->data['name']:null;
+             $user_email= isset($this->request->data['email'])? $this->request->data['email']:null;
+             $user_phone= isset($this->request->data['phone'])? $this->request->data['phone']:null;
+             $user_message= isset($this->request->data['contact_text'])?$this->request->data['contact_text']:null;
+
+            $data['message'][] = "";
+
+            if( !empty($user_name)  &&  !empty($user_email) && !empty($user_phone) && !empty($user_message) ){
+
+                $user_email = filter_var($user_email, FILTER_SANITIZE_EMAIL);
+                // Validate e-mail
+                    if (!filter_var($user_email, FILTER_VALIDATE_EMAIL) === false) {
+                        $to="anita@apparrant.com";
+                        $subject="Contact Us";
+                        $headers = "From: info@mylearninguru.com" . "\r\n" .
+                          "CC: $user_email";
+                        $user_message= "Hi 
+
+                         $user_name is trying to contact with you for his query. Please Find the detail below :
+
+                          Email : $user_email
+                          Mobile: $user_phone
+
+                          Query:
+                          ".$user_message;
+
+                       // $sent_mail=mail($to,$subject,$user_message,$headers=null);
+
+                        $sent_mail = $this->sendEmail($to, $user_email, $subject, $user_message);
+                        if($sent_mail==TRUE){ 
+                            $data['status'] = "True";
+                          $data['message']= "Thank You for contacting us."; 
+                        }
+                        else{ 
+                              $data['status'] = "False";
+                              $data['message']= "Oppss mail is not send";                         
+                      }       
+                    }else {
+                      $data['status'] = 'False';
+                      $data['message'] ="$email is not a valid email address";                    
+                    }
+            }else{
+               $data['status'] = 'False';
+               $data['message'] = "Please fill all contact information properly. No field can be empty.";
+            }
+
+        }
+        else {
+            $data['status'] = 'False';
+            $data['message'] = "Please fill contact form information.";
+        }
+
+        $this->set(array(
+            'data' => $data,
+            '_serialize' => array('data')
+        ));
+
+
+        
+      }
+
+
+
+
    /*
         ** U1 - IsUserExists
         ** Request – String <Email> / String <Username>;
@@ -71,12 +140,20 @@ class UsersController extends AppController{
     */
     public function getUserDetails($id = null, $function_call = FALSE){
       $user_record = $this->Users->find()->where(['Users.id' => $id])->count();
+      $data['user_all_details'] = array();
       if ($user_record > 0) {
         $data['user'] = $this->Users->get($id);
+        $data['user_all_details'] = $this->Users->find('all')->where(['user_id' => $id])->contain(['UserDetails']);
       } else {
         $data['response'] = "Record is not found";
       }
       if ($function_call) {
+        if (!empty($data['user_all_details'])) {
+          $temp = $data['user_all_details'];
+          foreach ($temp as $user_details) {
+            $data['user_all_details'] = $user_details->toArray();
+          }
+        }
         return $data;
       }
       $this->set([
@@ -831,6 +908,8 @@ class UsersController extends AppController{
             $email->subject($subject);
             if ($email->send($email_message)) {
               $status = TRUE;
+            }else{
+              $status = FALSE;
             }
           } catch (Exception $ex) {
             $this->log($ex->getMessage());
@@ -2109,23 +2188,23 @@ class UsersController extends AppController{
               . ' WHERE  condition_key = ' . "'" . $param['condition_key']  . "'"
               . ' AND condition_value <= ' . "'" . $param['condition_value']  . "'";
             $conditional_coupons = $connection->execute($sql_coupon)->fetchAll('assoc');
-          }
+            }
+          $conditional_array = array();
           if (!empty($coupon_results)) {
             $status = TRUE;
             if (!empty($conditional_coupons)) {
-              $conditional_array = array();
               foreach ($conditional_coupons as $conditional_coupon) {
                 $conditional_array[$conditional_coupon['id']] = $conditional_coupon;
               }
-              foreach ($coupon_results as &$coupon_result) {
-                if (isset($conditional_array[$coupon_result['id']])) {
-                  $coupon_result['conditional_value'] = isset($conditional_array[$coupon_result['id']]['condition_value']) ?
-                  $conditional_array[$coupon_result['id']]['condition_value'] : 0;
-                  $coupon_result['visibility'] = 'visible';
-                } else {
-                  $coupon_result['conditional_value'] = 0;
-                  $coupon_result['visibility'] = 'hidden';
-                }
+            }
+            foreach ($coupon_results as &$coupon_result) {
+              if (isset($conditional_array[$coupon_result['id']])) {
+                $coupon_result['conditional_value'] = isset($conditional_array[$coupon_result['id']]['condition_value']) ?
+                $conditional_array[$coupon_result['id']]['condition_value'] : 0;
+                $coupon_result['visibility'] = 'visible';
+              } else {
+                $coupon_result['conditional_value'] = 0;
+                $coupon_result['visibility'] = 'hidden';
               }
             }
           } else {
@@ -2161,6 +2240,13 @@ class UsersController extends AppController{
       if (isset($param['user_id']) && !empty($param['user_id'])) {
         $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
         $coupons_status_result = $coupon_avail_status_table->find('all')->where(['user_id' => $param['user_id']]);
+        $coupons_status_result->join([
+          'table' => 'coupons',
+          'type' => 'INNER',
+          'conditions' => 'coupons.id = coupon_avail_status.coupon_id'
+        ])->select([ 'coupons.id', 'coupons.title', 'coupons.description', 'coupons.image','coupons.user_type',
+          'coupon_avail_status.id','coupon_avail_status.user_id', 'coupon_avail_status.coupon_id',
+          'coupon_avail_status.date', 'coupon_avail_status.status', 'coupon_avail_status.updated_by']);
         if ($coupons_status_result->count()) {
           $status = TRUE;
         }
@@ -2184,10 +2270,67 @@ class UsersController extends AppController{
   public function setAvailableCoupon() {
     try {
       $status = FALSE;
-      $message = '';
+      $message = $error_code = '';
       $param = $this->request->data;
+      if (!isset($param['updated_by_user_id'])) {
+        throw new Exception('Kindly login to update coupons');
+      }
       if (isset($param['user_id']) && !empty($param['user_id'])) {
        if (isset($param['coupon_id']) && !empty($param['coupon_id'])) {
+         $user_details_table = TableRegistry::get('UserDetails');
+
+        //if automatic approval turned on by parent
+         $user_data = $user_details_table->find()->where(['user_id' => $param['user_id']]);
+         foreach ($user_data as $user_info) {
+           $parent_id = $user_info->parent_id;
+           if (!empty($parent_id)) {
+             $this->request->data['user_id'] = $parent_id;
+             $this->request->data['setting_key'] = 'automatic_approval';
+             $this->request->data['requested'] = TRUE;
+             $setting_response = $this->getUserSetting();
+             foreach ($setting_response as $user_setting) {
+               if ($user_setting->setting_value == 1 || $user_setting->setting_value == TRUE) {
+                 $param['status'] = (strtolower($param['status']) == 'approval pending') ? 'acquired' : $param['status'];
+               }
+               break;
+             }
+           }
+           break;
+         }
+
+         // When coupon is acquired, the point will be updated
+         if (strtolower($param['status']) == 'acquired') {
+           $coupon_condition_key = isset($param['coupon_condition_key']) ? $coupon_condition_key : 'points';
+           $condition_response = $this->_getCondtionsDetailsOnCoupon($param['coupon_id'], $coupon_condition_key);
+           if ($condition_response['status'] == TRUE) {
+             $user_details = $this->getUserDetails($param['user_id'], TRUE);
+             $user_current_points = $user_details['user_all_details']['user_detail']['points'];
+
+             if ($user_current_points > 0) {
+               $user_new_points = $user_current_points - $condition_response['result']['condition_value'];
+               if ($user_new_points < 0) {
+                 $error_code = 'LESS_POINT';
+                 $message = 'Insufficient Points';
+                 throw new Exception('User points are less');
+               }
+
+               $query_updated = $user_details_table->query()->update()->set(['points' => $user_new_points])->where(['user_id' => $param['user_id']])->execute();
+               if (!$query_updated) {
+                 $message = 'Some Error occured. Please contact to administrator';
+                 throw new Exception('unable to update points to user details table');
+               }
+             } else {
+               $error_code = 'ZERO_POINT';
+               $message = 'Insufficient Points';
+               throw new Exception('User points are below Zero');
+             }
+           } else {
+             $error_code = 'POINT_GET_ERROR';
+             $message = "Unable to get points";
+             throw new Exception('Error in coupon condition table. Message: ' . $condition_response['message']);
+           }
+         }
+
           $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
           $coupon = $coupon_avail_status_table->find()->where(['user_id' => $param['user_id'],
             'coupon_id' => $param['coupon_id']]);
@@ -2200,12 +2343,13 @@ class UsersController extends AppController{
               'user_id' => $param['user_id'],
               'coupon_id' => $param['coupon_id'],
               'date' => date('Y-m-d'),
-              'status' => $param['status'],
+              'status' => ucfirst($param['status']),
               'updated_by' => $param['updated_by_user_id'],
               )
             );
            $entry_status = $coupon_avail_status_table->save($coupon_entry);
           }
+
           if (!empty($entry_status)) {
             $coupon_avail_transactions = TableRegistry::get('coupon_avail_transactions');
             $new_transaction_entity = $coupon_avail_transactions->newEntity(array(
@@ -2221,10 +2365,13 @@ class UsersController extends AppController{
             }
             $status = TRUE;
           }
+
        } else {
+         $message = 'Coupon Id cannot be empty';
          throw new Exception('Coupon Id cannot be empty');
        }
       } else {
+        $message = 'user id cannot be empty';
         throw new Exception('user id cannot be empty');
       }
     } catch (Exception $ex) {
@@ -2233,8 +2380,173 @@ class UsersController extends AppController{
      $this->set([
       'status' => $status,
       'message' => $message,
-      '_serialize' => ['status', 'message']
+      'error_code' => $error_code,
+      'coupon_status' => ucfirst($param['status']),
+      '_serialize' => ['status', 'coupon_status', 'message', 'error_code']
     ]);
   }
 
+  /*
+   * function _getCondtionsDetailsOnCoupon().
+   */
+  private function _getCondtionsDetailsOnCoupon($coupon_id = NULL, $coupon_condition_key = 'points') {
+    try {
+      $response = array('status' => FALSE, 'message' => '', 'result' => array());
+      if (empty($coupon_id)) {
+        $response['message'] = 'coupon id cannot be blank';
+        throw new Exception($response['message']);
+      }
+      $coupon_condition_table = TableRegistry::get('coupon_conditions');
+      $query_results = $coupon_condition_table->find('all')->where(['condition_key' => $coupon_condition_key, 'coupon_id' => $coupon_id]);
+      if ($query_results->count()) {
+        $response['status'] = TRUE;
+        foreach ($query_results as $query_result) {
+          $response['result'] = $query_result->toArray();
+        }
+      } else {
+        $response['message'] = 'No record found';
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $response;
+  }
+
+  /*
+   * function setpreTestStatus().
+   */
+  public function setpreTestStatus(){
+    $test_status = isset($this->request->data['pretestStatus'] ) ? $this->request->data['pretestStatus'] : 0;
+    $user_id = isset( $this->request->data['user_id'] ) ? $this->request->data['user_id'] : 0;
+
+     $userdetails = TableRegistry::get('UserDetails');
+     $result =$userdetails->query()->update()->set(['preTestStatus' => $test_status])->where(['user_id' => $user_id] )->execute();
+
+     $affectedRows = $result->rowCount();
+     if($affectedRows>0){
+          $data['status'] = "True";
+          $data['message'] ="updated;";
+      }else{
+            $data['status'] = "False";
+            $data['message'] ="not updated;";
+       }
+    
+      $this->set([
+      'response' => $data,      
+      '_serialize' => ['response']
+    ]);
+  }
+
+  public function getpreTestStatus(){
+    $user_id = isset( $_REQUEST['user_id'] ) ? $_REQUEST['user_id'] : 0;
+   
+     $user_detail =TableRegistry::get('UserDetails')->find('all')->where(['user_id'=>$user_id]);
+        if($user_detail->count() >0 ){
+              foreach ($user_detail as $userdetail) {                 
+                  $data['preTestStatus'] = $userdetail->preTestStatus;
+              }
+          $data['status'] = "True";          
+      }else{
+            $data['status'] = "False";
+            $data['message'] ="No records;";
+       }
+    
+      $this->set([
+      'response' => $data,      
+      '_serialize' => ['response']
+    ]);
+  }
+
+  /*
+   * function getUserSetting().
+   */
+  public function getUserSetting() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $user_setting = array();
+      $data = $this->request->data;
+      if ($this->request->is('post') || isset($data['requested'])) {
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['setting_key'])) {
+          $message = 'Setting key missing';
+          throw new Exception('setting key not found');
+        }
+        $user_setting = TableRegistry::get('settings')
+           ->find()->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']]);
+        if ($user_setting->count()) {
+          $status = TRUE;
+        } else {
+          $message = 'user setting not found';
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    if (isset($data['requested'])) {
+      return $user_setting;
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'result' => $user_setting->first(),
+      '_serialize' => ['status', 'message', 'result']
+    ]);
+  }
+
+  /*
+   * function setUserSetting().
+   */
+  public function setUserSetting() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $data = $this->request->data;
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['setting_key'])) {
+          $message = 'Setting key missing';
+          throw new Exception('setting key not found');
+        }
+        if (!isset($data['setting_value'])) {
+          $message = 'Setting value missing';
+          throw new Exception('setting value not found');
+        }
+        $user_setting_table = TableRegistry::get('settings');
+        $user_setting = $user_setting_table->find('all')->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']]);
+        if ($user_setting->count()) {
+          $user_setting = $user_setting_table->query()->update()->set(['setting_value' => $data['setting_value']])->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']])->execute();
+          if ($user_setting) {
+            $status = TRUE;
+          } else {
+            $message = 'unable to update your settings';
+          }
+        } else {
+          $user_setting = $user_setting_table->newEntity(array(
+           'user_id' => $data['user_id'],
+           'setting_key' => $data['setting_key'],
+           'setting_value' => $data['setting_value'],
+          ));
+          if ($user_setting_table->save($user_setting)) {
+            $status = TRUE;
+          } else {
+            $message = 'Unable to save your settings';
+          }
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message', 'result']
+    ]);
+  }
 }

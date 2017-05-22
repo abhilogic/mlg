@@ -32,32 +32,36 @@ class TeachersController extends AppController {
       $teacher_detail= TableRegistry::get('UserDetails');
       if ($this->request->is('post')) {
         if (empty($this->request->data['user_id'])) {
-          $message = 'Please login first.';
-        }else if (empty($this->request->data['school_name'])) {
-          $message = 'Please Enter School Name.';
-        }else if (empty($this->request->data['country'])) {
-          $message = 'Please choose country.';
+          $message = 'Login first.';
         }else if (empty($this->request->data['state'])) {
-          $message = 'Please choose State.';
-        }elseif (empty($this->request->data['city'])) {
-          $message = 'Please choose city';
+          $message = 'Choose State.';
         }else if (empty($this->request->data['district'])) {
-          $message = 'Please choose district';
+          $message = 'Choose district';
+        }else if (empty($this->request->data['country'])) {
+          $message = 'Choose country.';
+        }else if (empty($this->request->data['zip'])) {
+          $message = 'Enter zipcode';
+        }else if (empty($this->request->data['school_name'])) {
+          $message = 'Enter School Name.';
+        }else if (empty($this->request->data['school_address'])) {
+          $message = 'Enter school address.';
         }
         if (empty($message)) {
           $id = $this->request->data['user_id'];
           $school = $this->request->data['school_name'];
           $country = $this->request->data['country'];
           $state = $this->request->data['state'];
-          $city = $this->request->data['city'];
           $district = $this->request->data['district'];
+          $school_address = $this->request->data['school_address'];
+          $zipcode = $this->request->data['zip'];
           $query = $teacher_detail->query();
           $result = $query->update()->set([
                 'school' => $school,
                 'country' => $country,
                 'state' => $state,
-                'city' => $city,
                 'district' => $district,
+                'district' => $school_address,
+                'district' => $zipcode,
                 'step_completed'=>1
              ])->where(['user_id' => $id ])->execute();
           $row_count = $result->rowCount();
@@ -71,7 +75,7 @@ class TeachersController extends AppController {
         throw new Exception('Some error occured.');
       }
        
-    } catch (Exception $ex) {
+    } catch (Exception $e) {
       $this->logs('Error in setTeacherRecord function in Teachers Controller'
               . $e->getMessage().'(' . __METHOD__ . ')');
     }
@@ -152,7 +156,7 @@ class TeachersController extends AppController {
         $connection = ConnectionManager::get('default');
         $sql =" SELECT * from courses"
                 . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
-                . " WHERE user_courses.user_id =".$user_id;
+                . " WHERE user_courses.user_id =".$user_id.' ORDER BY level_id';
         $result = $connection->execute($sql)->fetchAll('assoc');
         $count = count($result);
         $grade = '';
@@ -178,10 +182,9 @@ class TeachersController extends AppController {
             }
           } 
         } else {
-          $message = 'You are not teach any subject. Please select subject.';
+          $message = 'You have not taught any subject yet.';
         } 
       }
-      
     }  catch (Exception $e) {
       $this->log('Error in getTeacherSubject function in Teachers Controller.s'
               .$e->getMessage().'(' . __METHOD__ . ')');
@@ -660,7 +663,7 @@ class TeachersController extends AppController {
         $content_detail['standard'] = explode(',', $value['standard']);
         if($type == 'lesson'){
 			
-	    }
+	      }
         $content_detail['standard_type'] = explode(',', $value['standard_type']);
         $content_detail['course_id'] = $value['course_id'];
         $content_detail['skills'] = explode(',', $value['skill_ids']);
@@ -670,11 +673,11 @@ class TeachersController extends AppController {
           $content_detail['claim'] = $value['claim'];
           $content_detail['scope'] = $value['scope'];
           $content_detail['dok'] = $value['depth_of_knowledge'];
-          $content_detail['ques_passage'] = explode(',', $value['passage']);
-          $content_detail['ques_target'] = explode(',', $value['secondary_target']);
+          $content_detail['ques_passage'] = $value['passage'];
+          $content_detail['ques_target'] = $value['secondary_target'];
           $content_detail['task'] = $value['task_noties'];
-          $content_detail['ques_complexity'] = explode(',', $value['text_compexity']);
-          $content_detail['ques_type'] = explode(',', $value['question']);
+          $content_detail['ques_complexity'] = $value['text_compexity'];
+          $content_detail['ques_type'] = explode(',',$value['question']);
           $content_detail['assignment'] = $value['assignment'];
 		}
         $content[] = $content_detail;
@@ -1497,57 +1500,64 @@ public function addStudent() {
           $message = 'Please select an answer.';
         }
         if($message == '') {
-         $answer_list = explode(',', $this->request->data['answer']);
-        $sql = 'SELECT MAX( id )FROM question_master';
-        $result = $connection->execute($sql)->fetchAll('assoc');
-        $last_inserted_id = 0;
-        foreach($result[0] as $key=>$value) {
-          $last_inserted_id = $value;
-        }
-        $unique_id = date('Ymd',time()).uniqid(9);
-        $question_master = TableRegistry::get('question_master');
-        $question = $question_master->newEntity();
-        $question->questionName = $this->request->data['question'];
-        $question->grade_id = $this->request->data['grade'];
-        $question->courde_id = $this->request->data['course'];
-        $question->level = $this->request->data['ques_diff'];
-        $question->type = implode(',',$this->request->data['ques_type']);
-        $question->standard = implode(',',$this->request->data['standard']);
-        $question->uniqueId  = $unique_id;
-        if($question_master->save($question)) {
-          foreach($answer_list as $key=>$value) {
-            $option_master = TableRegistry::get('option_master');
-            $option = $option_master->newEntity();
-            $option->uniqueId  = $unique_id;
-            if($this->request->data['type'] == 'image') {
-              $option->options  = 'upload/'.$value;
-            }else{
-              $option->options  = $value;
-            }
-            if($option_master->save($option)) {
-              if($key+1 == $this->request->data['correctanswer']) {
-                $answer_master = TableRegistry::get('answer_master');
-                $answer = $answer_master->newEntity();
-                $answer->id = $last_inserted_id+1;
-                $answer->uniqueId  = $unique_id;
-                $answer->answers  = $value;
-                $answer_master->save($answer);           
+           $subskill = $this->request->data['sub_skill'];
+           foreach ($subskill as $key => $value) {
+            $answer_list = explode(',', $this->request->data['answer']);
+            $unique_id = date('Ymd',time()).uniqid(9);
+            $question_master = TableRegistry::get('question_master');
+            $question = $question_master->newEntity();
+            $question->questionName = $this->request->data['question'];
+            $question->grade_id = $this->request->data['grade'];
+            $question->grade = $this->request->data['grade_name'];
+            $question->subject = $this->request->data['course_name'];
+            $question->course_id = $value;
+            $question->level = $this->request->data['ques_diff_name'];
+            $question->difficulty_level_id= $this->request->data['ques_diff'];
+            $question->type = implode(',',$this->request->data['ques_type']);
+            $question->standard = implode(',',$this->request->data['standard']);
+            $question->uniqueId  = $unique_id;
+            if($question_master->save($question)) {
+              $header_master = TableRegistry::get('header_master');
+              $header = $header_master->newEntity();
+              $header->uniqueId = $unique_id;
+              $header->Claim = $this->request->data['claim'];
+              $header->DOK = $this->request->data['dok'];
+              $header_master->save($header);
+              foreach($answer_list as $key=>$value) {
+                $option_master = TableRegistry::get('option_master');
+                $option = $option_master->newEntity();
+                $option->uniqueId  = $unique_id;
+                if($this->request->data['type'] == 'image') {
+                  $option->options  = 'upload/'.$value;
+                }else{
+                  $option->options  = $value;
+                }
+                if($option_master->save($option)) {
+                  if($key+1 == $this->request->data['correctanswer']) {
+                    $answer_master = TableRegistry::get('answer_master');
+                    $answer = $answer_master->newEntity();
+                    $answer->uniqueId  = $unique_id;
+                    $answer->answers  = $value;
+                    $answer_master->save($answer);           
+                  }
+                }else{
+                  $mesaage = "Not able to saved option.";
+                } 
               }
+              $message = 'Question answer saved with options.';
+              $status = TRUE;
             }else{
-              $mesaage = "Not able to saved option.";
-            } 
-          }
-          $message = 'Question answer saved with options.';
-          $status = TRUE;
-        }else{
-          $message = 'unable to save question.';
-        } 
+              $message = 'unable to save question.';
+            }
+           }
+           
         }                 
-      }else{
-        $message = 'please define correct method.';
+        }else{
+          $message = 'please define correct method.';
       }	    
 	  }catch(Exception $e) {
-	     
+	     $this->log('Error in saveQuestion function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
 	  }
     $this->set([
       'message' => $message,
@@ -1555,8 +1565,6 @@ public function addStudent() {
       '_serialize' =>['message','status']
     ]);
 	}
-    
-    
-    
+   
 }
 
