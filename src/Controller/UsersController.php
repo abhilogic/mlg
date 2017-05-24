@@ -2385,7 +2385,81 @@ class UsersController extends AppController{
       '_serialize' => ['response']
     ]);
   }
+// save avtar image on location.
+  public function uploadAvatarImage() {
+    try{
+      if($this->request->is('post')) {
+        $message = '';
+        $id = '';
+        $status = FALSE;
+        if(empty($this->request->data['uid'])) {
+          $message = 'Please login.';
+        }else{
+          $id = $this->request->data['uid'];
+        }
+        if($message == '') {
+          $img = $this->request->data['image'];
+          $img = str_replace('data:image/png;base64,', '', $img);
+          $imgData = base64_decode($img);
+          $image =  'Avtar_'.$id.'.png';
+          // Path where the image is going to be saved
+          $filePath = WWW_ROOT .'/Avtar/'.$image;
+          // Delete previously uploaded image
+          if (file_exists($filePath)) {
+           unlink($filePath);
+          }
+          // Write $imgData into the image file
+          $file = fopen($filePath, 'w');
+          fwrite($file, $imgData);
+          fclose($file);
+          $user = TableRegistry::get('user_details');
+          $query = $user->query();
+          $result = $query->update()->set([
+                'profile_pic' => '/Avtar/'.$image,
+             ])->where(['user_id' => $id ])->execute();
+          $row_count = $result->rowCount();
+          if ($row_count == '1') {
+            $message = 'Avtar saved.';
+            $status = TRUE;
+          }  else {
+            throw new Exception('udable to update value in db');
+          }
+        }
+      }
+    }catch(Exception $e) {
+      $this->log('Error in uploadAvtarImage function in Users Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'response' => '/Avtar/'.$image,
+      'message' => $message,
+      'status' => $status,
+      '_serialize' => ['response','message','status']
+    ]);
+  }
 
+  // get avtar image on location.
+  public function getAvatarImage($id=NULL) {
+    try{
+      $message = '';
+      $result = '';
+      $user = TableRegistry::get('user_details');
+      if($id == NULL) {
+        $message = 'Please login.';
+      }
+      if($message == '') {
+        $result = $user->find()->where(['user_id'=> $id]);
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getAvtarImage function in Users Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'response' => $result,
+      'message' => $message,
+      '_serialize' => ['response','message']
+    ]);
+  }
   /*
    * function getUserSetting().
    */
