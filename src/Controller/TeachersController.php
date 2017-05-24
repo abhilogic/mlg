@@ -1203,11 +1203,12 @@ public function addStudent() {
 
 
        // API to create group of a teacher for a subject
-       public function createGroupInSubjectByTeacher($tid=null,$course_id=null){        
+       public function createGroupInSubjectByTeacher($tid=null,$course_id=null, $grade_id = null){        
           if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
               $students = $this->request->data['selectedstudent'];
              
               $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
+              $postdata['grade_id'] = isset($_GET['grade_id'])? $_GET['grade_id'] : $grade_id;
               $postdata['course_id'] = isset($_GET['course_id'])? $_GET['course_id'] : $course_id;
               $postdata['title'] = $this->request->data['groupname']; 
               $postdata['created_by'] = time();
@@ -1254,6 +1255,59 @@ public function addStudent() {
        }
 
 
+       // API to update  group of a teacher for a subject
+       public function editGroupOfSubject($group_id){
+
+          pr($this->request->data); die;
+          if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
+              $students = $this->request->data['selectedstudent'];
+             
+              $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
+              $postdata['grade_id'] = isset($_GET['grade_id'])? $_GET['grade_id'] : $grade_id;
+              $postdata['course_id'] = isset($_GET['course_id'])? $_GET['course_id'] : $course_id;
+              $postdata['title'] = $this->request->data['groupname']; 
+              //$postdata['created_by'] = time();
+              $postdata['modified_by'] = time();
+
+              $student_groups = TableRegistry::get('StudentGroups');
+              $query = $student_groups->query();
+              $result = $query->update()->set([
+                    'school' => $school,
+                    'country' => $country,
+                    'state' => $state,
+                    'district' => $district,
+                    'district' => $school_address,
+                    'district' => $zipcode,
+                    'step_completed'=>1
+                 ])->where(['user_id' => $id ])->execute();
+              
+              $row_count = $result->rowCount();
+              if ($row_count == '1') {
+                $status = "True";  
+
+              }else{
+                  $data['status']="False";
+                  $data['message']="Opps....Group is not updated. Please try again .";
+              }
+
+          }else{
+              $data['status']="False";
+              $data['message']="Opps....Either students are not selected or Group Title is not entered .";
+          }
+
+
+          $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+
+         
+         
+
+
+       }
+
+
        //Get groups of a teacher
        public function getGroupsOfSubjectForTeacher($tid=null, $course_id=null){
           $teacher_id = isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
@@ -1261,16 +1315,16 @@ public function addStudent() {
 
           if(!empty($teacher_id) && !empty($course_id)){
              $student_groups= TableRegistry::get('StudentGroups')->find('all')->where(['teacher_id'=>$teacher_id, 'course_id'=>$course_id])->group('group_icon')->toArray();
+             $param = array();
 
               if(count($student_groups) > 0){
                   foreach ($student_groups as $stgroup) {
-                      if(!empty($stgroup['group_icon']) || $stgroup['group_icon'] !=""){
-                        $data['groups'][] = $stgroup;
+                     if(empty($stgroup['group_icon']) || $stgroup['group_icon'] =="" || $stgroup['group_icon']==null){ 
+                            $stgroup['group_icon']= "group_images/default_group.png";                      
                       }
-                      else{
-                        $stgroup['group_icon']="group_images/default_group.png";
-                        $data['groups'][] = $stgroup;
-                      }
+                      $stgroup['URL_title'] = str_replace(' ', '-', strtolower($stgroup['title']));
+                      $data['groups'][] = $stgroup;
+
                   }
                 }
                 $data['status']="true";
@@ -1286,6 +1340,69 @@ public function addStudent() {
 
 
       }
+
+       // API to get the students of a group
+       public function getStudentsOfGroup($group_id = null){
+
+          $groupid = isset($_GET['group_id'])?$_GET['group_id']:$group_id;
+
+          if(!empty($groupid) ){ 
+             $connection = ConnectionManager::get('default');         
+             $gprecords = TableRegistry::get('StudentGroups')->find('all')->where([ 'id'=>$groupid ]);
+             
+             if($gprecords->count() > 0 ){              
+                  foreach ($gprecords as $gprecord) {                       
+                       $studentids   =  $gprecord['student_id'] ;
+                       $data ['group_title'] =  $gprecord['title'] ;
+                       $data ['group_icon'] =  'webroot/upload/'.$gprecord['group_icon'] ; 
+                       $data ['course_id'] =  $gprecord['course_id'] ;          
+                    }  
+
+                  // find the students details whose id are linked with group                   
+                  $sql =" SELECT users.id as id,first_name,last_name,username,email, profile_pic from users"
+                        . " INNER JOIN user_details ON users.id = user_details.user_id "                                            
+                        . " WHERE users.id IN ($studentids)"
+                        ." ORDER BY users.id ASC "; 
+
+                      
+                  $student_records = $connection->execute($sql)->fetchAll('assoc');
+                  $studentcount = count($student_records);
+
+                  if($studentcount > 0 ){
+                     foreach ($student_records as $stRecord) {
+
+                        if( $stRecord['profile_pic']==NULL ){
+                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                          }else{
+                            $stRecord['profile_pic'] = $stRecord['profile_pic'];
+                          }                          
+
+                       $data['students'][] = $stRecord ;                    
+                     }
+                     $data['status']="True";                      
+                  }
+                  else{
+                    $data['status']="False";
+                    $data['message']="Group does not exist";
+                }
+                   
+             }
+
+        }else{
+            $data['status']="False";
+            $data['message']="Opps. Group  ID is missing.";
+        }
+
+
+        $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+
+
+      }
+
+
 
        // API to get the student of a subject Added by a teacher
        public function getStudentsOfSubjectForTeacher($tid=null,$course_id=null){
