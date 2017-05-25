@@ -1260,34 +1260,33 @@ public function addStudent() {
 
 
        // API to update  group of a teacher for a subject
-       public function editGroupOfSubject($group_id){
-
-          pr($this->request->data); die;
-          if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
-              $students = $this->request->data['selectedstudent'];
-             
-              $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
-              $postdata['grade_id'] = isset($_GET['grade_id'])? $_GET['grade_id'] : $grade_id;
-              $postdata['course_id'] = isset($_GET['course_id'])? $_GET['course_id'] : $course_id;
-              $postdata['title'] = $this->request->data['groupname']; 
-              //$postdata['created_by'] = time();
-              $postdata['modified_by'] = time();
+       public function editGroupOfSubject($group_id=null){
+          
+          if(isset($this->request->data['group_id'] ) || isset($_GET['group_id'] ) ) {
+              $students = $this->request->data['students'];             
+              $group_id = isset($_GET['group_id'])? $_GET['group_id'] : $group_id;        
+              $title = $this->request->data['groupname'];              
+              $modified_by = time();
+              $student_ids ="";
+              foreach ($students as $key => $value) {
+                    if(!empty($value)){
+                      $student_ids = $key.','.$student_ids ; 
+                    }                    
+                  }
+              $student_ids = rtrim($student_ids,',');
 
               $student_groups = TableRegistry::get('StudentGroups');
               $query = $student_groups->query();
               $result = $query->update()->set([
-                    'school' => $school,
-                    'country' => $country,
-                    'state' => $state,
-                    'district' => $district,
-                    'district' => $school_address,
-                    'district' => $zipcode,
-                    'step_completed'=>1
-                 ])->where(['user_id' => $id ])->execute();
+                    'title'      => $title,                   
+                    'student_id' => $student_ids,                    
+                    'modified_by'=> $modified_by
+                 ])->where(['id' => $group_id ])->execute();
               
               $row_count = $result->rowCount();
               if ($row_count == '1') {
-                $status = "True";  
+                $data['status'] = "True"; 
+                $data['message'] = "Group is updated sucessfully."; 
 
               }else{
                   $data['status']="False";
@@ -1303,10 +1302,7 @@ public function addStudent() {
           $this->set([           
               'response' => $data,
                '_serialize' => ['response']
-          ]);
-
-         
-         
+          ]);       
 
 
        }
