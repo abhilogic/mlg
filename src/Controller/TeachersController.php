@@ -1203,7 +1203,9 @@ public function addStudent() {
 
 
        // API to create group of a teacher for a subject
-       public function createGroupInSubjectByTeacher($tid=null,$course_id=null, $grade_id = null){        
+       public function createGroupInSubjectByTeacher($tid=null,$course_id=null, $grade_id = null){
+
+
           if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
               $students = $this->request->data['selectedstudent'];
              
@@ -1222,13 +1224,15 @@ public function addStudent() {
               }
 
               if(!empty($postdata['teacher_id']) && $postdata['teacher_id']!=null){
-                  $student_ids=array();                     
+                  $postdata['student_id'] ="";                     
                 
-                  foreach ($students as $id => $value) {
-                    $student_ids[] = array_push($student_ids, $id) ;                     
+                  foreach ($students as $key => $value) {
+                    if(!empty($value)){
+                      $postdata['student_id'] = $key.','.$postdata['student_id'] ; 
+                    }                    
                   }
-
-                    $postdata['student_id'] = implode(',',$student_ids);
+                  $postdata['student_id'] = rtrim($postdata['student_id'],',');                  
+                   
                     $student_groups= TableRegistry::get('StudentGroups');
                     $new_rowEntry = $student_groups->newEntity($postdata);
                     if ($student_groups->save($new_rowEntry)) {
@@ -1353,10 +1357,13 @@ public function addStudent() {
              if($gprecords->count() > 0 ){              
                   foreach ($gprecords as $gprecord) {                       
                        $studentids   =  $gprecord['student_id'] ;
-                       $data ['group_title'] =  $gprecord['title'] ;
-                       $data ['group_icon'] =  'webroot/upload/'.$gprecord['group_icon'] ; 
-                       $data ['course_id'] =  $gprecord['course_id'] ;          
+                       $data ['group_title'] =  $gprecord['title'] ;                        
+                       $data ['course_id'] =  $gprecord['course_id'] ; 
+
+                       if( $gprecord['group_icon']==NULL ){ $data ['group_icon'] ="webroot/upload/group_images/default_group.png";}
+                       else{$data ['group_icon'] =  'webroot/upload/'.$gprecord['group_icon'] ;}         
                     }  
+
 
                   // find the students details whose id are linked with group                   
                   $sql =" SELECT users.id as id,first_name,last_name,username,email, profile_pic from users"
