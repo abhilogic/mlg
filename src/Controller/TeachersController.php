@@ -10,6 +10,8 @@ use Cake\Auth\DefaultPasswordHasher;
 use Cake\Mailer\Email;
 use Cake\Routing\Router;
 use Cake\Datasource\ConnectionManager;
+use App\Controller\UsersController;
+use App\Controller\PaymentController;
 
 class TeachersController extends AppController {
   
@@ -1201,11 +1203,12 @@ public function addStudent() {
 
 
        // API to create group of a teacher for a subject
-       public function createGroupInSubjectByTeacher($tid=null,$course_id=null){        
+       public function createGroupInSubjectByTeacher($tid=null,$course_id=null, $grade_id = null){        
           if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
               $students = $this->request->data['selectedstudent'];
              
               $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
+              $postdata['grade_id'] = isset($_GET['grade_id'])? $_GET['grade_id'] : $grade_id;
               $postdata['course_id'] = isset($_GET['course_id'])? $_GET['course_id'] : $course_id;
               $postdata['title'] = $this->request->data['groupname']; 
               $postdata['created_by'] = time();
@@ -1252,6 +1255,59 @@ public function addStudent() {
        }
 
 
+       // API to update  group of a teacher for a subject
+       public function editGroupOfSubject($group_id){
+
+          pr($this->request->data); die;
+          if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
+              $students = $this->request->data['selectedstudent'];
+             
+              $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
+              $postdata['grade_id'] = isset($_GET['grade_id'])? $_GET['grade_id'] : $grade_id;
+              $postdata['course_id'] = isset($_GET['course_id'])? $_GET['course_id'] : $course_id;
+              $postdata['title'] = $this->request->data['groupname']; 
+              //$postdata['created_by'] = time();
+              $postdata['modified_by'] = time();
+
+              $student_groups = TableRegistry::get('StudentGroups');
+              $query = $student_groups->query();
+              $result = $query->update()->set([
+                    'school' => $school,
+                    'country' => $country,
+                    'state' => $state,
+                    'district' => $district,
+                    'district' => $school_address,
+                    'district' => $zipcode,
+                    'step_completed'=>1
+                 ])->where(['user_id' => $id ])->execute();
+              
+              $row_count = $result->rowCount();
+              if ($row_count == '1') {
+                $status = "True";  
+
+              }else{
+                  $data['status']="False";
+                  $data['message']="Opps....Group is not updated. Please try again .";
+              }
+
+          }else{
+              $data['status']="False";
+              $data['message']="Opps....Either students are not selected or Group Title is not entered .";
+          }
+
+
+          $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+
+         
+         
+
+
+       }
+
+
        //Get groups of a teacher
        public function getGroupsOfSubjectForTeacher($tid=null, $course_id=null){
           $teacher_id = isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
@@ -1259,16 +1315,16 @@ public function addStudent() {
 
           if(!empty($teacher_id) && !empty($course_id)){
              $student_groups= TableRegistry::get('StudentGroups')->find('all')->where(['teacher_id'=>$teacher_id, 'course_id'=>$course_id])->group('group_icon')->toArray();
+             $param = array();
 
               if(count($student_groups) > 0){
                   foreach ($student_groups as $stgroup) {
-                      if(!empty($stgroup['group_icon']) || $stgroup['group_icon'] !=""){
-                        $data['groups'][] = $stgroup;
+                     if(empty($stgroup['group_icon']) || $stgroup['group_icon'] =="" || $stgroup['group_icon']==null){ 
+                            $stgroup['group_icon']= "group_images/default_group.png";                      
                       }
-                      else{
-                        $stgroup['group_icon']="group_images/default_group.png";
-                        $data['groups'][] = $stgroup;
-                      }
+                      $stgroup['URL_title'] = str_replace(' ', '-', strtolower($stgroup['title']));
+                      $data['groups'][] = $stgroup;
+
                   }
                 }
                 $data['status']="true";
@@ -1284,6 +1340,69 @@ public function addStudent() {
 
 
       }
+
+       // API to get the students of a group
+       public function getStudentsOfGroup($group_id = null){
+
+          $groupid = isset($_GET['group_id'])?$_GET['group_id']:$group_id;
+
+          if(!empty($groupid) ){ 
+             $connection = ConnectionManager::get('default');         
+             $gprecords = TableRegistry::get('StudentGroups')->find('all')->where([ 'id'=>$groupid ]);
+             
+             if($gprecords->count() > 0 ){              
+                  foreach ($gprecords as $gprecord) {                       
+                       $studentids   =  $gprecord['student_id'] ;
+                       $data ['group_title'] =  $gprecord['title'] ;
+                       $data ['group_icon'] =  'webroot/upload/'.$gprecord['group_icon'] ; 
+                       $data ['course_id'] =  $gprecord['course_id'] ;          
+                    }  
+
+                  // find the students details whose id are linked with group                   
+                  $sql =" SELECT users.id as id,first_name,last_name,username,email, profile_pic from users"
+                        . " INNER JOIN user_details ON users.id = user_details.user_id "                                            
+                        . " WHERE users.id IN ($studentids)"
+                        ." ORDER BY users.id ASC "; 
+
+                      
+                  $student_records = $connection->execute($sql)->fetchAll('assoc');
+                  $studentcount = count($student_records);
+
+                  if($studentcount > 0 ){
+                     foreach ($student_records as $stRecord) {
+
+                        if( $stRecord['profile_pic']==NULL ){
+                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                          }else{
+                            $stRecord['profile_pic'] = $stRecord['profile_pic'];
+                          }                          
+
+                       $data['students'][] = $stRecord ;                    
+                     }
+                     $data['status']="True";                      
+                  }
+                  else{
+                    $data['status']="False";
+                    $data['message']="Group does not exist";
+                }
+                   
+             }
+
+        }else{
+            $data['status']="False";
+            $data['message']="Opps. Group  ID is missing.";
+        }
+
+
+        $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+
+
+      }
+
+
 
        // API to get the student of a subject Added by a teacher
        public function getStudentsOfSubjectForTeacher($tid=null,$course_id=null){
@@ -1587,12 +1706,285 @@ public function addStudent() {
 	     $this->log('Error in saveQuestion function in Teachers Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
 	  }
-    $this->set([
-      'message' => $message,
-      'status' => $status,
-      '_serialize' =>['message','status']
-    ]);
+      $this->set([
+        'message' => $message,
+        'status' => $status,
+        '_serialize' =>['message','status']
+      ]);
 	}
-   
-}
 
+    /*
+     * function saveCardToPaypal().
+     */
+    public function saveCardToPaypal() {
+      $message = $response = '';
+      $status = $payment_status = FALSE;
+      $data = $name = array();
+      $trial_period = TRUE;
+      $payment_controller = new PaymentController();
+      $access_token = $payment_controller->paypalAccessToken();
+      if ($this->request->is('post')) {
+        try {
+          if (empty($this->request->data['user_id'])) {
+            $message = 'Please login to submit payment';
+            throw new Exception($message);
+          }
+          $validation = $payment_controller->validatePaymentCardDetail($this->request->data, $access_token);
+          $response = $validation['response'];
+          $data = $validation['data'];
+          $message = $validation['message'];
+
+          if (!empty($message)) {
+            throw new Exception($message);
+          }
+
+          $card_token = $external_cutomer_id = '';
+          if (isset($response['state']) && $response['state'] == 'ok') {
+            $data['card_response'] = $message;
+            $data['card_token'] = $response['id'];
+            $data['external_cutomer_id'] = $response['external_customer_id'];
+            $user_id = $this->request->data['user_id'];
+
+            $users_table = TableRegistry::get('Users');
+            $parent_info = $users_table->get($user_id)->toArray();
+            $parent_subcription = (array) $parent_info['subscription_end_date'];
+            $subcription_end_date = $parent_subcription['date'];
+            if (time() > strtotime($subcription_end_date)) {
+              $trial_period = FALSE;
+            }
+
+            $billing_plan = $this->createBillingPlan($user_id, $access_token, $this->request->data, $trial_period);
+            if (!empty($billing_plan['plan_id'])) {
+              $plan_id = $billing_plan['plan_id'];
+
+              //total amount.
+              $data['total_amount'] = $billing_plan['total_amount'];
+              $plan_status = $payment_controller->activatePayaplPlan($plan_id, $access_token);
+              if ($plan_status == 'ACTIVE') {
+                $user_id = $this->request->data['user_id'];
+
+                //same order date and time will be saved on user orders tabl.
+                $order_date = $data['order_date'] = time();
+                $order_timestamp = $data['order_timestamp'] = time();
+                $data['trial_period'] = 1;
+
+                $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
+                if (!$billing_response['error']) {
+                  $payment_status = TRUE;
+                  $status = TRUE;
+
+                  // Updated user purchase items table.
+                  $data['paypal_plan_id'] = $plan_id;
+                  $data['paypal_plan_status'] = $plan_status;
+                  $data['billing_id'] = $billing_response['result']['id'];
+                  $data['billing_state'] = $billing_response['result']['state'];
+
+                  //for teacher
+                  $users_controller = new UsersController();
+                  $users_controller->setUserOrders($user_id, 0, $data);
+
+                  $message = 'card added successfully';
+                } else {
+                  $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2Bill";
+                  throw new Exception('Unable to process billing agreement');
+                }
+              } else {
+                $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2ACTPLN";
+                throw new Exception('unable to activate plan');
+              }
+            } else {
+              $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2CTEPLN";
+              throw new Exception('Unable to create Plan');
+            }
+          }
+
+          if (!$payment_status) {
+            $status = FALSE;
+            $message = 'Payment not completed';
+            throw new Exception('Payment not completed');
+          } else {
+            // start- update the user state
+            $user_details = TableRegistry::get('UserDetails');
+            $query = $user_details->query();
+            $result = $query->update()
+              ->set(['step_completed' => 4])
+              ->where(['user_id' => $this->request->data['user_id']])
+              ->execute();
+            $affectedRows = $result->rowCount();
+            if ($affectedRows > 0) {
+              $data['status'] = "True";
+            } else {
+              $data['status'] = "False";
+            }
+          }
+          //end- update the user
+        } catch (Exception $ex) {
+          $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+        }
+      }
+      $this->set([
+        'status' => $status,
+        'message' => $message,
+        '_serialize' => ['status', 'message',]
+      ]);
+    }
+
+  /**
+   * Create Paypal Billing Plan.
+   */
+  public function createBillingPlan($user_id = null, $access_token = null, $request_data, $trial_period = TRUE) {
+    try {
+      $user_controller = new UsersController();
+      $frequency = 'MONTH';
+      $cycles = 1;
+
+      $fixed_name = 'Deduction For  Teacher';
+      $fixed_description = 'You will be charged ' . $request_data['amount'] . ' for ' . 'Month';
+
+      $fixed_payment_name = 'Regular payment defination';
+      $fixed_payment_type = 'REGULAR';
+      $fixed_payment_frequency = $frequency;
+      $fixed_payment_frequency_interval = 1;
+
+      $fixed_amount_value = $request_data['amount'];
+      $fixed_amount_currency = PAYPAL_CURRENCY;
+
+      $fixed_cycles = 1;
+      $fixed_charged_shipping_amount_value = 0;
+      $fixed_charged_shipping_amount_currency = PAYPAL_CURRENCY;
+      $fixed_charged_tax_amount_value = 0;
+      $fixed_charged_tax_amount_currency = PAYPAL_CURRENCY;
+
+      $trial_name = 'Subcription on trial';
+      $trial_frequency = 'MONTH';
+      $trial_frequency_interval = 1;
+      $trial_amount_value = 0;
+      $trial_amount_currency = PAYPAL_CURRENCY;
+      $trial_cycles = 1;
+      $trial_charged_shipping_amount_value = 0;
+      $trial_charged_shipping_amount_currency = PAYPAL_CURRENCY;
+      $trial_charged_tax_amount_value = 0;
+      $trial_charged_tax_amount_currency = PAYPAL_CURRENCY;
+
+      $merchant_setup_fee_value = ($trial_period == TRUE) ? 0 : $fixed_amount_value;
+      $merchant_setup_fee_currency = PAYPAL_CURRENCY;
+      $return_url = 'http://www.paypal.com';
+      $cancel_url = 'http://www.paypal.com/cancel';
+      $auto_bill_amount = 'NO';
+      $initial_fail_amount_action = 'CANCEL';
+      $max_fail_attempts = 0;
+
+      $post_fields = array(
+        "name" => $fixed_name,
+        "description" => $fixed_description,
+        "type" => "FIXED",
+        "payment_definitions" => array(
+          array(
+            "name" => $fixed_payment_name,
+            "type" => $fixed_payment_type,
+            "frequency" => $fixed_payment_frequency,
+            "frequency_interval" => $fixed_payment_frequency_interval,
+            "amount" => array(
+              "value" => $fixed_amount_value,
+              "currency" => $fixed_amount_currency
+            ),
+            "cycles" => $fixed_cycles,
+            "charge_models" => array(
+              array(
+                "type" => "SHIPPING",
+                "amount" => array(
+                  "value" => $fixed_charged_shipping_amount_value,
+                  "currency" => $fixed_charged_shipping_amount_currency
+                )
+              ),
+              array(
+                "type" => "TAX",
+                "amount" => array(
+                  "value" => $fixed_charged_tax_amount_value,
+                  "currency" => $fixed_charged_tax_amount_currency
+                )
+              )
+            )
+          )
+        ),
+        "merchant_preferences" => array(
+          "setup_fee" => array(
+            "value" => $merchant_setup_fee_value,
+            "currency" => $merchant_setup_fee_currency
+          ),
+          "return_url" => $return_url,
+          "cancel_url" => $cancel_url,
+          "auto_bill_amount" => $auto_bill_amount,
+          "initial_fail_amount_action" => $initial_fail_amount_action,
+          "max_fail_attempts" => $max_fail_attempts
+        )
+      );
+
+      if ($trial_period == TRUE) {
+        $trial_payment_definitions = array(
+          "name" => $trial_name,
+          "type" => "TRIAL",
+          "frequency" => $trial_frequency,
+          "frequency_interval" => $trial_frequency_interval,
+          "amount" => array(
+            "value" => $trial_amount_value,
+            "currency" => $trial_amount_currency
+          ),
+          "cycles" => $trial_cycles,
+          "charge_models" => array(
+            array(
+              "type" => "SHIPPING",
+              "amount" => array(
+                "value" => $trial_charged_shipping_amount_value,
+                "currency" => $trial_charged_shipping_amount_currency
+              )
+            ),
+            array(
+              "type" => "TAX",
+              "amount" => array(
+                "value" => $trial_charged_tax_amount_value,
+                "currency" => $trial_charged_tax_amount_currency
+              )
+            )
+          )
+        );
+        $post_fields['payment_definitions'][] = $trial_payment_definitions;
+      }
+      $url = 'https://api.sandbox.paypal.com/v1/payments/billing-plans/';
+      if (USE_SANDBOX_ACCOUNT == FALSE) {
+        $url = 'https://api.paypal.com/v1/payments/billing-plans/';
+      }
+      if ($access_token == null) {
+        $access_token = $this->paypalAccessToken();
+      }
+      $ch = curl_init();
+      curl_setopt($ch, CURLOPT_URL, $url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_fields));
+      curl_setopt($ch, CURLOPT_POST, 1);
+
+      $headers = array();
+      $headers[] = "Content-Type: application/json";
+      $headers[] = "Authorization: Bearer $access_token";
+      curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+      $result = curl_exec($ch);
+      if (curl_errno($ch)) {
+        echo 'Error:' . curl_error($ch);
+      }
+      curl_close($ch);
+      $result = json_decode($result, TRUE);
+      $error = FALSE;
+      $plan_id = isset($result['id']) ? $result['id'] : '';
+      if (isset($result['name']) && ($result['name'] == 'VALIDATION_ERROR')) {
+        $error = TRUE;
+        throw new Exception('Exception occured: ' . json_encode($result));
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return array('plan_id' => $plan_id,
+      'total_amount' => $request_data['amount'],
+      'error' => $error);
+  }
+}

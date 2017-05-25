@@ -808,6 +808,8 @@ class CoursesController extends AppController{
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
+
+
       if($type == 'type') {
         foreach ($course_details as $course_detail) {
           if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
@@ -1005,5 +1007,41 @@ class CoursesController extends AppController{
     }
     return $user;
   }
+
+
+  // Function to get courses of a grade : for main course (math) parent_id=0; but course (number system) parent_id=course_id of math is as skill, but for course(number system) parent_id=course_id of number system as subkill.
+  public function getCourseSkillSubskills($grade_id=null,  $parent_id=0){
+    $grade_id = isset($_GET['grade_id'])?$_GET['grade_id']:$grade_id;    
+    $parent_id = isset($_GET['parent_id'])?$_GET['parent_id']:$parent_id;
+
+    if(!empty($grade_id) && !empty($parent_id) ){
+        $courses= $this->Courses->find('all')->contain(['CourseDetails'])->where(['level_id'=>$grade_id,'parent_id'=>$parent_id ]);
+          
+        if($courses->count() > 0 ){                    
+            foreach ($courses as $cr) {
+               $course_list['course_id'] = $cr['id'];
+               $course_list['course_name'] = $cr['course_name'];
+               $course_list['course_code'] = $cr['course_code'];              
+              
+               $data['courses'][] = $course_list;                            
+              }
+               
+            $data['status'] = "True";    
+        }else{
+            $data['status'] = "False";
+            $data['message'] = "No records found";
+        }
+    }else{
+        $data['status'] = "False";
+        $data['message'] = "Course_id and Parent_id cannot null;";
+    }
+    
+
+  $this->set([
+     'response' => $data,       
+     '_serialize' => ['response']
+  ]);
+}
+
 
 }
