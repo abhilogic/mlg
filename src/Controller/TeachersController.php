@@ -1420,7 +1420,7 @@ public function addStudent() {
                         . " INNER JOIN user_courses ON users.id = user_courses.user_id "
                         . " INNER JOIN student_teachers ON users.id = student_teachers.student_id "                       
                         . " WHERE student_teachers.teacher_id =".$tid. " AND user_courses.course_id=".$course_id
-                        ." ORDER BY users.id ASC "; 
+                        ." ORDER BY users.first_name ASC "; 
                       
                   $student_records = $connection->execute($sql)->fetchAll('assoc');
                   $studentcount = count($student_records);
@@ -1586,9 +1586,7 @@ public function addStudent() {
              $data['message']="Opps data is not recieved properly. Please try again.";
              $data['status']="false";
            }
-
        } 
-
 
 
        protected function sendEmail($to, $from, $subject = null, $email_message = null) {
@@ -1716,6 +1714,51 @@ public function addStudent() {
       ]);
 	}
 
+
+  /* to create custome Assignment */
+  public function createCutsomAssignmentByTeacher($courseid=null,$gradeid=null,$teacherid=null){
+     
+      $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id'] : $gradeid;
+      $teacher_id = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : $teacherid;
+      $subject_id = isset($this->request->data['main_course_id'])?$this->request->data['main_course_id']:$courseid;
+
+
+      if(!empty($teacher_id) && !empty($subject_id) && !empty($grade_id)){       
+        if($this->request->data['skill_id'] ==''  && $this->request->data['subskill_id']==''){
+            //Assignment for -  class/group/selected students
+          if($this->request->data['assignmentFor'] == 'class'){
+
+            
+
+
+          }elseif($this->request->data['assignmentFor'] == 'group' ){
+
+          }elseif($this->request->data['assignmentFor'] == 'students'){
+
+          }else{
+              $data['status'] = "False";
+              $data['message'] ="Assignment for cannot be null.";
+          }    
+
+          }else{
+              $data['status'] = "False";
+              $data['message'] ="Please select skill and subskill.";
+          }
+
+      }else{
+        $data['status'] = "False";
+        $data['message'] ="teacher id and selected subject and grade cannot be null.";
+      }
+
+      $this->set([
+        'response' => $data,        
+        '_serialize' =>['response']
+      ]);
+
+
+
+  }
+
     /*
      * function saveCardToPaypal().
      */
@@ -1831,6 +1874,11 @@ public function addStudent() {
         '_serialize' => ['status', 'message',]
       ]);
     }
+
+
+
+
+
 
   /**
    * Create Paypal Billing Plan.
