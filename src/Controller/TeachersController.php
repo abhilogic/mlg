@@ -245,7 +245,7 @@ class TeachersController extends AppController {
   * This api is used for get teacher subject with grade.
   * 
   **/
-  public function getTeacherGradeSubject($user_id='',$type) {
+  public function getTeacherGradeSubject($user_id='',$type,$func_name=null) {
     try{
       $connection = ConnectionManager::get('default');
       $status = FALSE;
@@ -309,11 +309,14 @@ class TeachersController extends AppController {
         }  else {
           $level_subject = 'you have not choosen any subject or grade.';
         } 
-      }  
+      }
     }catch (Exception $e) {
       $this->log('Error in getTeacherGradeSubject function in Teachers Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
-    }  
+    }
+    if( $func_name == 'setEvent') {
+      return $level_subject;
+    }
      $this->set([
       'status' => $status,
       'response' => $level_subject,
@@ -1203,11 +1206,14 @@ public function addStudent() {
 
 
        // API to create group of a teacher for a subject
-       public function createGroupInSubjectByTeacher($tid=null,$course_id=null){        
+       public function createGroupInSubjectByTeacher($tid=null,$course_id=null, $grade_id = null){
+
+
           if(isset($this->request->data['selectedstudent'] ) && isset($this->request->data['groupname']) ) {
               $students = $this->request->data['selectedstudent'];
              
               $postdata['teacher_id'] = isset($_GET['teacher_id'])? $_GET['teacher_id'] : $tid;
+              $postdata['grade_id'] = isset($_GET['grade_id'])? $_GET['grade_id'] : $grade_id;
               $postdata['course_id'] = isset($_GET['course_id'])? $_GET['course_id'] : $course_id;
               $postdata['title'] = $this->request->data['groupname']; 
               $postdata['created_by'] = time();
@@ -1221,13 +1227,15 @@ public function addStudent() {
               }
 
               if(!empty($postdata['teacher_id']) && $postdata['teacher_id']!=null){
-                  $student_ids=array();                     
+                  $postdata['student_id'] ="";                     
                 
-                  foreach ($students as $id => $value) {
-                    $student_ids[] = array_push($student_ids, $id) ;                     
+                  foreach ($students as $key => $value) {
+                    if(!empty($value)){
+                      $postdata['student_id'] = $key.','.$postdata['student_id'] ; 
+                    }                    
                   }
-
-                    $postdata['student_id'] = implode(',',$student_ids);
+                  $postdata['student_id'] = rtrim($postdata['student_id'],',');                  
+                   
                     $student_groups= TableRegistry::get('StudentGroups');
                     $new_rowEntry = $student_groups->newEntity($postdata);
                     if ($student_groups->save($new_rowEntry)) {
@@ -1254,6 +1262,55 @@ public function addStudent() {
        }
 
 
+       // API to update  group of a teacher for a subject
+       public function editGroupOfSubject($group_id=null){
+          
+          if(isset($this->request->data['group_id'] ) || isset($_GET['group_id'] ) ) {
+              $students = $this->request->data['students'];             
+              $group_id = isset($_GET['group_id'])? $_GET['group_id'] : $group_id;        
+              $title = $this->request->data['groupname'];              
+              $modified_by = time();
+              $student_ids ="";
+              foreach ($students as $key => $value) {
+                    if(!empty($value)){
+                      $student_ids = $key.','.$student_ids ; 
+                    }                    
+                  }
+              $student_ids = rtrim($student_ids,',');
+
+              $student_groups = TableRegistry::get('StudentGroups');
+              $query = $student_groups->query();
+              $result = $query->update()->set([
+                    'title'      => $title,                   
+                    'student_id' => $student_ids,                    
+                    'modified_by'=> $modified_by
+                 ])->where(['id' => $group_id ])->execute();
+              
+              $row_count = $result->rowCount();
+              if ($row_count == '1') {
+                $data['status'] = "True"; 
+                $data['message'] = "Group is updated sucessfully."; 
+
+              }else{
+                  $data['status']="False";
+                  $data['message']="Opps....Group is not updated. Please try again .";
+              }
+
+          }else{
+              $data['status']="False";
+              $data['message']="Opps....Either students are not selected or Group Title is not entered .";
+          }
+
+
+          $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);       
+
+
+       }
+
+
        //Get groups of a teacher
        public function getGroupsOfSubjectForTeacher($tid=null, $course_id=null){
           $teacher_id = isset($_GET['teacher_id'])?$_GET['teacher_id']:$tid;
@@ -1261,16 +1318,16 @@ public function addStudent() {
 
           if(!empty($teacher_id) && !empty($course_id)){
              $student_groups= TableRegistry::get('StudentGroups')->find('all')->where(['teacher_id'=>$teacher_id, 'course_id'=>$course_id])->group('group_icon')->toArray();
+             $param = array();
 
               if(count($student_groups) > 0){
                   foreach ($student_groups as $stgroup) {
-                      if(!empty($stgroup['group_icon']) || $stgroup['group_icon'] !=""){
-                        $data['groups'][] = $stgroup;
+                     if(empty($stgroup['group_icon']) || $stgroup['group_icon'] =="" || $stgroup['group_icon']==null){ 
+                            $stgroup['group_icon']= "group_images/default_group.png";                      
                       }
-                      else{
-                        $stgroup['group_icon']="group_images/default_group.png";
-                        $data['groups'][] = $stgroup;
-                      }
+                      $stgroup['URL_title'] = str_replace(' ', '-', strtolower($stgroup['title']));
+                      $data['groups'][] = $stgroup;
+
                   }
                 }
                 $data['status']="true";
@@ -1287,6 +1344,72 @@ public function addStudent() {
 
       }
 
+       // API to get the students of a group
+       public function getStudentsOfGroup($group_id = null){
+
+          $groupid = isset($_GET['group_id'])?$_GET['group_id']:$group_id;
+
+          if(!empty($groupid) ){ 
+             $connection = ConnectionManager::get('default');         
+             $gprecords = TableRegistry::get('StudentGroups')->find('all')->where([ 'id'=>$groupid ]);
+             
+             if($gprecords->count() > 0 ){              
+                  foreach ($gprecords as $gprecord) {                       
+                       $studentids   =  $gprecord['student_id'] ;
+                       $data ['group_title'] =  $gprecord['title'] ;                        
+                       $data ['course_id'] =  $gprecord['course_id'] ; 
+
+                       if( $gprecord['group_icon']==NULL ){ $data ['group_icon'] ="webroot/upload/group_images/default_group.png";}
+                       else{$data ['group_icon'] =  'webroot/upload/'.$gprecord['group_icon'] ;}         
+                    }  
+
+
+                  // find the students details whose id are linked with group                   
+                  $sql =" SELECT users.id as id,first_name,last_name,username,email, profile_pic from users"
+                        . " INNER JOIN user_details ON users.id = user_details.user_id "                                            
+                        . " WHERE users.id IN ($studentids)"
+                        ." ORDER BY users.id ASC "; 
+
+                      
+                  $student_records = $connection->execute($sql)->fetchAll('assoc');
+                  $studentcount = count($student_records);
+
+                  if($studentcount > 0 ){
+                     foreach ($student_records as $stRecord) {
+
+                        if( $stRecord['profile_pic']==NULL ){
+                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                          }else{
+                            $stRecord['profile_pic'] = $stRecord['profile_pic'];
+                          }                          
+
+                       $data['students'][] = $stRecord ;                    
+                     }
+                     $data['status']="True";                      
+                  }
+                  else{
+                    $data['status']="False";
+                    $data['message']="Group does not exist";
+                }
+                   
+             }
+
+        }else{
+            $data['status']="False";
+            $data['message']="Opps. Group  ID is missing.";
+        }
+
+
+        $this->set([           
+              'response' => $data,
+               '_serialize' => ['response']
+          ]);
+
+
+      }
+
+
+
        // API to get the student of a subject Added by a teacher
        public function getStudentsOfSubjectForTeacher($tid=null,$course_id=null){
 
@@ -1300,7 +1423,7 @@ public function addStudent() {
                         . " INNER JOIN user_courses ON users.id = user_courses.user_id "
                         . " INNER JOIN student_teachers ON users.id = student_teachers.student_id "                       
                         . " WHERE student_teachers.teacher_id =".$tid. " AND user_courses.course_id=".$course_id
-                        ." ORDER BY users.id ASC "; 
+                        ." ORDER BY users.first_name ASC "; 
                       
                   $student_records = $connection->execute($sql)->fetchAll('assoc');
                   $studentcount = count($student_records);
@@ -1466,9 +1589,7 @@ public function addStudent() {
              $data['message']="Opps data is not recieved properly. Please try again.";
              $data['status']="false";
            }
-
        } 
-
 
 
        protected function sendEmail($to, $from, $subject = null, $email_message = null) {
@@ -1596,6 +1717,224 @@ public function addStudent() {
       ]);
 	}
 
+
+
+  /* to create custome Assignment */
+  public function createCutsomAssignmentByTeacher($courseid=null,$gradeid=null,$teacherid=null){
+     
+      $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id'] : $gradeid;
+      $teacher_id = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : $teacherid;
+      $subject_id = isset($this->request->data['main_course_id'])?$this->request->data['main_course_id']:$courseid;
+
+
+      if(!empty($teacher_id) && !empty($subject_id) && !empty($grade_id)){       
+        if($this->request->data['skill_id'] ==''  && $this->request->data['subskill_id']==''){
+            //Assignment for -  class/group/selected students
+          if($this->request->data['assignmentFor'] == 'class'){
+
+            
+
+
+          }elseif($this->request->data['assignmentFor'] == 'group' ){
+
+          }elseif($this->request->data['assignmentFor'] == 'students'){
+
+          }else{
+              $data['status'] = "False";
+              $data['message'] ="Assignment for cannot be null.";
+          }    
+
+          }else{
+              $data['status'] = "False";
+              $data['message'] ="Please select skill and subskill.";
+          }
+
+      }else{
+        $data['status'] = "False";
+        $data['message'] ="teacher id and selected subject and grade cannot be null.";
+      }
+
+      $this->set([
+        'response' => $data,        
+        '_serialize' =>['response']
+      ]);
+
+
+
+  }
+
+
+  /**
+   * Upload event.
+   * 
+   **/
+  public function setEvent() {
+    try{
+      $message = '';
+      $status = FALSE;
+      $event = TableRegistry::get('events');
+      if($this->request->is('post')) {
+        if(isset($this->request->data['event_date']) && empty($this->request->data['event_date']) ) {
+          $message = 'Select a date first.';
+          throw new Exception('Select a date first.');
+        }else if(isset($this->request->data['grade']) && empty($this->request->data['grade']) ) {
+          $message = 'Not getting grade.';
+          throw new Exception('Not getting grade.');
+        }else if(isset($this->request->data['course_id']) && empty($this->request->data['course_id']) ) {
+          $message = 'Not getting subject.';
+          throw new Exception('Not getting subject.');
+        }
+        if(!empty($this->request->data['event_date'])){
+         $current_timestamp = time();;
+         $event_timestamp = strtotime($this->request->data['event_date']);
+         if($current_timestamp > $event_timestamp) {
+           $message = 'Event date should be greater than current date.';
+           throw new Exception('Event date should be greater than current date.');
+         }
+        }
+        if($this->request->data['event_type'] == 'ptm') {
+          if($message == '') {
+            if(empty($this->request->data['event_time']) ) {
+              $message = 'Schedule time.';
+              throw new Exception('Schedule time.');
+            }else if(isset($this->request->data['event_for']) && empty($this->request->data['event_for']) ) {
+              $message = 'Select category for which you create event.';
+              throw new Exception('Select category for which you create event.');
+            } 
+          }
+          if($message == '') {
+            $event_detail = $event->newEntity();
+            $event_detail->event_type = 'ptm';
+            $event_detail->event_title = 'Parent Teacher Meeting.';
+            $event_detail->event_date = $this->request->data['event_date'];
+            $event_detail->event_time = $this->request->data['event_time'];
+            $event_detail->event_for = $this->request->data['event_for'];
+            $event_detail->created_by = $this->request->data['user_id'];
+            if($this->request->data['event_for'] == 'group') {
+              $event_detail->group_id = $this->request->data['event_for_id'];
+              $event_detail->grade_id = $this->request->data['grade'];
+              $event_detail->grade_name = $this->request->data['grade_name'];
+              $event_detail->course_id = $this->request->data['course_id'];
+            }
+            if($this->request->data['event_for'] == 'people') {
+              $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
+              $event_detail->grade_id = $this->request->data['grade'];
+              $event_detail->grade_name = $this->request->data['grade_name'];
+              $event_detail->course_id = $this->request->data['course_id'];
+            }
+            if($this->request->data['event_for'] == 'class') {
+              print_r( implode(',',$this->request->data['event_for_id']));
+              $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
+              $event_detail->grade_id = $this->request->data['grade'];
+              $event_detail->grade_name = $this->request->data['grade_name'];
+              $event_detail->course_id = $this->request->data['course_id'];
+            }
+            if($event->save($event_detail)) {
+              $status = TRUE;
+              $message = 'Event created Successfully.';
+            }  else {
+              $message = 'Event not generated.';
+            }
+          }
+        }else if($this->request->data['event_type'] == 'todo') {
+          if(empty($this->request->data['event_title']) ) {
+            $message = 'Please Write something you want to do???';
+            throw new Exception('Please Write something you want to do???');
+          }
+          if($message == '') {
+            $event_detail = $event->newEntity();
+            $event_detail->event_type = 'todo';
+            $event_detail->event_date = $this->request->data['event_date'];
+            $event_detail->created_by = $this->request->data['user_id'];
+            $event_detail->event_title = $this->request->data['event_title'];
+            $event_detail->created_by = $this->request->data['user_id'];
+            $event_detail->grade_id = $this->request->data['grade'];
+            $event_detail->grade_name = $this->request->data['grade_name'];
+            $event_detail->course_id = $this->request->data['course_id'];
+            if($event->save($event_detail)) {
+              $status = TRUE;
+              $message = 'Event created Successfully.';
+            }  else {
+              $message = 'Event not generated.';
+            } 
+          }
+        }    
+      }
+    }catch (Exception $e) {
+    $this->log('Error in eventUpload function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');   
+    }
+    $this->set([
+      'message' => $message,
+      'status' => $status,
+      '_serialize' =>['message','status']
+    ]);
+  }
+  
+  /**
+   * Get event.
+   * 
+   **/
+  public function getEvent($id=null) {
+    try{
+      $status = FALSE;
+      $message = '';
+      if($id == null) {
+        $message = 'Login first.';
+        throw new Exception('Login first.');
+      }
+      if($message == '') {
+        $event = TableRegistry::get('events');
+        $result = $event->find()->where(['created_by' => $id]);
+        $count = $event->find()->where(['created_by' => $id])->count();
+        if($count >0){
+          $status = TRUE;
+        } 
+      }  
+    }catch(Exception $e) {
+      $this->log('Error in getEvent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'response' => $result,
+      'message' => $message,
+      'status' => $status,
+      '_serialize' =>['response','message','status']
+    ]);
+  }
+  
+  public function getTodayEvents($uid) {
+    try{
+      $event = TableRegistry::get('events');
+      $user = TableRegistry::get('users');
+      $user_array = '';
+      $message = '';
+      $list = '';
+      $date = date('Y-m-d',time());
+      $result = $event->find('all')->where(['event_date >'=> $date])->order('event_date');
+      foreach ($result as $key => $value) {
+        $user_bunch_id = explode(',',$value['created_for']);
+        $index = array_search($uid,$user_bunch_id);
+        if($index !== false) {
+          $user_array[] = $value; 
+        }
+      }
+      foreach ($user_array as $key => $value) {
+        $name = $user->find()->where(['id'=> $value['created_by']]);
+        foreach ($name as $val) {
+          $list[] = 'You have parent teacher meeting with '.$val['first_name'].' '.$val['last_name'].' on '.$value['event_date'].' at '.$value['event_time'].'.';
+        }  
+      }
+    }catch(Exception $e) {
+      
+    }
+    $this->set([
+      'response' => $list,
+//      'status' => $status,
+      '_serialize' =>['response']
+    ]);
+  }
+
     /*
      * function saveCardToPaypal().
      */
@@ -1711,6 +2050,11 @@ public function addStudent() {
         '_serialize' => ['status', 'message',]
       ]);
     }
+
+
+
+
+
 
   /**
    * Create Paypal Billing Plan.
