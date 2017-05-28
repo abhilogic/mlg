@@ -97,12 +97,32 @@ class UsersController extends AppController{
             'data' => $data,
             '_serialize' => array('data')
         ));
-
-
-        
       }
 
-
+      /**
+       * getUserPreferences().
+       *
+       *
+       * To get user preferences.
+       */
+      public function getUserPreferences($uid = null) {
+        $data = array();
+        $status = FALSE;
+        $message = '';
+        $user_Preferences_table = TableRegistry::get('UserPreferences');
+        $data = $user_Preferences_table->find()->where(['user_id' => $uid]);
+        if ($data->count()) {
+          $status = TRUE;
+        } else {
+          $message = 'No record found';
+        }
+        $this->set(array(
+            'status' => $status,
+            'data' => $data->first(),
+            'message' => $message,
+            '_serialize' => array('status', 'data', 'message')
+        ));
+      }
 
 
    /*
@@ -258,7 +278,7 @@ class UsersController extends AppController{
             $message = 'Password is not Set';
           }
         } else {
-          $message = 'You have entered either wrong Id or password';
+          $message = 'Wrong current password';
         }
         $this->set([
           'response' => $message,
@@ -2199,14 +2219,16 @@ class UsersController extends AppController{
            $parent_id = $user_info->parent_id;
            if (!empty($parent_id)) {
              $this->request->data['user_id'] = $parent_id;
-             $this->request->data['setting_key'] = 'automatic_approval';
+             $this->request->data['child_id'] = $param['user_id'];
              $this->request->data['requested'] = TRUE;
-             $setting_response = $this->getUserSetting();
-             foreach ($setting_response as $user_setting) {
-               if ($user_setting->setting_value == 1 || $user_setting->setting_value == TRUE) {
-                 $automatic_approval = 1;
-             }
-               break;
+             $settings = $this->getUserSetting();
+             if (!empty($settings)) {
+               foreach ($settings as $user_setting) {
+                 if ($user_setting['automatic_approval'] == TRUE) {
+                   $automatic_approval = 1;
+                 }
+                 break;
+               }
              }
            }
            break;
@@ -2460,6 +2482,7 @@ class UsersController extends AppController{
       '_serialize' => ['response','message']
     ]);
   }
+
   /*
    * function getUserSetting().
    */
@@ -2474,12 +2497,9 @@ class UsersController extends AppController{
           $message = 'Kindly login';
           throw new Exception('User Id cannot be null');
         }
-        if (!isset($data['setting_key'])) {
-          $message = 'Setting key missing';
-          throw new Exception('setting key not found');
-        }
-        $user_setting = TableRegistry::get('settings')
-           ->find()->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']]);
+        $data['child_id'] = isset($data['child_id']) ? $data['child_id'] : 0;
+        $user_setting = TableRegistry::get('user_settings')
+           ->find()->where(['user_id' => $data['user_id'], 'child_id' => $data['child_id']]);
         if ($user_setting->count()) {
           $status = TRUE;
         } else {
@@ -2490,7 +2510,7 @@ class UsersController extends AppController{
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
     if (isset($data['requested'])) {
-      return $user_setting;
+      return $user_setting->first()->toArray();
     }
     $this->set([
       'status' => $status,
@@ -2513,30 +2533,37 @@ class UsersController extends AppController{
           $message = 'Kindly login';
           throw new Exception('User Id cannot be null');
         }
-        if (!isset($data['setting_key'])) {
-          $message = 'Setting key missing';
-          throw new Exception('setting key not found');
+        if (!isset($data['settings'])) {
+          $message = 'Settings not found';
+          throw new Exception('Settings key not present in post data');
         }
-        if (!isset($data['setting_value'])) {
-          $message = 'Setting value missing';
-          throw new Exception('setting value not found');
-        }
-        $user_setting_table = TableRegistry::get('settings');
-        $user_setting = $user_setting_table->find('all')->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']]);
-        if ($user_setting->count()) {
-          $user_setting = $user_setting_table->query()->update()->set(['setting_value' => $data['setting_value']])->where(['user_id' => $data['user_id'], 'setting_key' => $data['setting_key']])->execute();
-          if ($user_setting) {
+        $user_setting_table = TableRegistry::get('user_settings');
+        $data['child_id'] = isset($data['child_id']) ? $data['child_id'] : 0;
+
+        $user_settings = $user_setting_table->find('all')->where(['user_id' => $data['user_id'], 'child_id' => $data['child_id']]);
+        $settings_decoded_json = array();
+        if ($user_settings->count()) {
+          foreach ($user_settings as $user) {
+            $settings_decoded_json = json_decode($user->settings, TRUE);
+            break;
+          }
+
+          foreach ($data['settings'] as $key => $value) {
+            $settings_decoded_json[$key] = $value;
+          }
+
+          $saved_user_setting = $user_setting_table->query()->update()->set(['settings' => json_encode($settings_decoded_json)])
+            ->where(['user_id' => $data['user_id'], 'child_id' => $data['child_id']])->execute();
+          if ($saved_user_setting) {
             $status = TRUE;
           } else {
             $message = 'unable to update your settings';
           }
         } else {
-          $user_setting = $user_setting_table->newEntity(array(
-           'user_id' => $data['user_id'],
-           'setting_key' => $data['setting_key'],
-           'setting_value' => $data['setting_value'],
-          ));
-          if ($user_setting_table->save($user_setting)) {
+          //settings defaut settings for new user
+          $data_settings = $this->_setDefaultSettings($data['settings']);
+          $data['settings'] = json_encode($data_settings);
+          if ($user_setting_table->save($user_setting_table->newEntity($data))) {
             $status = TRUE;
           } else {
             $message = 'Unable to save your settings';
@@ -2549,7 +2576,91 @@ class UsersController extends AppController{
     $this->set([
       'status' => $status,
       'message' => $message,
-      '_serialize' => ['status', 'message', 'result']
+      '_serialize' => ['status', 'message']
     ]);
+  }
+
+  /**
+   * setDefaultSettings().
+   */
+  private function _setDefaultSettings($user_settings = array()) {
+    try {
+      $default_settings = array(
+        'automatic_approval' => FALSE,
+        'text_notification' => FALSE,
+        'email_notification' => FALSE,
+        'mlg_offers' => FALSE,
+        'chat' => FALSE,
+        'group_builder' => FALSE,
+        'placement_test' => TRUE,
+        'auto-progression' => TRUE,
+        'fill_in_the_blank' => TRUE,
+        'single_choice' => TRUE,
+        'multiple_choice' => TRUE,
+        'true_false' => TRUE,
+      );
+      foreach ($user_settings as $settings_key => $settings_value) {
+        if (array_key_exists($settings_key, $default_settings)) {
+          $default_settings[$settings_key] = $settings_value;
+        } else {
+          $default_settings[$settings_key] = $settings_value;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $default_settings;
+  }
+
+  /**
+   * updateMyAccount().
+   */
+  public function updateMyAccount() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $user = $this->request->data;
+        if (!isset($user['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('user id missing');
+        }
+
+        $user_details_table = TableRegistry::get('UserDetails');
+        $user_details = $user_details_table->find()->where(['user_id' => $user['user_id']]);
+        if ($user_details->count()) {
+          $user_details_table->patchEntity($user_details->first(), $user, ['validate' => false]);
+          if(!$user_details_table->save($user_details->first())) {
+            $message = 'Some Error Occured, Kindly contact the Administrator';
+            throw new Exception('Unable to save data');
+          } else {
+            $status = TRUE;
+            $user_preferences_table = TableRegistry::get('UserPreferences');
+            $user_preference = $user_preferences_table->find()->where(['user_id' => $user['user_id']]);
+            if ($user_preference->count()) {
+              $user_preferences_table->patchEntity($user_preference->first(), $user, ['validate' => false]);
+              if(!$user_preferences_table->save($user_preference->first())) {
+                $status = FALSE;
+                $message = 'Some Error Occured, Kindly contact the Administrator';
+                throw new Exception('Unable to save user Preference data');
+              }
+            } else {
+              $message = 'User Preference not found';
+              throw new Exception('User id not found in userPreferences');
+            }
+          }
+        } else {
+          $message = 'User Details not found';
+          throw new Exception('User id not found in userDetails');
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+     '_serialize' => ['status', 'message']
+   ]);
   }
 }
