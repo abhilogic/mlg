@@ -245,7 +245,7 @@ class TeachersController extends AppController {
   * This api is used for get teacher subject with grade.
   * 
   **/
-  public function getTeacherGradeSubject($user_id='',$type) {
+  public function getTeacherGradeSubject($user_id='',$type,$func_name=null) {
     try{
       $connection = ConnectionManager::get('default');
       $status = FALSE;
@@ -309,11 +309,14 @@ class TeachersController extends AppController {
         }  else {
           $level_subject = 'you have not choosen any subject or grade.';
         } 
-      }  
+      }
     }catch (Exception $e) {
       $this->log('Error in getTeacherGradeSubject function in Teachers Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
-    }  
+    }
+    if( $func_name == 'setEvent') {
+      return $level_subject;
+    }
      $this->set([
       'status' => $status,
       'response' => $level_subject,
@@ -1420,7 +1423,7 @@ public function addStudent() {
                         . " INNER JOIN user_courses ON users.id = user_courses.user_id "
                         . " INNER JOIN student_teachers ON users.id = student_teachers.student_id "                       
                         . " WHERE student_teachers.teacher_id =".$tid. " AND user_courses.course_id=".$course_id
-                        ." ORDER BY users.id ASC "; 
+                        ." ORDER BY users.first_name ASC "; 
                       
                   $student_records = $connection->execute($sql)->fetchAll('assoc');
                   $studentcount = count($student_records);
@@ -1586,9 +1589,7 @@ public function addStudent() {
              $data['message']="Opps data is not recieved properly. Please try again.";
              $data['status']="false";
            }
-
        } 
-
 
 
        protected function sendEmail($to, $from, $subject = null, $email_message = null) {
@@ -1716,6 +1717,224 @@ public function addStudent() {
       ]);
 	}
 
+
+
+  /* to create custome Assignment */
+  public function createCutsomAssignmentByTeacher($courseid=null,$gradeid=null,$teacherid=null){
+     
+      $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id'] : $gradeid;
+      $teacher_id = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : $teacherid;
+      $subject_id = isset($this->request->data['main_course_id'])?$this->request->data['main_course_id']:$courseid;
+
+
+      if(!empty($teacher_id) && !empty($subject_id) && !empty($grade_id)){       
+        if($this->request->data['skill_id'] ==''  && $this->request->data['subskill_id']==''){
+            //Assignment for -  class/group/selected students
+          if($this->request->data['assignmentFor'] == 'class'){
+
+            
+
+
+          }elseif($this->request->data['assignmentFor'] == 'group' ){
+
+          }elseif($this->request->data['assignmentFor'] == 'students'){
+
+          }else{
+              $data['status'] = "False";
+              $data['message'] ="Assignment for cannot be null.";
+          }    
+
+          }else{
+              $data['status'] = "False";
+              $data['message'] ="Please select skill and subskill.";
+          }
+
+      }else{
+        $data['status'] = "False";
+        $data['message'] ="teacher id and selected subject and grade cannot be null.";
+      }
+
+      $this->set([
+        'response' => $data,        
+        '_serialize' =>['response']
+      ]);
+
+
+
+  }
+
+
+  /**
+   * Upload event.
+   * 
+   **/
+  public function setEvent() {
+    try{
+      $message = '';
+      $status = FALSE;
+      $event = TableRegistry::get('events');
+      if($this->request->is('post')) {
+        if(isset($this->request->data['event_date']) && empty($this->request->data['event_date']) ) {
+          $message = 'Select a date first.';
+          throw new Exception('Select a date first.');
+        }else if(isset($this->request->data['grade']) && empty($this->request->data['grade']) ) {
+          $message = 'Not getting grade.';
+          throw new Exception('Not getting grade.');
+        }else if(isset($this->request->data['course_id']) && empty($this->request->data['course_id']) ) {
+          $message = 'Not getting subject.';
+          throw new Exception('Not getting subject.');
+        }
+        if(!empty($this->request->data['event_date'])){
+         $current_timestamp = time();;
+         $event_timestamp = strtotime($this->request->data['event_date']);
+         if($current_timestamp > $event_timestamp) {
+           $message = 'Event date should be greater than current date.';
+           throw new Exception('Event date should be greater than current date.');
+         }
+        }
+        if($this->request->data['event_type'] == 'ptm') {
+          if($message == '') {
+            if(empty($this->request->data['event_time']) ) {
+              $message = 'Schedule time.';
+              throw new Exception('Schedule time.');
+            }else if(isset($this->request->data['event_for']) && empty($this->request->data['event_for']) ) {
+              $message = 'Select category for which you create event.';
+              throw new Exception('Select category for which you create event.');
+            } 
+          }
+          if($message == '') {
+            $event_detail = $event->newEntity();
+            $event_detail->event_type = 'ptm';
+            $event_detail->event_title = 'Parent Teacher Meeting.';
+            $event_detail->event_date = $this->request->data['event_date'];
+            $event_detail->event_time = $this->request->data['event_time'];
+            $event_detail->event_for = $this->request->data['event_for'];
+            $event_detail->created_by = $this->request->data['user_id'];
+            if($this->request->data['event_for'] == 'group') {
+              $event_detail->group_id = $this->request->data['event_for_id'];
+              $event_detail->grade_id = $this->request->data['grade'];
+              $event_detail->grade_name = $this->request->data['grade_name'];
+              $event_detail->course_id = $this->request->data['course_id'];
+            }
+            if($this->request->data['event_for'] == 'people') {
+              $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
+              $event_detail->grade_id = $this->request->data['grade'];
+              $event_detail->grade_name = $this->request->data['grade_name'];
+              $event_detail->course_id = $this->request->data['course_id'];
+            }
+            if($this->request->data['event_for'] == 'class') {
+              print_r( implode(',',$this->request->data['event_for_id']));
+              $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
+              $event_detail->grade_id = $this->request->data['grade'];
+              $event_detail->grade_name = $this->request->data['grade_name'];
+              $event_detail->course_id = $this->request->data['course_id'];
+            }
+            if($event->save($event_detail)) {
+              $status = TRUE;
+              $message = 'Event created Successfully.';
+            }  else {
+              $message = 'Event not generated.';
+            }
+          }
+        }else if($this->request->data['event_type'] == 'todo') {
+          if(empty($this->request->data['event_title']) ) {
+            $message = 'Please Write something you want to do???';
+            throw new Exception('Please Write something you want to do???');
+          }
+          if($message == '') {
+            $event_detail = $event->newEntity();
+            $event_detail->event_type = 'todo';
+            $event_detail->event_date = $this->request->data['event_date'];
+            $event_detail->created_by = $this->request->data['user_id'];
+            $event_detail->event_title = $this->request->data['event_title'];
+            $event_detail->created_by = $this->request->data['user_id'];
+            $event_detail->grade_id = $this->request->data['grade'];
+            $event_detail->grade_name = $this->request->data['grade_name'];
+            $event_detail->course_id = $this->request->data['course_id'];
+            if($event->save($event_detail)) {
+              $status = TRUE;
+              $message = 'Event created Successfully.';
+            }  else {
+              $message = 'Event not generated.';
+            } 
+          }
+        }    
+      }
+    }catch (Exception $e) {
+    $this->log('Error in eventUpload function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')');   
+    }
+    $this->set([
+      'message' => $message,
+      'status' => $status,
+      '_serialize' =>['message','status']
+    ]);
+  }
+  
+  /**
+   * Get event.
+   * 
+   **/
+  public function getEvent($id=null) {
+    try{
+      $status = FALSE;
+      $message = '';
+      if($id == null) {
+        $message = 'Login first.';
+        throw new Exception('Login first.');
+      }
+      if($message == '') {
+        $event = TableRegistry::get('events');
+        $result = $event->find()->where(['created_by' => $id]);
+        $count = $event->find()->where(['created_by' => $id])->count();
+        if($count >0){
+          $status = TRUE;
+        } 
+      }  
+    }catch(Exception $e) {
+      $this->log('Error in getEvent function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'response' => $result,
+      'message' => $message,
+      'status' => $status,
+      '_serialize' =>['response','message','status']
+    ]);
+  }
+  
+  public function getTodayEvents($uid) {
+    try{
+      $event = TableRegistry::get('events');
+      $user = TableRegistry::get('users');
+      $user_array = '';
+      $message = '';
+      $list = '';
+      $date = date('Y-m-d',time());
+      $result = $event->find('all')->where(['event_date >'=> $date])->order('event_date');
+      foreach ($result as $key => $value) {
+        $user_bunch_id = explode(',',$value['created_for']);
+        $index = array_search($uid,$user_bunch_id);
+        if($index !== false) {
+          $user_array[] = $value; 
+        }
+      }
+      foreach ($user_array as $key => $value) {
+        $name = $user->find()->where(['id'=> $value['created_by']]);
+        foreach ($name as $val) {
+          $list[] = 'You have parent teacher meeting with '.$val['first_name'].' '.$val['last_name'].' on '.$value['event_date'].' at '.$value['event_time'].'.';
+        }  
+      }
+    }catch(Exception $e) {
+      
+    }
+    $this->set([
+      'response' => $list,
+//      'status' => $status,
+      '_serialize' =>['response']
+    ]);
+  }
+
     /*
      * function saveCardToPaypal().
      */
@@ -1831,6 +2050,11 @@ public function addStudent() {
         '_serialize' => ['status', 'message',]
       ]);
     }
+
+
+
+
+
 
   /**
    * Create Paypal Billing Plan.
