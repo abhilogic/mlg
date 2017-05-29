@@ -10,6 +10,8 @@ use Cake\Mailer\Email;
 use Cake\Routing\Router;
 use Cake\Datasource\ConnectionManager;
 use App\Controller\PaymentController;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
 
 /**
  * Users Controller
@@ -22,6 +24,7 @@ class UsersController extends AppController{
        // $conn = ConnectionManager::get('default');
         $this->loadComponent('RequestHandler');
          $this->RequestHandler->renderAs($this, 'json');
+
     }
 
 
@@ -33,6 +36,8 @@ class UsersController extends AppController{
             'data' => $user,
             '_serialize' => ['data']
         ));
+         $log = new Logger('cli');
+         $log->info('total users', array('username' => 'Seldaek'));
       }
 
 

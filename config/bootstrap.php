@@ -157,6 +157,16 @@ Email::config(Configure::consume('Email'));
 Log::config(Configure::consume('Log'));
 Security::salt(Configure::consume('Security.salt'));
 
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+
+Log::config('default', function () {
+    $log = new Logger('cli');
+    $log->pushHandler(new StreamHandler('../logs/mono.log'));
+    
+    return $log;
+});
+
 /*
  * The default crypto extension in 3.0 is OpenSSL.
  * If you are migrating from 2.x uncomment this code to
