@@ -164,6 +164,7 @@ class UsersController extends AppController{
       if ($user_record > 0) {
         $data['user'] = $this->Users->get($id);
         $data['user_all_details'] = $this->Users->find('all')->where(['user_id' => $id])->contain(['UserDetails']);
+        $data['image_directory'] = Router::url('/', true) . 'upload';
       } else {
         $data['response'] = "Record is not found";
       }
@@ -2128,6 +2129,10 @@ class UsersController extends AppController{
           $connection = ConnectionManager::get('default');
           $user_type = strtoupper($param['user_type']);
           $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'";
+          if (isset($param['applied_for']) && !empty($param['applied_for'])) {
+            $sql.= ' AND applied_for = '. "'" . $param['applied_for'] . "'"
+            . ' AND validity >= ' . "'" . time() . "'";
+          }
           $coupon_results = $connection->execute($sql)->fetchAll('assoc');
           $conditional_coupons = array();
           if (isset($param['condition_key']) && isset($param['condition_value']) &&
@@ -2691,5 +2696,88 @@ class UsersController extends AppController{
      'message' => $message,
      '_serialize' => ['status', 'message']
    ]);
+  }
+
+  /**
+   * function updateProfilePic().
+   */
+  public function updateProfilePic() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $data = $this->request->data;
+        if (isset($data['user_id'])) {
+          if (!empty($data['user_id'])) {
+            if (isset($data['file']) && !empty($data['file'])) {
+              $response = $this->_uploadFiles($data['file'], DEFAULT_IMAGE_DIRECTORY);
+              if ($response['success'] == TRUE) {
+                $user_details_table = TableRegistry::get('UserDetails');
+                $user_details = $user_details_table->find()->where(['user_id' => $data['user_id']]);
+                foreach ($user_details as $user_detail) {
+                  $user_detail->profile_pic = $response['file_name'];
+                }
+                if (!$user_details_table->save($user_detail)) {
+                  $message = 'unable to save Profile image';
+                  throw new Exception('unable to save data');
+                }
+                $status = TRUE;
+              } else {
+                $message = 'unable to save Profile image';
+                throw new Exception($response['message']);
+              }
+            } else {
+              $message = "No data to save";
+              throw new Exception('empty data file');
+            }
+          } else {
+            $message = "user Id empty";
+            throw new Exception('user_id canot be empty');
+          }
+        } else {
+          $message = 'Kindly login';
+          throw new Exception('key : user_id not present');
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+     '_serialize' => ['status', 'message']
+   ]);
+  }
+
+  /**
+   * function _uploadFiles().
+   *
+   * @param Array $file
+   *   contains $_FILES values.
+   * @param String $upload_file
+   *   location of file to be uploaded.
+   * @return Array
+   *   return response.
+   */
+  private function _uploadFiles($file, $upload_path) {
+    $response = array('success' => FALSE, 'url' => '', 'message' => '', 'file_name' => '');
+    $file_name = time() . '_' . $file['name'];
+    $file_path = $upload_path . $file_name;
+    if (is_dir(WWW_ROOT . $upload_path)) {
+      if (is_writable(WWW_ROOT . $upload_path)) {
+        if (move_uploaded_file($file['tmp_name'], WWW_ROOT . $file_path)) {
+          $response['success'] = TRUE;
+          $response['file_name'] = $file_name;
+          $response['url'] = Router::url('/', true) . $file_path;
+        } else {
+          $response['message'] = 'Unable to upload file due to some error';
+        }
+      } else {
+        $response['message'] = 'Upload path is not writable';
+      }
+    } else {
+      $response['message'] = 'No such directory exist.';
+    }
+    return $response;
   }
 }
