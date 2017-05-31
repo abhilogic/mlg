@@ -1979,7 +1979,7 @@ public function addStudent() {
 
               }else{
                 $data['status'] = "False";
-                $data['message'] = "No Record Found";
+                $data['message'] = "No question found in our dataware house.";
               }
            
              // return ($data);
@@ -2080,6 +2080,8 @@ public function addStudent() {
           $quiz_info['grade_id'] = isset($this->request->data['grade_id'])? $this->request->data['grade_id'] : null;
 
           $quiz_info['comments'] = isset($this->request->data['comments']) ? $this->request->data['comments'] : '';
+
+          $quiz_info['attachedresource'] = isset($this->request->data['attachedresource']) ? $this->request->data['attachedresource'] : null;
 
 
           $quiz_info['assignment_for'] = isset($this->request->data['assignmentFor'])? $this->request->data['assignmentFor'] : null;
@@ -2195,6 +2197,43 @@ public function addStudent() {
                 $AssignmentDetails=TableRegistry::get('AssignmentDetails');
                 $new_assignmentdetails = $AssignmentDetails->newEntity($quiz_info);
                 if ($assgnresult= $AssignmentDetails->save($new_assignmentdetails) ) {
+                     $quiz_info['assignment_id']  = $assgnresult->id;
+                     $attchedresources =array();
+
+
+                     // insert the value of attached resource if exist                
+
+
+                    if($quiz_info['attachedresource']!=null){
+                      if(isset($quiz_info['attachedresource']['image'])){
+                          $resimages =json_decode('['.$quiz_info['attachedresource']['image'].']');
+
+                          foreach ($resimages as $resimage) {
+                              $attchedresources[]=$resimage->response;
+                          }
+
+                      }
+                      if(isset($quiz_info['attachedresource']['document'])){
+                        $resdocs =json_decode('['.$quiz_info['attachedresource']['document'].']');
+                        foreach ($resdocs as $resdoc) {
+                              $attchedresources[]=$resdoc->response;
+                          }
+                      }
+                    }
+
+                    if(!empty($attchedresources)){
+                       
+                        foreach ($attchedresources as $attchedresource) {
+                           $quiz_info['url'] = 'upload/profile_img/'.$attchedresource;
+
+                         
+                          $assignmentResources=TableRegistry::get('AssignmentResources');
+                           $new_assignmentResources = $assignmentResources->newEntity($quiz_info);
+                          $assignmentResources->save($new_assignmentResources);
+                        }                     
+
+                    }                    
+                 
 
                    foreach ($questions as $question) {
                           $quiz_info['item_id']  = $question;
