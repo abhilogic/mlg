@@ -1829,31 +1829,53 @@ class UsersController extends AppController{
     * 
     * **/    
    public function getOffers() {
-     try{
-      $offer_list = array();
-      $current_date = Time::now();
-      $offers = TableRegistry::get('Offers');
-      $offers_detail = $offers->find('all')->where(['validity >=' => $current_date])->toArray();
-      $i=0;
-      foreach ($offers_detail as $offersDetails) {
-        if (isset($offersDetails->title) && !empty($offersDetails->title) ) {
-          $offer_list[$i]['title'] = $offersDetails->title;
-          $offer_list[$i]['description'] = $offersDetails->description;
-          $offer_list[$i]['image'] = $offersDetails->image;
-          $date = explode(' ',$offersDetails->validity);
-          $offer_list[$i]['validity'] = date('d M Y',strtotime($date[0]));
-          $i++;
+     try {
+       $status = FALSE;
+       $message = '';
+       $offer_list = array();
+       if ($this->request->is('post')) {
+        $param = $this->request->data;
+        if (isset($param['user_type']) && !empty($param['user_type'])) {
+          $connection = ConnectionManager::get('default');
+          $user_type = strtoupper($param['user_type']);
+          $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'"
+               . ' AND applied_for = "OFFER"'
+               . ' AND validity >= ' . "'" . time() . "'";
+          $offer_list = $connection->execute($sql)->fetchAll('assoc');
+          if (!empty($offer_list)) {
+            $status = TRUE;
+            $avail_coupon_sql =  'SELECT * FROM coupon_avail_status WHERE user_id = ' . "'" . $param['user_id'] . "'";
+            $avail_offers = $connection->execute($avail_coupon_sql)->fetchAll('assoc');
+            if (!empty($avail_offers)) {
+              $temp = array();
+              foreach ($avail_offers as $avail) {
+                $temp[$avail['coupon_id']] = $avail;
+              }
+            }
+            foreach($offer_list as &$offer) {
+              $offer['status'] = '';
+              if (isset($temp[$offer['id']])) {
+                $offer['status'] = $temp[$offer['id']]['status'];
+              }
+            }
+          } else {
+           $message = 'No offers available';
+           throw new Exception('No Record found');
+          }
         } else {
-          throw new Exception('Unable to find offers');
+          $message = 'user type missing';
+         throw new Exception('No user Type given for offers');
         }
-      } 
-    } catch (Exception $e) {
-      $this->log($e->getMessage(). '(' . __METHOD__ . ')');
-    }
-    $this->set([
-      'response' => $offer_list,
-      '_serialize' => ['response']
-    ]);
+       }
+     } catch (Exception $e) {
+       $this->log($e->getMessage(). '(' . __METHOD__ . ')');
+     }
+     $this->set([
+       'status' => $status,
+       'message' => $message,
+       'result' => $offer_list,
+       '_serialize' => ['status', 'message', 'result']
+     ]);
    }
 
    /**
@@ -2252,8 +2274,9 @@ class UsersController extends AppController{
              $this->request->data['user_id'] = $parent_id;
              $this->request->data['child_id'] = $param['user_id'];
              $this->request->data['requested'] = TRUE;
-             $settings = $this->getUserSetting();
-             if (!empty($settings)) {
+             $user_settings = $this->getUserSetting();
+             if (!empty($user_settings) && isset($user_settings['settings']) && !empty($user_settings['settings'])) {
+               $settings = json_decode($user_settings['settings'], TRUE);
                foreach ($settings as $user_setting) {
                  if ($user_setting['automatic_approval'] == TRUE) {
                    $automatic_approval = 1;
