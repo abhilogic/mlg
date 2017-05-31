@@ -24,6 +24,8 @@ define('GUEST_TEACHER_ROLE_ID', 5);
 //principal role
 define('PRINCIPAL_ROLE_ID', 6);
 
+//default image directory
+define('DEFAULT_IMAGE_DIRECTORY', 'upload/');
 
 //PAYPAL CONSTANTS
 

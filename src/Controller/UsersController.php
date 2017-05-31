@@ -164,6 +164,7 @@ class UsersController extends AppController{
       if ($user_record > 0) {
         $data['user'] = $this->Users->get($id);
         $data['user_all_details'] = $this->Users->find('all')->where(['user_id' => $id])->contain(['UserDetails']);
+        $data['image_directory'] = Router::url('/', true) . 'upload';
       } else {
         $data['response'] = "Record is not found";
       }
@@ -1656,140 +1657,48 @@ class UsersController extends AppController{
 
        }
 
-       /**
-        * function paypalAcessToken
-        *   To generate paypal Acess Token.
-        */
-       public function  paypalAccessToken() {
-         try {
-           $url = "https://api.sandbox.paypal.com/v1/oauth2/token";
-           $credential = PAYPAL_SANDBOX_CREDENTIAL;
-           if (USE_SANDBOX_ACCOUNT == FALSE) {
-             $url = "https://api.paypal.com/v1/oauth2/token";
-             $credential = PAYPAL_LIVE_CREDENTIAL;
-           }
-           $ch = curl_init();
-           curl_setopt($ch, CURLOPT_URL, $url);
-           curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-           curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=client_credentials");
-           curl_setopt($ch, CURLOPT_POST, 1);
-           curl_setopt($ch, CURLOPT_USERPWD, $credential);
-
-           $headers = array();
-           $headers[] = "Accept: application/json";
-           $headers[] = "Accept-Language: en_US";
-           $headers[] = "Content-Type: application/x-www-form-urlencoded";
-           curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-           $result = curl_exec($ch);
-           if (curl_errno($ch)) {
-             echo 'Error:' . curl_error($ch);
-           }
-           curl_close($ch);
-           $result = json_decode($result, TRUE);
-         } catch (Exception $ex) {
-           $this->log($ex->getMessage() . "\n". curl_error($ch) . '(' . __METHOD__ . ')');
-         }
-         return $result['access_token'];
-       }
-
-  /*
+      /*
        * function saveCardToPaypal().
        */
        public function saveCardToPaypal() {
          $message = $response = '';
          $status = $payment_status = FALSE;
          $data = $name = array();
-         $access_token = $this->paypalAccessToken();
+         $trial_period = TRUE;
+         $payment_controller = new PaymentController();
+         $access_token = $payment_controller->paypalAccessToken();
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
                $message = 'Please login to submit payment';
                throw new Exception($message);
              }
-             if (isset($this->request->data['name']) && !empty($this->request->data['name'])) {
-               $data['first_name'] = $this->request->data['name'];
-               $name =  explode(' ', $this->request->data['name']);
-             }
-             if (count($name) >= 2) {
-               $data['first_name'] = @current($name);
-               $data['last_name'] = @end($name);
-             }
-             if (isset($this->request->data['card_number']) && !empty($this->request->data['card_number'])) {
-               $data['number'] = trim($this->request->data['card_number']);
-             } else {
-               $message = 'Card Number is required';
-               throw new Exception($message);
-             }
-             if (isset($this->request->data['expiry_month']) && !empty($this->request->data['expiry_month'])) {
-               $data['expire_month'] = $this->request->data['expiry_month'];
-             } else {
-               $message = 'Expiry Month is required';
-               throw new Exception($message);
-             }
-             if (isset($this->request->data['expiry_year']) && !empty($this->request->data['expiry_year'])) {
-               $data['expire_year'] = $this->request->data['expiry_year'];
-             } else {
-               $message = 'Expiry Year is required';
-               throw new Exception($message);
-             }
-             if (isset($this->request->data['cvv']) && !empty($this->request->data['cvv'])) {
-               if (strlen($this->request->data['cvv']) > 4) {
-                 $message = 'not valid CVV';
-                 throw new Exception($message);
-               }
-               $data['cvv2'] = $this->request->data['cvv'];
-             } else {
-               $message = 'CVV is required';
-               throw new Exception($message);
-             }
-             $data['type'] = isset($this->request->data['card_type']) && !empty($this->request->data['card_type']) ?
-               $this->request->data['card_type'] : 'visa';
-             $data['external_customer_id'] = 'customer' . '_' . time();
+             $validation = $payment_controller->validatePaymentCardDetail($this->request->data, $access_token);
+             $response = $validation['response'];
+             $data = $validation['data'];
+             $message = $validation['message'];
 
-             $url = "https://api.sandbox.paypal.com/v1/vault/credit-cards/";
-             if (USE_SANDBOX_ACCOUNT == FALSE) {
-               $url = "https://api.paypal.com/v1/vault/credit-cards/";
+             if (!empty($message)) {
+                throw new Exception($message);
              }
-             $ch = curl_init();
-             curl_setopt($ch, CURLOPT_URL, $url);
-             curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-             curl_setopt($ch, CURLOPT_POST, 1);
-             $headers = array();
-             $headers[] = "Content-Type: application/json";
-             $headers[] = "Authorization: Bearer $access_token";
-             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-             $response = curl_exec($ch);
-             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-             if (curl_errno($ch)) {
-               $message = 'Some error occured';
-               throw new Exception(curl_error($ch));
-             }
-             curl_close ($ch);
-             switch ($httpCode) {
-               case 401 : $message = 'Some error occured. Unable to proceed, Kindly contact to administrator';
-                          throw new Exception('Unauthorised Access');
-                 break;
-
-               case 500 : $message = 'Some error occured. Unable to proceed, Kindly contact to administrator';
-                          throw new Exception('Internal Server Error Occured');
-                 break;
-             }
-             $response = json_decode($response, TRUE);
              $card_token = $external_cutomer_id = '';
              if  (isset($response['state']) && $response['state'] == 'ok') {
                $data['card_response'] = $message;
                $data['card_token'] = $response['id'];
                $data['external_cutomer_id'] = $response['external_customer_id'];
-               $payment_controller = new PaymentController();
+               $parent_id = $this->request->data['user_id'];
+
+               $parent_info = $this->Users->get($parent_id)->toArray();
+               $parent_subcription = (array)$parent_info['subscription_end_date'];
+               $subcription_end_date = $parent_subcription['date'];
+               if (time() > strtotime($subcription_end_date)) {
+                 $trial_period = FALSE;
+               }
+
                $user_ids = $this->request->data['children_ids'];
                foreach ($user_ids as $child_id) {
-//                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, TRUE);
-                 
-                 //omit
-                 $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, TRUE);
-                 if (!empty($billing_plan['plan_id'])) {
+               $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, $trial_period);
+                if (!empty($billing_plan['plan_id'])) {
                    $plan_id = $billing_plan['plan_id'];
 
                    //total amount.
@@ -1831,18 +1740,9 @@ class UsersController extends AppController{
                  }
                }
              }
-             if (isset($response['name']) && $response['name'] == 'VALIDATION_ERROR') {
-               $message = $response['details'][0]['issue'];
-               $error_fields = explode(',', $response['details'][0]['field']);
-               foreach ($error_fields as $error_field) {
-                 switch($error_field) {
-                   case 'number' :  $message = "Card number is not valid \n";
-                    break;
-                 }
-               }
-             }
              if (!$payment_status) {
                $status = FALSE;
+               $message = 'Payment not completed';
                throw new Exception('Payment not compleated succesfully');
              } else {
                // start- update the user state
@@ -2203,7 +2103,7 @@ class UsersController extends AppController{
         'paypal_plan_status' => $order_details['paypal_plan_status'],
         'billing_id' => $order_details['billing_id'],
         'billing_state' => $order_details['billing_state'],
-        'order_timestamp' => $order_details['order_timestamp'],
+        'order_timestamp' => isset($order_details['order_timestamp']) ? $order_details['order_timestamp'] : time(),
         );
         $user_order = $user_orders->newEntity($order);
         if ($user_orders->save($user_order)) {
@@ -2229,16 +2129,25 @@ class UsersController extends AppController{
           $connection = ConnectionManager::get('default');
           $user_type = strtoupper($param['user_type']);
           $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'";
+          if (isset($param['applied_for']) && !empty($param['applied_for'])) {
+            $sql.= ' AND applied_for = '. "'" . $param['applied_for'] . "'"
+            . ' AND validity >= ' . "'" . time() . "'";
+          }
           $coupon_results = $connection->execute($sql)->fetchAll('assoc');
           $conditional_coupons = array();
           if (isset($param['condition_key']) && isset($param['condition_value']) &&
             (strtolower($param['condition_key']) == 'points' )) {
             $sql_coupon = 'SELECT * FROM coupons'
               . ' INNER JOIN coupon_conditions ON coupons.id = coupon_conditions.coupon_id'
-              . ' WHERE  condition_key = ' . "'" . $param['condition_key']  . "'"
-              . ' AND condition_value <= ' . "'" . $param['condition_value']  . "'";
-            $conditional_coupons = $connection->execute($sql_coupon)->fetchAll('assoc');
+              . ' WHERE  coupon_conditions.condition_key = ' . "'" . $param['condition_key']  . "'"
+              . ' AND coupon_conditions.condition_value <= ' . "'" . $param['condition_value']  . "'"
+              . ' AND coupons.user_type = ' . "'" . $user_type  . "'"
+              . ' AND coupons.validity >= ' . "'" . time() . "'";
+            if (strtoupper($user_type) == 'STUDENT') {
+              $sql_coupon.= ' AND coupons.external_coupon = 1 AND coupons.applied_for =' . "'coupon'";
             }
+            $conditional_coupons = $connection->execute($sql_coupon)->fetchAll('assoc');
+          }
           $conditional_array = array();
           if (!empty($coupon_results)) {
             $status = TRUE;
@@ -2294,9 +2203,15 @@ class UsersController extends AppController{
           'table' => 'coupons',
           'type' => 'INNER',
           'conditions' => 'coupons.id = coupon_avail_status.coupon_id'
+        ])->join([
+          'table' => 'coupon_conditions',
+          'type' => 'INNER',
+          'conditions' => 'coupon_conditions.coupon_id = coupon_avail_status.coupon_id'
         ])->select([ 'coupons.id', 'coupons.title', 'coupons.description', 'coupons.image','coupons.user_type',
-          'coupon_avail_status.id','coupon_avail_status.user_id', 'coupon_avail_status.coupon_id',
-          'coupon_avail_status.date', 'coupon_avail_status.status', 'coupon_avail_status.updated_by']);
+           'coupon_avail_status.id','coupon_avail_status.user_id', 'coupon_avail_status.coupon_id',
+          'coupon_avail_status.date', 'coupon_avail_status.status', 'coupon_avail_status.updated_by',
+          'coupon_conditions.condition_value'
+        ]);
         if ($coupons_status_result->count()) {
           $status = TRUE;
         }
@@ -2342,6 +2257,9 @@ class UsersController extends AppController{
                foreach ($settings as $user_setting) {
                  if ($user_setting['automatic_approval'] == TRUE) {
                    $automatic_approval = 1;
+                 } elseif (isset($user_setting['global_automatic_approval']) &&
+                   $user_setting['global_automatic_approval'] == TRUE) {
+                   $automatic_approval = 1;
                  }
                  break;
                }
@@ -2383,6 +2301,18 @@ class UsersController extends AppController{
              $error_code = 'POINT_GET_ERROR';
              $message = "Unable to get points";
              throw new Exception('Error in coupon condition table. Message: ' . $condition_response['message']);
+           }
+         }
+
+          // When coupon is in state of rejected, the point will be added.
+         if (strtolower($param['status']) == 'rejected') {
+           $user_details = $this->getUserDetails($param['user_id'], TRUE);
+           $user_current_points = $user_details['user_all_details']['user_detail']['points'];
+           $user_new_points = $user_current_points + $param['conditional_value'];
+           $query_updated = $user_details_table->query()->update()->set(['points' => $user_new_points])->where(['user_id' => $param['user_id']])->execute();
+           if (!$query_updated) {
+             $message = 'Some Error occured. Please contact to administrator';
+             throw new Exception('unable to update points to user details table');
            }
          }
 
@@ -2766,5 +2696,88 @@ class UsersController extends AppController{
      'message' => $message,
      '_serialize' => ['status', 'message']
    ]);
+  }
+
+  /**
+   * function updateProfilePic().
+   */
+  public function updateProfilePic() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $data = $this->request->data;
+        if (isset($data['user_id'])) {
+          if (!empty($data['user_id'])) {
+            if (isset($data['file']) && !empty($data['file'])) {
+              $response = $this->_uploadFiles($data['file'], DEFAULT_IMAGE_DIRECTORY);
+              if ($response['success'] == TRUE) {
+                $user_details_table = TableRegistry::get('UserDetails');
+                $user_details = $user_details_table->find()->where(['user_id' => $data['user_id']]);
+                foreach ($user_details as $user_detail) {
+                  $user_detail->profile_pic = $response['file_name'];
+                }
+                if (!$user_details_table->save($user_detail)) {
+                  $message = 'unable to save Profile image';
+                  throw new Exception('unable to save data');
+                }
+                $status = TRUE;
+              } else {
+                $message = 'unable to save Profile image';
+                throw new Exception($response['message']);
+              }
+            } else {
+              $message = "No data to save";
+              throw new Exception('empty data file');
+            }
+          } else {
+            $message = "user Id empty";
+            throw new Exception('user_id canot be empty');
+          }
+        } else {
+          $message = 'Kindly login';
+          throw new Exception('key : user_id not present');
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+     '_serialize' => ['status', 'message']
+   ]);
+  }
+
+  /**
+   * function _uploadFiles().
+   *
+   * @param Array $file
+   *   contains $_FILES values.
+   * @param String $upload_file
+   *   location of file to be uploaded.
+   * @return Array
+   *   return response.
+   */
+  private function _uploadFiles($file, $upload_path) {
+    $response = array('success' => FALSE, 'url' => '', 'message' => '', 'file_name' => '');
+    $file_name = time() . '_' . $file['name'];
+    $file_path = $upload_path . $file_name;
+    if (is_dir(WWW_ROOT . $upload_path)) {
+      if (is_writable(WWW_ROOT . $upload_path)) {
+        if (move_uploaded_file($file['tmp_name'], WWW_ROOT . $file_path)) {
+          $response['success'] = TRUE;
+          $response['file_name'] = $file_name;
+          $response['url'] = Router::url('/', true) . $file_path;
+        } else {
+          $response['message'] = 'Unable to upload file due to some error';
+        }
+      } else {
+        $response['message'] = 'Upload path is not writable';
+      }
+    } else {
+      $response['message'] = 'No such directory exist.';
+    }
+    return $response;
   }
 }

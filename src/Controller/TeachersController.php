@@ -124,7 +124,6 @@ class TeachersController extends AppController {
         $data['status']='FALSE';
          $data['message']='Please select at least one course';
       }
-
   
       $this->set([
         'response' => $data,      
@@ -959,6 +958,10 @@ public function addStudent() {
               $postdata['school']=isset($this->request->data['school'])? $this->request->data['school']:$data['message'][5]="School Name is require";        
              // $postdata['dob']=isset($this->request->data['dob'])? $this->request->data['dob']:'';
 
+              $postdata['course_id']=isset($this->request->data['course_id'])? $this->request->data['course_id']:null;
+
+               $postdata['grade_id']=isset($this->request->data['grade_id'])? $this->request->data['grade_id']:null;
+
               $postdata['role_id']=$this->request->data['role_id'];
               $postdata['status']=$this->request->data['status'];
               //$postdata['created']=$this->request->data['created'];
@@ -1399,7 +1402,6 @@ public function addStudent() {
             $data['message']="Opps. Group  ID is missing.";
         }
 
-
         $this->set([           
               'response' => $data,
                '_serialize' => ['response']
@@ -1720,30 +1722,57 @@ public function addStudent() {
 
 
   /* to create custome Assignment */
-  public function createCutsomAssignmentByTeacher($courseid=null,$gradeid=null,$teacherid=null){
+  public function generateAssignQuestions($courseid=null,$gradeid=null,$teacherid=null){
      
       $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id'] : $gradeid;
       $teacher_id = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : $teacherid;
       $subject_id = isset($this->request->data['main_course_id'])?$this->request->data['main_course_id']:$courseid;
+      $base_url = Router::url('/', true);
 
 
       if(!empty($teacher_id) && !empty($subject_id) && !empty($grade_id)){       
-        if($this->request->data['skill_id'] ==''  && $this->request->data['subskill_id']==''){
-            //Assignment for -  class/group/selected students
-          if($this->request->data['assignmentFor'] == 'class'){
+       
 
+        if($this->request->data['skill_id'] !=''  && $this->request->data['subskill_id']!=''){
             
+          $skill_id = $this->request->data['skill_id'] ;
+          $subskill_id = $this->request->data['subskill_id'] ;
+          $questions_limit = $this->request->data['questions_limit'] ;
+          $difficulty_level = $this->request->data['difficulty_level'] ; 
 
+          $difficulty='NA';
+          if (!empty($difficulty_level)){              
+              foreach ($difficulty_level as $diff) {
+                  if( $diff['id']==1){ $diff_str = 'Easy'; }
+                  elseif( $diff['id']==2){ $diff_str = 'Moderate';}
+                  else{ $diff_str = 'Difficult';} 
 
-          }elseif($this->request->data['assignmentFor'] == 'group' ){
-
-          }elseif($this->request->data['assignmentFor'] == 'students'){
+                  $difficulty =$diff_str.'|'.$difficulty ;             
+              }
 
           }else{
-              $data['status'] = "False";
-              $data['message'] ="Assignment for cannot be null.";
-          }    
+            $difficulty='Easy|Moderate|Difficult';
+          }     
 
+          // Step 1 - get Questions as per field
+          $dataToGetQuestions['subjects'] = $subskill_id; // ids of course as eg 3,13,15
+          $dataToGetQuestions['grade_id'] = $grade_id;
+          $dataToGetQuestions['limit'] = $questions_limit;
+          $dataToGetQuestions['difficulty'] = $difficulty; // eg Easy|Difficult|mod
+          
+          
+          $json_questionslist = $this->curlPost($base_url.'teachers/getQuestionsListForAssg/', $dataToGetQuestions ) ;          
+          $array_qlist = (array)json_decode($json_questionslist);           
+
+          if($array_qlist['response']->status=="True"){
+              $data['status'] = "True";
+              $data['questions'] = $array_qlist['response']->questions ;              
+
+          }else{
+              $data['status'] = $array_qlist['response']->status ;
+              $data['message'] = $array_qlist['response']->message;
+          }
+          
           }else{
               $data['status'] = "False";
               $data['message'] ="Please select skill and subskill.";
@@ -1759,9 +1788,456 @@ public function addStudent() {
         '_serialize' =>['response']
       ]);
 
-
-
   }
+
+
+  // Function to get List of questions in assignment
+
+  public function getQuestionsListForAssg($subjects=null,$grade_id=null, $standard='CCSS.MATH.CONTENT.8.EE.A.3', $limit=5,$target=null,$dok=null,$difficulty='Easy',$type=null,$user_id=null,$removed_questions_id=null, $existing_questions_id=null){
+
+      $subjects =isset($this->request->data['subjects']) ? $this->request->data['subjects']:$subjects;
+      $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id']:$grade_id; 
+
+      $standard = isset($this->request->data['standard']) ? $this->request->data['standard']:$standard;
+
+      $limit = isset($this->request->data['limit'])?$this->request->data['limit']: $limit;
+
+      $target = isset($this->request->data['target']) ? $this->request->data['target']:$target;
+
+      $dok = isset($this->request->data['dok'])? $this->request->data['dok']:$dok;
+
+      $difficulty = isset($this->request->data['difficulty']) ? $this->request->data['difficulty'] : $difficulty;
+
+      $type = isset($this->request->data['type']) ? $this->request->data['type'] : $type;
+     
+      $user_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : $user_id;
+
+      $removed_questions_id = isset($this->request->data['removed_questions_id']) ? $this->request->data['removed_questions_id'] : $removed_questions_id;
+
+      $existing_questions_id = isset($this->request->data['existing_questions_id']) ? $this->request->data['existing_questions_id'] : $existing_questions_id;
+
+      
+      // $subj= '('.implode(',', $subj).')';
+      $subjects= '('.$subjects.')';
+      $data['status'] ="False";
+      $data['message']="";
+      $connection = ConnectionManager::get('default');  
+
+
+    $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,
+                 mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,cm.state, GUID,ParentGUID, AuthorityGUID, Document, Label, Number,Description,Year, createdDate
+              FROM mlg.question_master AS qm
+              JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
+              LEFT JOIN mlg.mime_master AS mm ON mm.uniqueId = qm.uniqueId
+              LEFT JOIN mlg.paragraph_master as pm on pm.question_id=qm.docId
+              JOIN  mlg.compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
+              where qm.course_id IN '.$subjects.' and qm.grade_id='.$grade_id;
+
+              
+              // To check Previous questions has been showed During Assignment Selection
+              if($removed_questions_id!=null){
+                $sql .=' and qm.id Not IN ('.$removed_questions_id.')';
+              }
+
+              if($existing_questions_id!=null){                
+                $previous_selected_id = $removed_questions_id.','.$existing_questions_id;
+                
+                $substr = 'SELECT  distinct qm.id FROM mlg.question_master AS qm where qm.course_id IN '.$subjects.' and qm.grade_id='.$grade_id.' and qm.id NOT IN ('.$previous_selected_id.') Limit 0,1';
+
+                $subqids = $connection->execute($substr)->fetchAll('assoc');
+
+                  if(count($subqids ) > 0){
+                    foreach ($subqids as $subqid) {                  
+                        $qsids = $subqid ['id'];
+                   }                
+                    $existing_questions_id = $qsids.','.$existing_questions_id;
+                    $sql .=' and qm.id IN ('.$existing_questions_id.')';
+                    $data['change_question_status'] ="True";
+
+                  }else{
+                      $data['change_question_status'] ="False";
+                      $data['change_question_message'] ="Opps..No More Question exist in database to change it.";
+                  }              
+             }              
+
+    
+           if($standard !== NULL){
+                $standard=explode("|",$standard);               
+                $sql.=" and `CCSS-MC` in (";
+                $countArray=0;
+                foreach($standard as $std){
+                    ++$countArray;
+                    $sql.="'".$std."' ";
+                    if(!empty($standard[$countArray])){ $sql.=",";  }
+                }
+          
+              $sql.=")";
+         }      
+
+        if($difficulty !== NULL){
+          
+            $difficulty=explode("|",$difficulty);
+           $sql.=" and qm.level in (";
+            $countArray=0;
+            foreach($difficulty as $level):
+                ++$countArray;
+                $sql.="'".$level."' ";
+                if(!empty($difficulty[$countArray])){
+                   $sql.=",";
+                }
+          endforeach;
+          
+          $sql.=")";
+        }
+
+        if($type !== NULL){
+          $type=explode("|",$type);
+          $sql.=" and qm.type in (";
+          $countArray=0;
+          foreach($type as $typos):
+            ++$countArray;
+            $sql.="'".$typos."' ";
+            if(!empty($type[$countArray])){
+              $sql.=",";
+            }
+          endforeach;
+          
+          $sql.=")";
+        }
+
+        //if($skills !== NULL){ $sql.=" and skills = '".$skills."'";  }
+        if($target !== NULL){ $sql.=" and target ='".$target."'";   }
+        if($dok !== NULL){    $sql.=" and hm.DOK ='".$dok."'";      }
+        if($limit !== null){ $sql.="ORDER BY RAND() limit ".$limit; }        
+
+        $question_info=array();
+        $quiz_marks = 0;
+        $ques_ids = array();
+         $questionRecords = $connection->execute($sql)->fetchAll('assoc');              
+              if($questionRecords){ 
+                $data['status'] = "True";                             
+                foreach ($questionRecords as $questionRow) {                  
+                   $ques_ids[] = $questionRow ['id']; 
+                   
+                   foreach ($questionRow as $key => $value) {                    
+                     $question_info[$key] = $value;
+                   }
+                   $question_info['id'] = 'response_id-'.$questionRow['id'];
+                   $question_info['question_id'] = $questionRow['id'];                   
+                   $question_info['questionName']=$questionRow['questionName'];                  
+                   // Find option to question
+                   $option_sql = "SELECT * FROM mlg.option_master WHERE uniqueId ='".$questionRow['uniqueId']."'";
+                   $optionRecords = $connection->execute($option_sql)->fetchAll('assoc');
+                   if($optionRecords > 0){ 
+                      foreach ($optionRecords as $optionRow) {
+                        $optionArray[]=array('value'=>$optionRow['options'],'label'=>$optionRow['options']);
+                      }
+                      $question_info['options'] =  $optionArray; 
+                      $optionArray =[];                         
+                   }else{
+                    $question_info ['option_message'] = "No option Found for this question";
+                   }
+
+
+                   // Find Answers for a question
+                   $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='".$questionRow['uniqueId']."'";
+                   $answerRecords = $connection->execute($answer_sql)->fetchAll('assoc');
+                   if($answerRecords > 0){ 
+                      foreach ($answerRecords as $answerRow) {
+                        $answerArray[]=array('value'=>$answerRow['answers'],'score'=>1);
+                        $quiz_marks = $quiz_marks +1;
+                      } 
+                     // $question_info['answers'] =  $answerArray; 
+                      $answerArray =[];                   
+                   }else{
+                    $question_info ['answer_message'] = "No Answer Found for this question";
+                   }
+
+                   //Question Collections
+                   $questions[]=$question_info;
+                 }  
+
+                   //Result 1-  if quiz is a custom Assignment  
+                  if($user_id == null){
+                        $data['questions'] = $questions;    
+                    }
+                    // Result 2-  if quiz is auto generated
+                    else{
+                       // Create Quiz                
+                       $quiz= $this->createQuiz($limit,$ques_ids,$quiz_marks,$user_id);
+                       if($quiz['status']=="True"){
+                          $quiz_id =$quiz['quiz_id'];
+                       }else{
+                          $data['quiz_status'] = $quiz;
+                       } 
+                       
+                       foreach ($questions as $ques) {
+                          $questions_detail['quiz_id'] = $quiz_id;                     
+                          $data[] = array_merge($questions_detail, $ques);                     
+                       }
+                  }                                  
+
+              }else{
+                $data['status'] = "False";
+                $data['message'] = "No Record Found";
+              }
+           
+             // return ($data);
+              $this->set([
+                  'response' => $data,         
+                  '_serialize' =>['response']
+            ]);
+
+    }
+
+
+        public function createQuiz($limit=null,$itemsIds=array(),$quiz_marks=null,$user_id=null){
+        if(!empty($itemsIds) && !empty($limit) && !empty($quiz_marks) ){
+            $date=date("Y-m-d H:i:s");    
+            $epoch=date("YmdHis");
+            $quiz_info['name'] = "external-".$epoch;
+            $quiz_info['is_graded'] = 1;
+            $quiz_info['is_time'] = 1;
+            $quiz_info['max_marks'] = $quiz_marks;
+            $quiz_info['max_questions'] = count($itemsIds);
+            $quiz_info['duration'] = '1'; 
+            $quiz_info['status'] = 1;
+            $quiz_info['created_by'] = $user_id;
+            $quiz_info['created'] = time();
+            $quiz_info['modified'] = time();
+
+
+            $Quizes=TableRegistry::get('Quizes');
+            $new_quiz = $Quizes->newEntity($quiz_info);
+            if ($qresult= $Quizes->save($new_quiz) ) {
+                $quiz_item['exam_id']  = $qresult->id;
+                $quiz_item['created']  = time();
+                $quiz_item['status']  = 1;
+
+                foreach ($itemsIds as $key => $value) {
+                   $quiz_item['item_id']  = $value;
+
+                    $QuizItems=TableRegistry::get('QuizItems');
+                    $new_quizitem = $QuizItems->newEntity($quiz_item);
+                    if ($qitemresult= $QuizItems->save($new_quizitem) ) {
+                       $data['status'] = "True";
+                       $data['quiz_id'] =  $qresult->id;
+                      $data ['message'] ="quiz is created.";
+                    }
+                    else{
+                        $data['status'] = "False";
+                        $data ['message'] ="Not able to create quiz item. Please consult with admin";
+                    }
+                 }             
+            }
+            else{
+                $data['status'] = "False";
+                $data ['message'] ="Not able to create quiz. Please consult with admin";
+              }      
+
+        }
+        else{
+          $data['status'] = "False";
+          $data ['message'] ="Not able to create quiz. Please consult with admin";
+        }
+
+        return($data);      
+
+    }
+
+
+
+
+    /*  function to save the Custom Assignment Created by Teacher*/
+    public function setCustomAssignmentByTeacher($teacher_id=null){
+      $quiz_info['teacher_id'] = isset($this->request->data['teacher_id'])? $this->request->data['teacher_id']:$user_id;
+
+        $data['status'] ="";
+        $data['message'] ="";
+
+        if(!empty($quiz_info['teacher_id'])){
+            $date=date("Y-m-d H:i:s");    
+            $epoch=date("Ymd-His");
+            $quiz_info['name'] = "internal-".$epoch;
+            $quiz_info['is_graded'] = 1;
+            $quiz_info['is_time'] = 1;            
+            $quiz_info['duration'] = '1'; 
+            $quiz_info['status'] = 1;
+            $quiz_info['created_by'] = $quiz_info['teacher_id'];
+            $quiz_info['created'] = time();
+            $quiz_info['modified'] = time();
+
+
+            $quiz_info['teacher_id'] = isset($this->request->data['teacher_id'])? $this->request->data['teacher_id'] : null;
+            
+
+          $quiz_info['subject_id'] = isset($this->request->data['main_course_id'])? $this->request->data['main_course_id'] : null;
+
+          $quiz_info['subject_name'] = isset($this->request->data['subject_name'])? $this->request->data['subject_name'] : null;
+
+          $quiz_info['course_id'] = isset($this->request->data['subskill_id']) ? $this->request->data['subskill_id'] : null;         
+
+          $quiz_info['grade_id'] = isset($this->request->data['grade_id'])? $this->request->data['grade_id'] : null;
+
+          $quiz_info['comments'] = isset($this->request->data['comments']) ? $this->request->data['comments'] : '';
+
+
+          $quiz_info['assignment_for'] = isset($this->request->data['assignmentFor'])? $this->request->data['assignmentFor'] : null;
+
+
+          // get students id-  if assignment is for selected class
+          if($quiz_info['assignment_for']=='class' || $quiz_info['assignment_for']=='CLASS'){
+              $class_id = $quiz_info['grade_id']  ;
+
+              if(!empty($class_id) ){
+                  $strecords= TableRegistry::get('StudentTeachers')->find('all')->where(['course_id'=>$quiz_info['subject_id'], 'grade_id'=>$quiz_info['grade_id'], 'teacher_id'=>$quiz_info['teacher_id'] ]); 
+                  
+                  if($strecords->count() > 0 ){              
+                      foreach ($strecords as $strecord) {                       
+                           $studentids[]   =  $strecord['student_id'] ;
+                      }
+                      $quiz_info['student_id'] = implode(',',$studentids);                  
+
+                  }else{
+                    $data['status'] ="False"; 
+                    $data['message'] ="No students found for this class.";
+                  }         
+                }else{
+                  $data['status']="False";
+                  $data['message']="No class is found to select the stidents for assignment.";
+                }
+          } 
+          // get students id-  if assignment is for selected group
+          elseif($quiz_info['assignment_for']=='group' || $quiz_info['assignment_for']=='GROUP'){
+
+              $quiz_info['group_id'] = isset($this->request->data['group_id'])? $this->request->data['group_id'] : null;
+
+              if(!empty($quiz_info['group_id'])){
+                  
+                  $gstrecords= TableRegistry::get('StudentTeachers')->find('all')->where(['course_id'=>$quiz_info['subject_id'], 'grade_id'=>$quiz_info['grade_id'],'teacher_id'=>$quiz_info['teacher_id'] ]); 
+                  
+                  if($gstrecords->count() > 0 ){
+                      foreach ($gstrecords as $gstrecord) {                       
+                           $gpstudentids   =  $gstrecord['student_id'] ;
+                      }
+                      $quiz_info['student_id'] = $gpstudentids;
+                  }
+                  else{
+                    $data['status'] ="False";
+                    $data['message'] ="No Student is added in group.";
+                  }
+              }
+              else{
+                $data['status'] ="False";
+                $data['message'] = "No group is selected. Please select Group.";
+              }
+          
+
+          }
+          // students id-  if assignment for selected students of class
+          else{
+                $selected_students = $this->request->data['students'];
+                if( count( $selected_students) > 0 ){
+                    foreach ($selected_students as $k=>$vl) {                        
+                        $select_stids[] = $vl['id'];
+                    }
+                    $quiz_info['student_id'] = implode(',',$select_stids);
+                }
+                else{
+                  $data['status'] = "False";
+                  $data['message'] = "No student is selected to this assignment.";
+                }
+          }
+
+
+          // To get quiz Marks
+          $selected_questions = isset($this->request->data['selected_questions']) ? $this->request->data['selected_questions'] : null;
+
+          $quiz_info['max_questions'] = isset($this->request->data['questions_limit']) ? $this->request->data['questions_limit'] : null;
+
+          $quiz_marks = 0;
+          
+            if(!empty($selected_questions)){
+                foreach ($selected_questions as $quesId => $quesLevel) {
+                      $questions[] = $quesId;
+
+                      if($quesLevel=='Easy'){
+                        $quiz_marks = $quiz_marks + 1;
+
+                      }
+                      elseif($quesLevel=='Moderate'){
+                          $quiz_marks = $quiz_marks + 2;
+                      }
+                      else{
+                          $quiz_marks = $quiz_marks + 3;
+                      }
+                }
+
+                $quiz_info['max_marks'] = $quiz_marks;
+            }
+            else{
+              $data['status'] = "False";
+              $data['message'] = "No question in the Assignment. Please select questions.";
+            }
+
+
+            // At end - Now to store the value in database
+            if($data['status']!="False"){
+
+              $Quizes=TableRegistry::get('Quizes');
+              $new_quiz = $Quizes->newEntity($quiz_info);
+            
+              if ($qresult= $Quizes->save($new_quiz) ) {
+                $quiz_info['exam_id']  = $qresult->id;
+                $quiz_info['quiz_id']  = $qresult->id;              
+
+                //insert data in assignment_details table
+                $AssignmentDetails=TableRegistry::get('AssignmentDetails');
+                $new_assignmentdetails = $AssignmentDetails->newEntity($quiz_info);
+                if ($assgnresult= $AssignmentDetails->save($new_assignmentdetails) ) {
+
+                   foreach ($questions as $question) {
+                          $quiz_info['item_id']  = $question;
+
+                          //Insert data in quiz item
+                          $QuizItems=TableRegistry::get('QuizItems');
+                          $new_quizitem = $QuizItems->newEntity($quiz_info);
+                           if ($qitemresult= $QuizItems->save($new_quizitem) ) {
+                              $data['status'] ="True";
+                              $data['message']="Assignment is stored sucessfully.";
+                            }
+                             else{
+                                $data['status'] ="False";
+                                $data['message'] ="Opps... Issue in inserting question".$quiz_info['item_id']."  data.";
+                            }
+                     }
+                }
+                else{
+                    $data['status'] ="False";
+                    $data['message'] ="Opps... Issue in inserting Assignment details data.";
+                }
+            }
+            else{
+              $data['status'] ="False";
+              $data['message'] ="Opps... Issue in inserting quiz data.";
+            }
+
+         }else{
+            $data['status'] ="False";
+          }
+       }else{
+            $data['status'] = "False";
+            $data['message'] ="Account is not logged in. Please login First."; 
+       }
+
+         $this->set([
+        'response' => $data,      
+        '_serialize' =>['response']
+      ]);
+
+    }
+
+
 
 
   /**
@@ -2214,4 +2690,18 @@ public function addStudent() {
       'total_amount' => $request_data['amount'],
       'error' => $error);
   }
+
+
+  // API to call curl 
+  /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
+public function curlPost($url, $data) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    return $response;
+}
+
 }
