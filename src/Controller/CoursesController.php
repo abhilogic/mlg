@@ -1053,9 +1053,7 @@ class CoursesController extends AppController{
                                       $data['hhh'] ="kk";
                                     }
                                 }
-
                             }
-
 
                         }
 
