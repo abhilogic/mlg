@@ -1381,7 +1381,7 @@ public function addStudent() {
                      foreach ($student_records as $stRecord) {
 
                         if( $stRecord['profile_pic']==NULL ){
-                              $stRecord['profile_pic'] = 'upload/profile_img/default_studentAvtar.png';
+                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
                           }else{
                             $stRecord['profile_pic'] = $stRecord['profile_pic'];
                           }                          
@@ -1442,7 +1442,7 @@ public function addStudent() {
                           $student['open_key'] = hex2bin($open_key);
                           
                           if( $studentrow['profile_pic']==NULL ){
-                              $student['profile_pic'] = 'upload/profile_img/default_studentAvtar.png';
+                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
                           }else{
                             $student['profile_pic'] = $studentrow['profile_pic'];
                           }
