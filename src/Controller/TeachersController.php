@@ -934,9 +934,9 @@ public function addStudent() {
               if(!empty($pass)){
                   // check emailchoice is yes/no 
                         //$pass= rand(1, 1000000); 
-                        $default_hasher = new DefaultPasswordHasher();
-                        $password=$default_hasher->hash($pass);
-                        $postdata['password']  = $password;
+                       // $default_hasher = new DefaultPasswordHasher();
+                        //$password=$default_hasher->hash($pass);
+                        $postdata['password']  = $pass;
                         $postdata['open_key'] = bin2hex($pass);  // encrypt a string
 
               }else{
@@ -1381,7 +1381,7 @@ public function addStudent() {
                      foreach ($student_records as $stRecord) {
 
                         if( $stRecord['profile_pic']==NULL ){
-                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
                           }else{
                             $stRecord['profile_pic'] = $stRecord['profile_pic'];
                           }                          
@@ -1442,7 +1442,7 @@ public function addStudent() {
                           $student['open_key'] = hex2bin($open_key);
                           
                           if( $studentrow['profile_pic']==NULL ){
-                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
                           }else{
                             $student['profile_pic'] = $studentrow['profile_pic'];
                           }
@@ -1493,7 +1493,7 @@ public function addStudent() {
                           $open_key=$studentrow['open_key'];
                           $student['open_key'] = hex2bin($open_key);
                           if( $studentrow['profile_pic']==NULL ){
-                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                              $student['profile_pic'] = 'upload/profile_img/default_studentAvtar.png';
                           }else{
                             $student['profile_pic'] = $studentrow['profile_pic'];
                           }
@@ -2076,7 +2076,8 @@ public function addStudent() {
         if(!empty($quiz_info['teacher_id'])){
             $date=date("Y-m-d H:i:s");    
             $epoch=date("Ymd-His");
-            $quiz_info['name'] = "internal-".$epoch;
+            $quiz_info['name'] = "teacherCustomAssignment-".$epoch;
+            $quiz_info['quiz_type'] = 5;
             $quiz_info['is_graded'] = 1;
             $quiz_info['is_time'] = 1;            
             $quiz_info['duration'] = '1'; 
