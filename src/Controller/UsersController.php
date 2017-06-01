@@ -2150,10 +2150,13 @@ class UsersController extends AppController{
         if (isset($param['user_type']) && !empty($param['user_type'])) {
           $connection = ConnectionManager::get('default');
           $user_type = strtoupper($param['user_type']);
-          $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'";
-          if (isset($param['applied_for']) && !empty($param['applied_for'])) {
-            $sql.= ' AND applied_for = '. "'" . $param['applied_for'] . "'"
+          $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'"
             . ' AND validity >= ' . "'" . time() . "'";
+          if (isset($param['applied_for']) && !empty($param['applied_for'])) {
+            $sql.= ' AND applied_for = '. "'" . $param['applied_for'] . "'";
+          }
+          if (isset($param['external_coupon']) && !empty($param['external_coupon'])) {
+            $sql.= ' AND external_coupon = '. "'" . $param['external_coupon'] . "'";
           }
           $coupon_results = $connection->execute($sql)->fetchAll('assoc');
           $conditional_coupons = array();
@@ -2397,7 +2400,7 @@ class UsersController extends AppController{
   /*
    * function _getCondtionsDetailsOnCoupon().
    */
-  private function _getCondtionsDetailsOnCoupon($coupon_id = NULL, $coupon_condition_key = 'points') {
+  public function _getCondtionsDetailsOnCoupon($coupon_id = NULL, $coupon_condition_key = 'points') {
     try {
       $response = array('status' => FALSE, 'message' => '', 'result' => array());
       if (empty($coupon_id)) {
@@ -2567,7 +2570,11 @@ class UsersController extends AppController{
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
     if (isset($data['requested'])) {
-      return $user_setting->first()->toArray();
+      if (!empty($user_setting->first())) {
+        return $user_setting->first()->toArray();
+      } else {
+        return array();
+      }
     }
     $this->set([
       'status' => $status,
