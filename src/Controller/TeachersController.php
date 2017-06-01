@@ -1617,6 +1617,7 @@ public function addStudent() {
 	  try{
 	    $message = '';
 	    $status = FALSE;
+      $insertedId = '';
       $connection = ConnectionManager::get('default');
       if($this->request->is('post')) {
         if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
@@ -1659,6 +1660,7 @@ public function addStudent() {
             $unique_id = date('Ymd',time()).uniqid(9);
             $question_master = TableRegistry::get('question_master');
             $question = $question_master->newEntity();
+            $question->user_id = $this->request->data['tid'];
             $question->questionName = $this->request->data['question'];
             $question->grade_id = $this->request->data['grade'];
             $question->grade = $this->request->data['grade_name'];
@@ -1668,8 +1670,10 @@ public function addStudent() {
             $question->difficulty_level_id= $this->request->data['ques_diff'];
             $question->type = implode(',',$this->request->data['ques_type']);
             $question->standard = implode(',',$this->request->data['standard']);
+            $question->status = 'approved';
             $question->uniqueId  = $unique_id;
-            if($question_master->save($question)) {
+            $insertedId = $question_master->save($question)->id;
+            if(is_numeric($insertedId)) {
               $header_master = TableRegistry::get('header_master');
               $header = $header_master->newEntity();
               $header->uniqueId = $unique_id;
@@ -1691,7 +1695,21 @@ public function addStudent() {
                     $answer = $answer_master->newEntity();
                     $answer->uniqueId  = $unique_id;
                     $answer->answers  = $value;
-                    $answer_master->save($answer);           
+                    if($answer_master->save($answer)){
+                      $points= TableRegistry::get('mlg_points');
+                      $user_points= TableRegistry::get('user_points');
+                      $get_points = $user_points->newEntity();
+                      $get_points->user_id = $this->request->data['tid'];
+                      $get_points->question_id = $insertedId;
+                      $get_points->point_type_id = $this->request->data['point_type'];
+                      $point = $points->find()->where(['id' => $this->request->data['point_type']]);
+                      foreach ($point as $key => $value) {
+                       $get_points->points = $value['points']; 
+                      }
+                      $get_points->status = 1;
+                      $get_points->created_date = date('y-m-d ',time());
+                      $user_points->save($get_points);
+                    }
                   }
                 }else{
                   $mesaage = "Not able to saved option.";
@@ -2083,6 +2101,8 @@ public function addStudent() {
 
           $quiz_info['attachedresource'] = isset($this->request->data['attachedresource']) ? $this->request->data['attachedresource'] : null;
 
+           $quiz_info['schedule_time'] = isset($this->request->data['schedule_time']) ? $this->request->data['schedule_time'] : '0000-00-00 00:00:00';          
+
 
           $quiz_info['assignment_for'] = isset($this->request->data['assignmentFor'])? $this->request->data['assignmentFor'] : null;
 
@@ -2300,9 +2320,9 @@ public function addStudent() {
           throw new Exception('Not getting subject.');
         }
         if(!empty($this->request->data['event_date'])){
-         $current_timestamp = time();;
+         $current_timestamp = time();
          $event_timestamp = strtotime($this->request->data['event_date']);
-         if($current_timestamp > $event_timestamp) {
+         if($current_timestamp >= $event_timestamp) {
            $message = 'Event date should be greater than current date.';
            throw new Exception('Event date should be greater than current date.');
          }
@@ -2729,8 +2749,6 @@ public function addStudent() {
       'total_amount' => $request_data['amount'],
       'error' => $error);
   }
-
-
   // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
 public function curlPost($url, $data) {
@@ -2743,4 +2761,263 @@ public function curlPost($url, $data) {
     return $response;
 }
 
+  /**
+   * This function is used for get question
+   *  of teacher for listing.
+   **/
+  public function getUserQuestions($user_id=null,$pnum=1) {
+    try{
+      $message = '';
+      $count = '';
+      $users_record = '';
+      if($user_id == NULL) {
+        $message = 'login first';
+        throw new Exception('login first');
+      }
+      if($message == '') {
+        $current_page = 1;
+        if (!empty($pnum)) {
+            $current_page = $pnum;
+        }
+        $question = TableRegistry::get('question_master');  
+        $count = $question->find()->where(['user_id' => $user_id])->count();
+        $last_page = ceil($count / 10);
+        if ($current_page < 1) {
+            $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+            $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * 10 . ',' . 10;
+        $connection = ConnectionManager::get('default');
+        $sql = " SELECT * ,question_master.status from question_master"
+                  . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                  . " WHERE question_master.user_id = ".$user_id
+                  ." ORDER BY question_master.id DESC ".$limit;
+        $users_record = $connection->execute($sql)->fetchAll('assoc');
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserQuestions function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'data'=> $users_record,
+      'lastPage' => $last_page,
+      'start'=> (($current_page - 1) * 10)+1,
+      'last' => (($current_page - 1) * 10)+10,
+      'total' => $count,
+      '_serialize' => ['data','lastPage','start','last','total']
+    ]);
+    
+  }
+  /**
+   * This function is used for deleting question of teacher.
+   **/
+  public function deleteTeacherQuestions($user_id=null,$pnum=1) {
+    try{
+      $message = '';
+      $status = FALSE;
+      if($this->request->is('post')) {
+        $connection = ConnectionManager::get('default');
+        $uniqId = trim($this->request->data['unique_id']);
+        $sql_point = "delete from user_points where question_id = ".$this->request->data['id'];
+        if($connection->execute($sql_point)) {
+          $sql_question = "delete from question_master where id = ".$this->request->data['id'];
+          if($connection->execute($sql_question)) {
+            $sql_option = "delete from option_master where uniqueId ='".$uniqId."'";
+            if($connection->execute($sql_option)) {
+              $sql_answer = "delete from answer_master where uniqueId ='".$uniqId."'";
+              if($connection->execute($sql_answer)) {
+                $status = TRUE;
+                $message = 'Question deleted successfully.';
+              }else{
+                $message = 'Some technical error occurred.';
+                throw new Exception('answer not deleted.');
+              }
+            }else{
+              $message = 'Some technical error occurred.';
+              throw new Exception('options not deleted.');
+            } 
+          }else{
+            $message = 'Some technical error occurred.';
+            throw new Exception('question not deleted.');
+          }
+        }else{
+          $message = 'Some technical error occurred.';
+          throw new Exception('points not deleted.');
+        }  
+      }  
+    }catch(Exception $e) {
+      $this->log('Error in deleteTeacherQuestions function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'message'=> $message,
+      'status' => $status,
+      '_serialize' => ['message','status']
+    ]);
+  }
+  public function filteredTeacherQuestions($user_id=null,$pnum=1,$grade,$course,$skill) {
+    try{
+      $message = '';
+      $count = '';
+      $result = '';
+      $subskills = '';
+      $users_record = '';
+      if($user_id == NULL) {
+        $message = 'login first';
+        throw new Exception('login first');
+      }
+      if($message == '') {
+        $current_page = 1;
+        if (!empty($pnum)) {
+            $current_page = $pnum;
+        }
+        $question = TableRegistry::get('question_master');  
+        $count = $question->find()->where(['user_id' => $user_id])->count();
+        $last_page = ceil($count / 10);
+        if ($current_page < 1) {
+            $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+            $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * 10 . ',' . 10;
+        if($course != -1) {
+          $course_detail = TableRegistry::get('course_details');
+          $result = $course_detail->find('all')->where(['parent_id'=> $course])->toArray();
+          $skills = '';
+          foreach ($result as $key => $value) {
+            $skills[$key] = $value['course_id'];
+          }
+          $subskill = $course_detail->find('all')->where(['parent_id IN'=> $skills]);
+          foreach ($subskill as $key => $value) {
+            $subskills[$key] = $value['course_id'];
+          }
+          if (empty($subskills)) {
+           $message = 'Result Not Found.'; 
+          }
+        }
+        $connection = ConnectionManager::get('default');
+        if($message == '') {
+          if($grade == -1 && $course == -1 && $skill == -1) {//000
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.user_id = ".$user_id
+                    ." ORDER BY question_master.id DESC ".$limit; 
+          }else if($grade != -1 && $course == -1 && $skill == -1) {//100
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.user_id = ".$user_id ." AND question_master.grade_id = ". $grade
+                    ." ORDER BY question_master.id DESC ".$limit; 
+          }else if($grade != -1 && $course != -1 && $skill == -1) {//110
+           echo $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.user_id = ".$user_id ." AND question_master.grade_id =". $grade." AND question_master.course_id IN (".implode(',',$subskills).")"
+                    ." ORDER BY question_master.id DESC ".$limit;
+
+          }else if($grade != -1 && $course != -1 && $skill != -1) {//111
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.user_id = ".$user_id ." AND grade_id =". $grade." AND course_id =".$skill
+                    ." ORDER BY question_master.id DESC ".$limit; 
+          }
+          $users_record = $connection->execute($sql)->fetchAll('assoc');
+        }
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserQuestions function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'data'=> $users_record,
+      'lastPage' => $last_page,
+      'start'=> (($current_page - 1) * 10)+1,
+      'last' => (($current_page - 1) * 10)+10,
+      'total' => $count,
+      '_serialize' => ['data','lastPage','start','last','total']
+    ]);
+    
+  }
+  /**
+   * This function is used for edit the question.
+   **/
+  public function getEditQuestionDetails($user_id=null,$id=null) {
+    try{
+      $message = '';
+      $status = FALSE;
+      $question_details = '';
+      $option_details = '';
+      $answer_details = '';
+      $skill = '';
+      $subject = '';
+      $tmp = '';
+      $ques_type = 'text';
+      if($user_id == null) {
+       $message = 'Kindly login';
+       throw new Exception('User not login.');
+      }else if($id == NULL) {
+        $message = 'question not exist.';
+        throw new Exception('question id is null.');
+      }
+      if($message == ''){
+        $question = TableRegistry::get('question_master');
+        $option = TableRegistry::get('option_master');
+        $answer = TableRegistry::get('answer_master');
+        $course_details = TableRegistry::get('course_details');
+        $courses = TableRegistry::get('courses');
+        $question_count = $question->find()->where(['user_id'=> $user_id ,'id' => $id])->count();
+        if($question_count > 0){
+          $question_details = $question->find()->where(['user_id'=> $user_id ,'id' => $id])->toArray();
+          foreach ($question_details as $key => $value) {
+            $question_unique_id = $value['uniqueId'];
+            $subskill = $value['course_id'];
+          }
+          $option_details = $option->find('all')->where(['uniqueId'=> $question_unique_id])->toArray();
+          foreach($option_details as $key => $value){
+            $data = explode('.',$value['options']);
+            if(isset($data[1]) &&($data[1] == 'jpg' || $data[1] == 'jpeg' || $data[1] == 'png') ) {
+              $ques_type = 'image';
+            }
+          }
+          $answer_details = $answer->find('all')->where(['uniqueId'=> $question_unique_id])->toArray();
+          $subskill_detail = $course_details-> find()->where(['course_id' => $subskill])->toArray();
+          foreach ($subskill_detail as $key => $value) {
+            $temp_skill[$key] = $value['parent_id'];
+          }
+          $skill = $course_details-> find()->where(['course_id IN' => $temp_skill])->orderAsc('parent_id')->toArray();
+          $temp_sub_id = '';
+          $i = 0;
+          foreach ($skill as $key => $value) {
+            if($tmp == $value['parent_id']) {
+               $temp_sub_id = $temp_sub_id;
+            }else{
+              $temp_sub_id[$i] = $value['parent_id'];
+              $i++;
+              $tmp = $value['parent_id'];
+            }
+          }
+          $subject = $courses->find()->where(['id IN' => $temp_sub_id])->toArray();
+          $status = TRUE;
+        }else{
+          $message = 'Question Not found.';
+          throw new Exception('Question Not found.');
+        } 
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getEditQuestionDetails function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'status'=> $status,
+      'message' => $message,
+      'question' => $question_details,
+      'option' => $option_details,
+      'answer' => $answer_details,
+      'skill' => $skill,
+      'subject' => $subject,
+      'sub_skill' => $subskill_detail,
+      'ques_type' => $ques_type,
+      '_serialize' => ['status','message','question','option','answer','skill','subject','sub_skill','ques_type']
+    ]);
+    
+  }
 }
