@@ -2261,6 +2261,7 @@ class UsersController extends AppController{
     try {
       $status = FALSE;
       $message = $error_code = '';
+      $automatic_approval = 0;
       $param = $this->request->data;
       if (!isset($param['updated_by_user_id'])) {
         throw new Exception('Kindly login to update coupons');
