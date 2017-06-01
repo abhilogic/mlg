@@ -2281,20 +2281,16 @@ class UsersController extends AppController{
              $user_settings = $this->getUserSetting();
              if (!empty($user_settings) && isset($user_settings['settings']) && !empty($user_settings['settings'])) {
                $settings = json_decode($user_settings['settings'], TRUE);
-               foreach ($settings as $user_setting) {
-                 if ($user_setting['automatic_approval'] == TRUE) {
-                   $automatic_approval = 1;
-                 } elseif (isset($user_setting['global_automatic_approval']) &&
-                   $user_setting['global_automatic_approval'] == TRUE) {
-                   $automatic_approval = 1;
-                 }
-                 break;
-               }
+              if ($settings['automatic_approval'] == 1) {
+                $automatic_approval = 1;
+              } elseif (isset($settings['global_automatic_approval']) &&
+                $settings['global_automatic_approval'] == 1) {
+                $automatic_approval = 1;
+              }
              }
            }
            break;
          }
-
          // When coupon is in state of approval pending, the point will be deducted
          if (strtolower($param['status']) == 'approval pending') {
            if ($automatic_approval == 1) {
