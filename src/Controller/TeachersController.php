@@ -2587,11 +2587,6 @@ public function addStudent() {
       ]);
     }
 
-
-
-
-
-
   /**
    * Create Paypal Billing Plan.
    */
@@ -2752,15 +2747,15 @@ public function addStudent() {
   }
   // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
-public function curlPost($url, $data) {
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-    $response = curl_exec($ch);
-    curl_close($ch);
+  public function curlPost($url, $data) {
+      $ch = curl_init($url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      $response = curl_exec($ch);
+      curl_close($ch);
 
-    return $response;
-}
+      return $response;
+  }
 
   /**
    * This function is used for get question
@@ -3019,6 +3014,216 @@ public function curlPost($url, $data) {
       'ques_type' => $ques_type,
       '_serialize' => ['status','message','question','option','answer','skill','subject','sub_skill','ques_type']
     ]);
-    
   }
+
+  /**
+   * getTeacherPoints().
+   */
+  public function getTeacherPoints() {
+    $user_current_points = 0;
+    $status = FALSE;
+    $message = '';
+    try {
+      $param = $this->request->data;
+      if (!$this->request->is('post')) {
+        throw new Exception('Request is not secure');
+      }
+      if (!isset($param['user_id']) || empty($param['user_id'])) {
+        throw new Exception('User Id is null');
+      }
+      $users_controller = new UsersController();
+      $user_details = $users_controller->getUserDetails($param['user_id'], TRUE);
+      $user_current_points = $user_details['user_all_details']['user_detail']['points'];
+      if (empty($user_current_points)) {
+        $user_current_points = 0;
+      }
+      $status = TRUE;
+    } catch (Exception $ex) {
+      $message = 'Some Error occured';
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'points' => $user_current_points,
+      '_serialize' => ['status', 'message', 'points']
+    ]);
+  }
+
+  /**
+   * getRewards().
+   */
+  public function getRewards() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $available_rewards = 0;
+      $reward_list = array();
+      if ($this->request->is('post')) {
+        $param = $this->request->data;
+        $connection = ConnectionManager::get('default');
+        if (!isset($param['user_id']) && empty($param['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('user id is missing');
+        }
+        if (!isset($param['condition_key']) && !isset($param['condition_value'])) {
+          $message = 'Unable to filter data';
+          throw new Exception('Either Key condition_key or condition_value is missing');
+        }
+        if (strtolower($param['condition_key']) == 'points') {
+          $sql_coupon = 'SELECT * FROM coupons'
+            . ' INNER JOIN coupon_conditions ON coupons.id = coupon_conditions.coupon_id'
+            . ' WHERE  coupon_conditions.condition_key = ' . "'" . $param['condition_key'] . "'"
+            . ' AND coupon_conditions.condition_value <= ' . "'" . $param['condition_value'] . "'"
+            . ' AND coupons.user_type = "TEACHER"'
+            . ' AND coupons.validity >= ' . "'" . time() . "'";
+          $reward_list = $connection->execute($sql_coupon)->fetchAll('assoc');
+          $available_rewards = count($reward_list);
+        }
+
+        $status = TRUE;
+        $avail_coupon_sql = 'SELECT * FROM coupons'
+          . ' INNER JOIN coupon_avail_status ON coupons.id = coupon_avail_status.coupon_id'
+          . ' INNER JOIN coupon_conditions ON coupon_avail_status.coupon_id = coupon_conditions.coupon_id'
+          . ' WHERE user_id = ' . "'" . $param['user_id'] . "'";
+        $avail_rewards = $connection->execute($avail_coupon_sql)->fetchAll('assoc');
+        $temp = array();
+        if (!empty($avail_rewards)) {
+          foreach ($avail_rewards as $avail) {
+            $temp[$avail['coupon_id']] = $avail;
+            $temp[$avail['coupon_id']]['id'] = $avail['coupon_id'];
+          }
+        }
+        if (!empty($reward_list)) {
+          foreach ($reward_list as &$reward) {
+            $reward['status'] = '';
+            $reward['id'] = $reward['coupon_id'];
+            if (isset($temp[$reward['coupon_id']])) {
+              $reward['status'] = $temp[$reward['coupon_id']]['status'];
+              unset($temp[$reward['coupon_id']]);
+            }
+          }
+        } else {
+          $message = 'No rewards available';
+        }
+        if (!empty($temp)) {
+          $reward_list = array_merge($reward_list, $temp);
+        }
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'available_rewards' => $available_rewards,
+      'message' => $message,
+      'result' => $reward_list,
+      '_serialize' => ['status', 'available_rewards', 'message', 'result']
+    ]);
+  }
+
+  /**
+   * setAvailableRewards().
+   */
+  public function setAvailableRewards() {
+    try {
+      $status = FALSE;
+      $message = $error_code = '';
+      $param = $this->request->data;
+      if (!isset($param['updated_by_user_id'])) {
+        throw new Exception('Kindly login to update coupons');
+      }
+      $users_controller = new UsersController();
+      if (isset($param['user_id']) && !empty($param['user_id'])) {
+        if (isset($param['coupon_id']) && !empty($param['coupon_id'])) {
+          $user_details_table = TableRegistry::get('UserDetails');
+
+          // When coupon is approved or mlg approval pending, the point will be deducted
+          if (strtolower($param['status']) == 'acquired' || strtolower($param['status']) == 'mlg approval pending') {
+            $coupon_condition_key = isset($param['coupon_condition_key']) ? $coupon_condition_key : 'points';
+            $condition_response = $users_controller->_getCondtionsDetailsOnCoupon($param['coupon_id'], $coupon_condition_key);
+            if ($condition_response['status'] == TRUE) {
+
+              $user_details = $users_controller->getUserDetails($param['user_id'], TRUE);
+              $user_current_points = $user_details['user_all_details']['user_detail']['points'];
+
+              if ($user_current_points > 0) {
+                $user_new_points = $user_current_points - $condition_response['result']['condition_value'];
+                if ($user_new_points < 0) {
+                  $error_code = 'LESS_POINT';
+                  $message = 'Insufficient Points';
+                  throw new Exception('User points are less');
+                }
+
+                $query_updated = $user_details_table->query()->update()->set(['points' => $user_new_points])->where(['user_id' => $param['user_id']])->execute();
+                if (!$query_updated) {
+                  $message = 'Some Error occured. Please contact to administrator';
+                  throw new Exception('unable to update points to user details table');
+                }
+              } else {
+                $error_code = 'ZERO_POINT';
+                $message = 'Insufficient Points';
+                throw new Exception('User points are below Zero');
+              }
+            } else {
+              $error_code = 'POINT_GET_ERROR';
+              $message = "Unable to get points";
+              throw new Exception('Error in coupon condition table. Message: ' . $condition_response['message']);
+            }
+          }
+
+          $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
+          $coupon = $coupon_avail_status_table->find()->where(['user_id' => $param['user_id'],
+            'coupon_id' => $param['coupon_id']]);
+          if ($coupon->count()) {
+            $entry_status = $coupon_avail_status_table->query()->update()
+                ->set(['status' => $param['status'], 'updated_by' => $param['updated_by_user_id']])
+                ->where(['coupon_id' => $param['coupon_id'], 'user_id' => $param['user_id']])->execute();
+          } else {
+            $coupon_entry = $coupon_avail_status_table->newEntity(array(
+              'user_id' => $param['user_id'],
+              'coupon_id' => $param['coupon_id'],
+              'date' => date('Y-m-d'),
+              'status' => ucfirst($param['status']),
+              'updated_by' => $param['updated_by_user_id'],
+              )
+            );
+            $entry_status = $coupon_avail_status_table->save($coupon_entry);
+          }
+
+          if (!empty($entry_status)) {
+            $coupon_avail_transactions = TableRegistry::get('coupon_avail_transactions');
+            $new_transaction_entity = $coupon_avail_transactions->newEntity(array(
+              'user_id' => $param['user_id'],
+              'coupon_id' => $param['coupon_id'],
+              'date' => date('Y-m-d'),
+              'status' => $param['status'],
+              'updated_by' => $param['updated_by_user_id'],
+            ));
+            if (!$coupon_avail_transactions->save($new_transaction_entity)) {
+              $message = "Some error occured while updating Information";
+              throw new Exception('unable to save in coupon availble transactions');
+            }
+            $status = TRUE;
+          }
+        } else {
+          $message = 'Coupon Id cannot be empty';
+          throw new Exception('Coupon Id cannot be empty');
+        }
+      } else {
+        $message = 'user id cannot be empty';
+        throw new Exception('user id cannot be empty');
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'error_code' => $error_code,
+      'coupon_status' => ucfirst($param['status']),
+      '_serialize' => ['status', 'coupon_status', 'message', 'error_code']
+    ]);
+  }
+
 }
