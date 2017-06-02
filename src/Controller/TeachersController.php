@@ -1776,7 +1776,9 @@ public function addStudent() {
           $dataToGetQuestions['difficulty'] = $difficulty; // eg Easy|Difficult|mod
           
           
-          $json_questionslist = $this->curlPost($base_url.'teachers/getQuestionsListForAssg/', $dataToGetQuestions ) ;          
+          $json_questionslist = $this->curlPost($base_url.'teachers/getQuestionsListForAssg/', $dataToGetQuestions ) ;
+
+                  
           $array_qlist = (array)json_decode($json_questionslist);           
 
           if($array_qlist['response']->status=="True"){
@@ -1808,7 +1810,7 @@ public function addStudent() {
 
   // Function to get List of questions in assignment
 
-  public function getQuestionsListForAssg($subjects=null,$grade_id=null, $standard='CCSS.MATH.CONTENT.8.EE.A.3', $limit=5,$target=null,$dok=null,$difficulty='Easy',$type=null,$user_id=null,$removed_questions_id=null, $existing_questions_id=null){
+  public function getQuestionsListForAssg($subjects=null,$grade_id=null, $standard=null, $limit=5,$target=null,$dok=null,$difficulty='Easy',$type=null,$user_id=null,$removed_questions_id=null, $existing_questions_id=null){
 
       $subjects =isset($this->request->data['subjects']) ? $this->request->data['subjects']:$subjects;
       $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id']:$grade_id; 
