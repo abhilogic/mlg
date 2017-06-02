@@ -571,7 +571,7 @@ class TeachersController extends AppController {
             $standard_type = implode(',', $this->request->data['standard_type']);
             $content = $template_detail->newEntity();
             $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
-            $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
+            $content->created_by = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
             $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
             $content->standard = $standard;
             $content->standard_type = $standard_type;
@@ -619,7 +619,7 @@ class TeachersController extends AppController {
             $question = implode(',',$this->request->data['ques_type']);
             $content = $template_detail->newEntity();
             $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
-            $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
+            $content->created_by = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
             $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
             $content->standard = $standard;
             //$content->standard_type = $standard_type;
@@ -660,16 +660,13 @@ class TeachersController extends AppController {
       $content = array();
       $content_detail = array();
       $template_detail= TableRegistry::get('ContentTemplate');
-      $template = $template_detail->find('all')->where(['user_id' => $user_id ,'content_type'=>$type]);
+      $template = $template_detail->find('all')->where(['created_by' => $user_id ,'content_type'=>$type]);
       foreach ($template as $key => $value) {
         $content_detail['id'] = $value['id'];
         $content_detail['template_name'] = $value['template_name'];
         $content_detail['user_id'] = $value['user_id'];
         $content_detail['grade'] = $value['grade'];
         $content_detail['standard'] = explode(',', $value['standard']);
-        if($type == 'lesson'){
-			
-	      }
         $content_detail['standard_type'] = explode(',', $value['standard_type']);
         $content_detail['course_id'] = $value['course_id'];
         $content_detail['skills'] = explode(',', $value['skill_ids']);
@@ -934,9 +931,9 @@ public function addStudent() {
               if(!empty($pass)){
                   // check emailchoice is yes/no 
                         //$pass= rand(1, 1000000); 
-                        $default_hasher = new DefaultPasswordHasher();
-                        $password=$default_hasher->hash($pass);
-                        $postdata['password']  = $password;
+                       // $default_hasher = new DefaultPasswordHasher();
+                        //$password=$default_hasher->hash($pass);
+                        $postdata['password']  = $pass;
                         $postdata['open_key'] = bin2hex($pass);  // encrypt a string
 
               }else{
@@ -1381,7 +1378,7 @@ public function addStudent() {
                      foreach ($student_records as $stRecord) {
 
                         if( $stRecord['profile_pic']==NULL ){
-                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                              $stRecord['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
                           }else{
                             $stRecord['profile_pic'] = $stRecord['profile_pic'];
                           }                          
@@ -1442,7 +1439,7 @@ public function addStudent() {
                           $student['open_key'] = hex2bin($open_key);
                           
                           if( $studentrow['profile_pic']==NULL ){
-                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
                           }else{
                             $student['profile_pic'] = $studentrow['profile_pic'];
                           }
@@ -1493,7 +1490,7 @@ public function addStudent() {
                           $open_key=$studentrow['open_key'];
                           $student['open_key'] = hex2bin($open_key);
                           if( $studentrow['profile_pic']==NULL ){
-                              $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.jpg';
+                              $student['profile_pic'] = 'upload/profile_img/default_studentAvtar.png';
                           }else{
                             $student['profile_pic'] = $studentrow['profile_pic'];
                           }
@@ -1617,10 +1614,11 @@ public function addStudent() {
 	  try{
 	    $message = '';
 	    $status = FALSE;
+      $insertedId = '';
       $connection = ConnectionManager::get('default');
       if($this->request->is('post')) {
         if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
-            $message = "please select a grade.";
+          $message = "please select a grade.";
         }elseif ($this->request->data['course'] == '-1') {
           $message = "please select a course.";
         }elseif (empty($this->request->data['standard'])) {
@@ -1659,6 +1657,7 @@ public function addStudent() {
             $unique_id = date('Ymd',time()).uniqid(9);
             $question_master = TableRegistry::get('question_master');
             $question = $question_master->newEntity();
+            $question->created_by = $this->request->data['tid'];
             $question->questionName = $this->request->data['question'];
             $question->grade_id = $this->request->data['grade'];
             $question->grade = $this->request->data['grade_name'];
@@ -1668,8 +1667,10 @@ public function addStudent() {
             $question->difficulty_level_id= $this->request->data['ques_diff'];
             $question->type = implode(',',$this->request->data['ques_type']);
             $question->standard = implode(',',$this->request->data['standard']);
+            $question->status = 'approved';
             $question->uniqueId  = $unique_id;
-            if($question_master->save($question)) {
+            $insertedId = $question_master->save($question)->id;
+            if(is_numeric($insertedId)) {
               $header_master = TableRegistry::get('header_master');
               $header = $header_master->newEntity();
               $header->uniqueId = $unique_id;
@@ -1691,7 +1692,21 @@ public function addStudent() {
                     $answer = $answer_master->newEntity();
                     $answer->uniqueId  = $unique_id;
                     $answer->answers  = $value;
-                    $answer_master->save($answer);           
+                    if($answer_master->save($answer)){
+                      $points= TableRegistry::get('mlg_points');
+                      $user_points= TableRegistry::get('user_points');
+                      $get_points = $user_points->newEntity();
+                      $get_points->user_id = $this->request->data['tid'];
+                      $get_points->question_id = $insertedId;
+                      $get_points->point_type_id = $this->request->data['point_type'];
+                      $point = $points->find()->where(['id' => $this->request->data['point_type']]);
+                      foreach ($point as $key => $value) {
+                       $get_points->points = $value['points']; 
+                      }
+                      $get_points->status = 1;
+                      $get_points->created_date = date('y-m-d ',time());
+                      $user_points->save($get_points);
+                    }
                   }
                 }else{
                   $mesaage = "Not able to saved option.";
@@ -1761,7 +1776,9 @@ public function addStudent() {
           $dataToGetQuestions['difficulty'] = $difficulty; // eg Easy|Difficult|mod
           
           
-          $json_questionslist = $this->curlPost($base_url.'teachers/getQuestionsListForAssg/', $dataToGetQuestions ) ;          
+          $json_questionslist = $this->curlPost($base_url.'teachers/getQuestionsListForAssg/', $dataToGetQuestions ) ;
+
+                  
           $array_qlist = (array)json_decode($json_questionslist);           
 
           if($array_qlist['response']->status=="True"){
@@ -1793,7 +1810,7 @@ public function addStudent() {
 
   // Function to get List of questions in assignment
 
-  public function getQuestionsListForAssg($subjects=null,$grade_id=null, $standard='CCSS.MATH.CONTENT.8.EE.A.3', $limit=5,$target=null,$dok=null,$difficulty='Easy',$type=null,$user_id=null,$removed_questions_id=null, $existing_questions_id=null){
+  public function getQuestionsListForAssg($subjects=null,$grade_id=null, $standard=null, $limit=5,$target=null,$dok=null,$difficulty='Easy',$type=null,$user_id=null,$removed_questions_id=null, $existing_questions_id=null){
 
       $subjects =isset($this->request->data['subjects']) ? $this->request->data['subjects']:$subjects;
       $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id']:$grade_id; 
@@ -1827,10 +1844,10 @@ public function addStudent() {
     $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,
                  mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,cm.state, GUID,ParentGUID, AuthorityGUID, Document, Label, Number,Description,Year, createdDate
               FROM mlg.question_master AS qm
-              JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
+              LEFT JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
               LEFT JOIN mlg.mime_master AS mm ON mm.uniqueId = qm.uniqueId
               LEFT JOIN mlg.paragraph_master as pm on pm.question_id=qm.docId
-              JOIN  mlg.compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
+              LEFT JOIN  mlg.compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
               where qm.course_id IN '.$subjects.' and qm.grade_id='.$grade_id;
 
               
@@ -1979,7 +1996,7 @@ public function addStudent() {
 
               }else{
                 $data['status'] = "False";
-                $data['message'] = "No Record Found";
+                $data['message'] = "No question found in our dataware house.";
               }
            
              // return ($data);
@@ -2058,7 +2075,8 @@ public function addStudent() {
         if(!empty($quiz_info['teacher_id'])){
             $date=date("Y-m-d H:i:s");    
             $epoch=date("Ymd-His");
-            $quiz_info['name'] = "internal-".$epoch;
+            $quiz_info['name'] = "teacherCustomAssignment-".$epoch;
+            $quiz_info['quiz_type'] = 5;
             $quiz_info['is_graded'] = 1;
             $quiz_info['is_time'] = 1;            
             $quiz_info['duration'] = '1'; 
@@ -2080,6 +2098,10 @@ public function addStudent() {
           $quiz_info['grade_id'] = isset($this->request->data['grade_id'])? $this->request->data['grade_id'] : null;
 
           $quiz_info['comments'] = isset($this->request->data['comments']) ? $this->request->data['comments'] : '';
+
+          $quiz_info['attachedresource'] = isset($this->request->data['attachedresource']) ? $this->request->data['attachedresource'] : null;
+
+           $quiz_info['schedule_time'] = isset($this->request->data['schedule_time']) ? $this->request->data['schedule_time'] : '0000-00-00 00:00:00';          
 
 
           $quiz_info['assignment_for'] = isset($this->request->data['assignmentFor'])? $this->request->data['assignmentFor'] : null;
@@ -2195,6 +2217,43 @@ public function addStudent() {
                 $AssignmentDetails=TableRegistry::get('AssignmentDetails');
                 $new_assignmentdetails = $AssignmentDetails->newEntity($quiz_info);
                 if ($assgnresult= $AssignmentDetails->save($new_assignmentdetails) ) {
+                     $quiz_info['assignment_id']  = $assgnresult->id;
+                     $attchedresources =array();
+
+
+                     // insert the value of attached resource if exist                
+
+
+                    if($quiz_info['attachedresource']!=null){
+                      if(isset($quiz_info['attachedresource']['image'])){
+                          $resimages =json_decode('['.$quiz_info['attachedresource']['image'].']');
+
+                          foreach ($resimages as $resimage) {
+                              $attchedresources[]=$resimage->response;
+                          }
+
+                      }
+                      if(isset($quiz_info['attachedresource']['document'])){
+                        $resdocs =json_decode('['.$quiz_info['attachedresource']['document'].']');
+                        foreach ($resdocs as $resdoc) {
+                              $attchedresources[]=$resdoc->response;
+                          }
+                      }
+                    }
+
+                    if(!empty($attchedresources)){
+                       
+                        foreach ($attchedresources as $attchedresource) {
+                           $quiz_info['url'] = 'upload/profile_img/'.$attchedresource;
+
+                         
+                          $assignmentResources=TableRegistry::get('AssignmentResources');
+                           $new_assignmentResources = $assignmentResources->newEntity($quiz_info);
+                          $assignmentResources->save($new_assignmentResources);
+                        }                     
+
+                    }                    
+                 
 
                    foreach ($questions as $question) {
                           $quiz_info['item_id']  = $question;
@@ -2261,9 +2320,9 @@ public function addStudent() {
           throw new Exception('Not getting subject.');
         }
         if(!empty($this->request->data['event_date'])){
-         $current_timestamp = time();;
+         $current_timestamp = time();
          $event_timestamp = strtotime($this->request->data['event_date']);
-         if($current_timestamp > $event_timestamp) {
+         if($current_timestamp >= $event_timestamp) {
            $message = 'Event date should be greater than current date.';
            throw new Exception('Event date should be greater than current date.');
          }
@@ -2293,13 +2352,12 @@ public function addStudent() {
               $event_detail->course_id = $this->request->data['course_id'];
             }
             if($this->request->data['event_for'] == 'people') {
-              $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
+              $event_detail->created_for = $this->request->data['event_for_id'];
               $event_detail->grade_id = $this->request->data['grade'];
               $event_detail->grade_name = $this->request->data['grade_name'];
               $event_detail->course_id = $this->request->data['course_id'];
             }
             if($this->request->data['event_for'] == 'class') {
-              print_r( implode(',',$this->request->data['event_for_id']));
               $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
               $event_detail->grade_id = $this->request->data['grade'];
               $event_detail->grade_name = $this->request->data['grade_name'];
@@ -2527,11 +2585,6 @@ public function addStudent() {
       ]);
     }
 
-
-
-
-
-
   /**
    * Create Paypal Billing Plan.
    */
@@ -2690,18 +2743,488 @@ public function addStudent() {
       'total_amount' => $request_data['amount'],
       'error' => $error);
   }
-
-
   // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
-public function curlPost($url, $data) {
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-    $response = curl_exec($ch);
-    curl_close($ch);
+  public function curlPost($url, $data) {
+      $ch = curl_init($url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      $response = curl_exec($ch);
+      curl_close($ch);
 
-    return $response;
-}
+      return $response;
+  }
+
+  /**
+   * This function is used for get question
+   *  of teacher for listing.
+   **/
+  public function getUserQuestions($user_id=null,$pnum=1) {
+    try{
+      $message = '';
+      $count = '';
+      $users_record = '';
+      if($user_id == NULL) {
+        $message = 'login first';
+        throw new Exception('login first');
+      }
+      if($message == '') {
+        $current_page = 1;
+        if (!empty($pnum)) {
+            $current_page = $pnum;
+        }
+        $question = TableRegistry::get('question_master');  
+        $count = $question->find()->where(['created_by' => $user_id])->count();
+        $last_page = ceil($count / 10);
+        if ($current_page < 1) {
+            $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+            $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * 10 . ',' . 10;
+        $connection = ConnectionManager::get('default');
+        $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
+                  . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                  . " WHERE question_master.created_by = ".$user_id
+                  ." ORDER BY question_master.id DESC ".$limit;
+        $users_record = $connection->execute($sql)->fetchAll('assoc');
+
+        
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserQuestions function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'data'=> $users_record,
+      'lastPage' => $last_page,
+      'start'=> (($current_page - 1) * 10)+1,
+      'last' => (($current_page - 1) * 10)+10,
+      'total' => $count,
+      '_serialize' => ['data','lastPage','start','last','total']
+    ]);
+    
+  }
+  /**
+   * This function is used for deleting question of teacher.
+   **/
+  public function deleteTeacherQuestions() {
+    try{
+      $message = '';
+      $status = FALSE;
+      if($this->request->is('post')) {
+        $connection = ConnectionManager::get('default');
+        $uniqId = trim($this->request->data['unique_id']);
+        $sql_point = "delete from user_points where question_id = ".$this->request->data['id'];
+        if($connection->execute($sql_point)) {
+
+          $sql_question = "delete from question_master where id = ".$this->request->data['id'];
+          if($connection->execute($sql_question)) {
+            $sql_option = "delete from option_master where uniqueId ='".$uniqId."'";
+            if($connection->execute($sql_option)) {
+              $sql_answer = "delete from answer_master where uniqueId ='".$uniqId."'";
+              if($connection->execute($sql_answer)) {
+                $status = TRUE;
+                $message = 'Question deleted successfully.';
+              }else{
+                $message = 'Some technical error occurred.';
+                throw new Exception('answer not deleted.');
+              }
+            }else{
+              $message = 'Some technical error occurred.';
+              throw new Exception('options not deleted.');
+            } 
+          }else{
+            $message = 'Some technical error occurred.';
+            throw new Exception('question not deleted.');
+          }
+        }else{
+          $message = 'Some technical error occurred.';
+          throw new Exception('points not deleted.');
+        }  
+      }  
+    }catch(Exception $e) {
+      $this->log('Error in deleteTeacherQuestions function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'message'=> $message,
+      'status' => $status,
+      '_serialize' => ['message','status']
+    ]);
+  }
+  public function filteredTeacherQuestions($user_id=null,$pnum=1,$grade,$course,$skill) {
+    try{
+      $message = '';
+      $count = '';
+      $result = '';
+      $subskills = '';
+      $users_record = '';
+      if($user_id == NULL) {
+        $message = 'login first';
+        throw new Exception('login first');
+      }
+      if($message == '') {
+        $current_page = 1;
+        if (!empty($pnum)) {
+            $current_page = $pnum;
+        }
+        $question = TableRegistry::get('question_master');  
+        $count = $question->find()->where(['created_by' => $user_id])->count();
+        $last_page = ceil($count / 10);
+        if ($current_page < 1) {
+            $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+            $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * 10 . ',' . 10;
+        if($course != -1) {
+          $course_detail = TableRegistry::get('course_details');
+          $result = $course_detail->find('all')->where(['parent_id'=> $course])->toArray();
+          $skills = '';
+          foreach ($result as $key => $value) {
+            $skills[$key] = $value['course_id'];
+          }
+          $subskill = $course_detail->find('all')->where(['parent_id IN'=> $skills]);
+          foreach ($subskill as $key => $value) {
+            $subskills[$key] = $value['course_id'];
+          }
+          if (empty($subskills)) {
+           $message = 'Result Not Found.'; 
+          }
+        }
+        $connection = ConnectionManager::get('default');
+        if($message == '') {
+          if($grade == -1 && $course == -1 && $skill == -1) {//000
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.created_by = ".$user_id
+                    ." ORDER BY question_master.id DESC ".$limit; 
+          }else if($grade != -1 && $course == -1 && $skill == -1) {//100
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.created_by = ".$user_id ." AND question_master.grade_id = ". $grade
+                    ." ORDER BY question_master.id DESC ".$limit; 
+          }else if($grade != -1 && $course != -1 && $skill == -1) {//110
+           echo $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.created_by = ".$user_id ." AND question_master.grade_id =". $grade." AND question_master.course_id IN (".implode(',',$subskills).")"
+                    ." ORDER BY question_master.id DESC ".$limit;
+
+          }else if($grade != -1 && $course != -1 && $skill != -1) {//111
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
+                    . " WHERE question_master.created_by = ".$user_id ." AND grade_id =". $grade." AND course_id =".$skill
+                    ." ORDER BY question_master.id DESC ".$limit; 
+          }
+          $users_record = $connection->execute($sql)->fetchAll('assoc');
+        }
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserQuestions function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'data'=> $users_record,
+      'lastPage' => $last_page,
+      'start'=> (($current_page - 1) * 10)+1,
+      'last' => (($current_page - 1) * 10)+10,
+      'total' => $count,
+      '_serialize' => ['data','lastPage','start','last','total']
+    ]);
+    
+  }
+  /**
+   * This function is used for edit the question.
+   **/
+  public function getEditQuestionDetails($user_id=null,$id=null) {
+    try{
+      $message = '';
+      $status = FALSE;
+      $question_details = '';
+      $option_details = '';
+      $answer_details = '';
+      $skill = '';
+      $subject = '';
+      $tmp = '';
+      $ques_type = 'text';
+      if($user_id == null) {
+       $message = 'Kindly login';
+       throw new Exception('User not login.');
+      }else if($id == NULL) {
+        $message = 'question not exist.';
+        throw new Exception('question id is null.');
+      }
+      if($message == ''){
+        $question = TableRegistry::get('question_master');
+        $option = TableRegistry::get('option_master');
+        $answer = TableRegistry::get('answer_master');
+        $course_details = TableRegistry::get('course_details');
+        $courses = TableRegistry::get('courses');
+        $question_count = $question->find()->where(['created_by'=> $user_id ,'id' => $id])->count();
+        if($question_count > 0){
+          $question_details = $question->find()->where(['created_by'=> $user_id ,'id' => $id])->toArray();
+          foreach ($question_details as $key => $value) {
+            $question_unique_id = $value['uniqueId'];
+            $subskill = $value['course_id'];
+          }
+          $option_details = $option->find('all')->where(['uniqueId'=> $question_unique_id])->toArray();
+          foreach($option_details as $key => $value){
+            $data = explode('.',$value['options']);
+            if(isset($data[1]) &&($data[1] == 'jpg' || $data[1] == 'jpeg' || $data[1] == 'png') ) {
+              $ques_type = 'image';
+            }
+          }
+          $answer_details = $answer->find('all')->where(['uniqueId'=> $question_unique_id])->toArray();
+          $subskill_detail = $course_details-> find()->where(['course_id' => $subskill])->toArray();
+          foreach ($subskill_detail as $key => $value) {
+            $temp_skill[$key] = $value['parent_id'];
+          }
+          $skill = $course_details-> find()->where(['course_id IN' => $temp_skill])->orderAsc('parent_id')->toArray();
+          $temp_sub_id = '';
+          $i = 0;
+          foreach ($skill as $key => $value) {
+            if($tmp == $value['parent_id']) {
+               $temp_sub_id = $temp_sub_id;
+            }else{
+              $temp_sub_id[$i] = $value['parent_id'];
+              $i++;
+              $tmp = $value['parent_id'];
+            }
+          }
+          $subject = $courses->find()->where(['id IN' => $temp_sub_id])->toArray();
+          $status = TRUE;
+        }else{
+          $message = 'Question Not found.';
+          throw new Exception('Question Not found.');
+        } 
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getEditQuestionDetails function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'status'=> $status,
+      'message' => $message,
+      'question' => $question_details,
+      'option' => $option_details,
+      'answer' => $answer_details,
+      'skill' => $skill,
+      'subject' => $subject,
+      'sub_skill' => $subskill_detail,
+      'ques_type' => $ques_type,
+      '_serialize' => ['status','message','question','option','answer','skill','subject','sub_skill','ques_type']
+    ]);
+  }
+
+  /**
+   * getTeacherPoints().
+   */
+  public function getTeacherPoints() {
+    $user_current_points = 0;
+    $status = FALSE;
+    $message = '';
+    try {
+      $param = $this->request->data;
+      if (!$this->request->is('post')) {
+        throw new Exception('Request is not secure');
+      }
+      if (!isset($param['user_id']) || empty($param['user_id'])) {
+        throw new Exception('User Id is null');
+      }
+      $users_controller = new UsersController();
+      $user_details = $users_controller->getUserDetails($param['user_id'], TRUE);
+      $user_current_points = $user_details['user_all_details']['user_detail']['points'];
+      if (empty($user_current_points)) {
+        $user_current_points = 0;
+      }
+      $status = TRUE;
+    } catch (Exception $ex) {
+      $message = 'Some Error occured';
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'points' => $user_current_points,
+      '_serialize' => ['status', 'message', 'points']
+    ]);
+  }
+
+  /**
+   * getRewards().
+   */
+  public function getRewards() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $available_rewards = 0;
+      $reward_list = array();
+      if ($this->request->is('post')) {
+        $param = $this->request->data;
+        $connection = ConnectionManager::get('default');
+        if (!isset($param['user_id']) && empty($param['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('user id is missing');
+        }
+        if (!isset($param['condition_key']) && !isset($param['condition_value'])) {
+          $message = 'Unable to filter data';
+          throw new Exception('Either Key condition_key or condition_value is missing');
+        }
+        if (strtolower($param['condition_key']) == 'points') {
+          $sql_coupon = 'SELECT * FROM coupons'
+            . ' INNER JOIN coupon_conditions ON coupons.id = coupon_conditions.coupon_id'
+            . ' WHERE  coupon_conditions.condition_key = ' . "'" . $param['condition_key'] . "'"
+            . ' AND coupon_conditions.condition_value <= ' . "'" . $param['condition_value'] . "'"
+            . ' AND coupons.user_type = "TEACHER"'
+            . ' AND coupons.validity >= ' . "'" . time() . "'";
+          $reward_list = $connection->execute($sql_coupon)->fetchAll('assoc');
+          $available_rewards = count($reward_list);
+        }
+
+        $status = TRUE;
+        $avail_coupon_sql = 'SELECT * FROM coupons'
+          . ' INNER JOIN coupon_avail_status ON coupons.id = coupon_avail_status.coupon_id'
+          . ' INNER JOIN coupon_conditions ON coupon_avail_status.coupon_id = coupon_conditions.coupon_id'
+          . ' WHERE user_id = ' . "'" . $param['user_id'] . "'";
+        $avail_rewards = $connection->execute($avail_coupon_sql)->fetchAll('assoc');
+        $temp = array();
+        if (!empty($avail_rewards)) {
+          foreach ($avail_rewards as $avail) {
+            $temp[$avail['coupon_id']] = $avail;
+            $temp[$avail['coupon_id']]['id'] = $avail['coupon_id'];
+          }
+        }
+        if (!empty($reward_list)) {
+          foreach ($reward_list as &$reward) {
+            $reward['status'] = '';
+            $reward['id'] = $reward['coupon_id'];
+            if (isset($temp[$reward['coupon_id']])) {
+              $reward['status'] = $temp[$reward['coupon_id']]['status'];
+              unset($temp[$reward['coupon_id']]);
+            }
+          }
+        } else {
+          $message = 'No rewards available';
+        }
+        if (!empty($temp)) {
+          $reward_list = array_merge($reward_list, $temp);
+        }
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'available_rewards' => $available_rewards,
+      'message' => $message,
+      'result' => $reward_list,
+      '_serialize' => ['status', 'available_rewards', 'message', 'result']
+    ]);
+  }
+
+  /**
+   * setAvailableRewards().
+   */
+  public function setAvailableRewards() {
+    try {
+      $status = FALSE;
+      $message = $error_code = '';
+      $param = $this->request->data;
+      if (!isset($param['updated_by_user_id'])) {
+        throw new Exception('Kindly login to update coupons');
+      }
+      $users_controller = new UsersController();
+      if (isset($param['user_id']) && !empty($param['user_id'])) {
+        if (isset($param['coupon_id']) && !empty($param['coupon_id'])) {
+          $user_details_table = TableRegistry::get('UserDetails');
+
+          // When coupon is approved or mlg approval pending, the point will be deducted
+          if (strtolower($param['status']) == 'acquired' || strtolower($param['status']) == 'mlg approval pending') {
+            $coupon_condition_key = isset($param['coupon_condition_key']) ? $coupon_condition_key : 'points';
+            $condition_response = $users_controller->_getCondtionsDetailsOnCoupon($param['coupon_id'], $coupon_condition_key);
+            if ($condition_response['status'] == TRUE) {
+
+              $user_details = $users_controller->getUserDetails($param['user_id'], TRUE);
+              $user_current_points = $user_details['user_all_details']['user_detail']['points'];
+
+              if ($user_current_points > 0) {
+                $user_new_points = $user_current_points - $condition_response['result']['condition_value'];
+                if ($user_new_points < 0) {
+                  $error_code = 'LESS_POINT';
+                  $message = 'Insufficient Points';
+                  throw new Exception('User points are less');
+                }
+
+                $query_updated = $user_details_table->query()->update()->set(['points' => $user_new_points])->where(['user_id' => $param['user_id']])->execute();
+                if (!$query_updated) {
+                  $message = 'Some Error occured. Please contact to administrator';
+                  throw new Exception('unable to update points to user details table');
+                }
+              } else {
+                $error_code = 'ZERO_POINT';
+                $message = 'Insufficient Points';
+                throw new Exception('User points are below Zero');
+              }
+            } else {
+              $error_code = 'POINT_GET_ERROR';
+              $message = "Unable to get points";
+              throw new Exception('Error in coupon condition table. Message: ' . $condition_response['message']);
+            }
+          }
+
+          $coupon_avail_status_table = TableRegistry::get('coupon_avail_status');
+          $coupon = $coupon_avail_status_table->find()->where(['user_id' => $param['user_id'],
+            'coupon_id' => $param['coupon_id']]);
+          if ($coupon->count()) {
+            $entry_status = $coupon_avail_status_table->query()->update()
+                ->set(['status' => $param['status'], 'updated_by' => $param['updated_by_user_id']])
+                ->where(['coupon_id' => $param['coupon_id'], 'user_id' => $param['user_id']])->execute();
+          } else {
+            $coupon_entry = $coupon_avail_status_table->newEntity(array(
+              'user_id' => $param['user_id'],
+              'coupon_id' => $param['coupon_id'],
+              'date' => date('Y-m-d'),
+              'status' => ucfirst($param['status']),
+              'updated_by' => $param['updated_by_user_id'],
+              )
+            );
+            $entry_status = $coupon_avail_status_table->save($coupon_entry);
+          }
+
+          if (!empty($entry_status)) {
+            $coupon_avail_transactions = TableRegistry::get('coupon_avail_transactions');
+            $new_transaction_entity = $coupon_avail_transactions->newEntity(array(
+              'user_id' => $param['user_id'],
+              'coupon_id' => $param['coupon_id'],
+              'date' => date('Y-m-d'),
+              'status' => $param['status'],
+              'updated_by' => $param['updated_by_user_id'],
+            ));
+            if (!$coupon_avail_transactions->save($new_transaction_entity)) {
+              $message = "Some error occured while updating Information";
+              throw new Exception('unable to save in coupon availble transactions');
+            }
+            $status = TRUE;
+          }
+        } else {
+          $message = 'Coupon Id cannot be empty';
+          throw new Exception('Coupon Id cannot be empty');
+        }
+      } else {
+        $message = 'user id cannot be empty';
+        throw new Exception('user id cannot be empty');
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'error_code' => $error_code,
+      'coupon_status' => ucfirst($param['status']),
+      '_serialize' => ['status', 'coupon_status', 'message', 'error_code']
+    ]);
+  }
 
 }

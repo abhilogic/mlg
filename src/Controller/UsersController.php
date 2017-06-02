@@ -1829,31 +1829,53 @@ class UsersController extends AppController{
     * 
     * **/    
    public function getOffers() {
-     try{
-      $offer_list = array();
-      $current_date = Time::now();
-      $offers = TableRegistry::get('Offers');
-      $offers_detail = $offers->find('all')->where(['validity >=' => $current_date])->toArray();
-      $i=0;
-      foreach ($offers_detail as $offersDetails) {
-        if (isset($offersDetails->title) && !empty($offersDetails->title) ) {
-          $offer_list[$i]['title'] = $offersDetails->title;
-          $offer_list[$i]['description'] = $offersDetails->description;
-          $offer_list[$i]['image'] = $offersDetails->image;
-          $date = explode(' ',$offersDetails->validity);
-          $offer_list[$i]['validity'] = date('d M Y',strtotime($date[0]));
-          $i++;
+     try {
+       $status = FALSE;
+       $message = '';
+       $offer_list = array();
+       if ($this->request->is('post')) {
+        $param = $this->request->data;
+        if (isset($param['user_type']) && !empty($param['user_type'])) {
+          $connection = ConnectionManager::get('default');
+          $user_type = strtoupper($param['user_type']);
+          $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'"
+               . ' AND applied_for = "OFFER"'
+               . ' AND validity >= ' . "'" . time() . "'";
+          $offer_list = $connection->execute($sql)->fetchAll('assoc');
+          if (!empty($offer_list)) {
+            $status = TRUE;
+            $avail_coupon_sql =  'SELECT * FROM coupon_avail_status WHERE user_id = ' . "'" . $param['user_id'] . "'";
+            $avail_offers = $connection->execute($avail_coupon_sql)->fetchAll('assoc');
+            if (!empty($avail_offers)) {
+              $temp = array();
+              foreach ($avail_offers as $avail) {
+                $temp[$avail['coupon_id']] = $avail;
+              }
+            }
+            foreach($offer_list as &$offer) {
+              $offer['status'] = '';
+              if (isset($temp[$offer['id']])) {
+                $offer['status'] = $temp[$offer['id']]['status'];
+              }
+            }
+          } else {
+           $message = 'No offers available';
+           throw new Exception('No Record found');
+          }
         } else {
-          throw new Exception('Unable to find offers');
+          $message = 'user type missing';
+         throw new Exception('No user Type given for offers');
         }
-      } 
-    } catch (Exception $e) {
-      $this->log($e->getMessage(). '(' . __METHOD__ . ')');
-    }
-    $this->set([
-      'response' => $offer_list,
-      '_serialize' => ['response']
-    ]);
+       }
+     } catch (Exception $e) {
+       $this->log($e->getMessage(). '(' . __METHOD__ . ')');
+     }
+     $this->set([
+       'status' => $status,
+       'message' => $message,
+       'result' => $offer_list,
+       '_serialize' => ['status', 'message', 'result']
+     ]);
    }
 
    /**
@@ -2128,10 +2150,13 @@ class UsersController extends AppController{
         if (isset($param['user_type']) && !empty($param['user_type'])) {
           $connection = ConnectionManager::get('default');
           $user_type = strtoupper($param['user_type']);
-          $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'";
-          if (isset($param['applied_for']) && !empty($param['applied_for'])) {
-            $sql.= ' AND applied_for = '. "'" . $param['applied_for'] . "'"
+          $sql = 'SELECT * FROM coupons WHERE user_type = ' . "'" . $user_type . "'"
             . ' AND validity >= ' . "'" . time() . "'";
+          if (isset($param['applied_for']) && !empty($param['applied_for'])) {
+            $sql.= ' AND applied_for = '. "'" . $param['applied_for'] . "'";
+          }
+          if (isset($param['external_coupon']) && !empty($param['external_coupon'])) {
+            $sql.= ' AND external_coupon = '. "'" . $param['external_coupon'] . "'";
           }
           $coupon_results = $connection->execute($sql)->fetchAll('assoc');
           $conditional_coupons = array();
@@ -2236,6 +2261,7 @@ class UsersController extends AppController{
     try {
       $status = FALSE;
       $message = $error_code = '';
+      $automatic_approval = 0;
       $param = $this->request->data;
       if (!isset($param['updated_by_user_id'])) {
         throw new Exception('Kindly login to update coupons');
@@ -2252,22 +2278,19 @@ class UsersController extends AppController{
              $this->request->data['user_id'] = $parent_id;
              $this->request->data['child_id'] = $param['user_id'];
              $this->request->data['requested'] = TRUE;
-             $settings = $this->getUserSetting();
-             if (!empty($settings)) {
-               foreach ($settings as $user_setting) {
-                 if ($user_setting['automatic_approval'] == TRUE) {
-                   $automatic_approval = 1;
-                 } elseif (isset($user_setting['global_automatic_approval']) &&
-                   $user_setting['global_automatic_approval'] == TRUE) {
-                   $automatic_approval = 1;
-                 }
-                 break;
-               }
+             $user_settings = $this->getUserSetting();
+             if (!empty($user_settings) && isset($user_settings['settings']) && !empty($user_settings['settings'])) {
+               $settings = json_decode($user_settings['settings'], TRUE);
+              if ($settings['automatic_approval'] == 1) {
+                $automatic_approval = 1;
+              } elseif (isset($settings['global_automatic_approval']) &&
+                $settings['global_automatic_approval'] == 1) {
+                $automatic_approval = 1;
+              }
              }
            }
            break;
          }
-
          // When coupon is in state of approval pending, the point will be deducted
          if (strtolower($param['status']) == 'approval pending') {
            if ($automatic_approval == 1) {
@@ -2374,7 +2397,7 @@ class UsersController extends AppController{
   /*
    * function _getCondtionsDetailsOnCoupon().
    */
-  private function _getCondtionsDetailsOnCoupon($coupon_id = NULL, $coupon_condition_key = 'points') {
+  public function _getCondtionsDetailsOnCoupon($coupon_id = NULL, $coupon_condition_key = 'points') {
     try {
       $response = array('status' => FALSE, 'message' => '', 'result' => array());
       if (empty($coupon_id)) {
@@ -2544,7 +2567,11 @@ class UsersController extends AppController{
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
     if (isset($data['requested'])) {
-      return $user_setting->first()->toArray();
+      if (!empty($user_setting->first())) {
+        return $user_setting->first()->toArray();
+      } else {
+        return array();
+      }
     }
     $this->set([
       'status' => $status,

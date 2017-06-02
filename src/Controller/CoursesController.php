@@ -980,6 +980,137 @@ class CoursesController extends AppController{
        ]);
    }
 
+
+/* get course/skill/subskill information */
+  public function getCourseInfo($course_id=null){
+      $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id ;
+
+      if(!empty($course_id)){
+      $connection = ConnectionManager::get('default');
+       $sql =" SELECT courses.id,courses.level_id, courses.course_code, courses.course_name, cd.parent_id ,levels.name as grade_name
+                 from courses"
+                . " INNER JOIN course_details as cd ON courses.id = cd.course_id "
+               . " INNER JOIN levels ON courses.level_id = levels.id "
+                . " WHERE courses.id =".$course_id." ORDER BY level_id ";
+        $cdetails = $connection->execute($sql)->fetchAll('assoc');
+       //pr($result);
+        $course_count = count($cdetails);
+        if($course_count>0){
+            foreach ($cdetails as $coursedetail) {
+                $parent_id = $coursedetail['parent_id'];
+                $data['course_Information'] = $coursedetail;
+            
+                if($parent_id==0){                   
+                    $data['course_Information']['course_type'] ="Main course/subject.";
+              }
+
+              //second level check
+              else{                  
+                  $data['course_Information']['course_type'] ="skill";
+
+                // to check skill of course
+                $sql1 =" SELECT courses.id,courses.level_id, courses.course_code, courses.course_name, cd.parent_id ,levels.name as grade_name
+                 from courses"
+                  . " INNER JOIN course_details as cd ON courses.id = cd.course_id "
+                  . " INNER JOIN levels ON courses.level_id = levels.id "
+                  . " WHERE courses.id =".$parent_id." ORDER BY level_id ";
+                  $cdetails1 = $connection->execute($sql1)->fetchAll('assoc');
+
+                  $count1 = count($cdetails1);
+                  if($count1>0){
+                      foreach ($cdetails1 as $cdetailrow) {
+                          $parentid = $cdetailrow['parent_id'];
+                          //$data['parent_Information'][] = $cdetailrow;
+
+                          if($parentid==0){
+                              $data['course_Information']['course_type'] ="skill";
+                              $data['parent_info_of_skill'] = $cdetailrow;
+                        }
+                        else{
+
+                          $data['course_Information']['course_type'] ="Sub skill";
+                          $data['skill_info_of_subskill'] = $cdetailrow;
+
+                          $sql2 =" SELECT courses.id,courses.level_id, courses.course_code, courses.course_name, cd.parent_id ,levels.name as grade_name
+                           from courses"
+                          . " INNER JOIN course_details as cd ON courses.id = cd.course_id "
+                          . " INNER JOIN levels ON courses.level_id = levels.id "
+                          . " WHERE courses.id =".$parentid." ORDER BY level_id ";
+
+                            $cdetails2 = $connection->execute($sql2)->fetchAll('assoc');
+                            $count2 = count($cdetails2);
+
+
+                            if($count2>0){
+
+                                foreach ($cdetails2 as $crow) {
+                                  $prid = $crow['parent_id'];                                 
+                                    if($prid==0){                                      
+                                      $data['course_Information']['course_type'] ="Sub skill";
+                                      $data['parent_info_of_skill'] = $crow;
+                                    }
+                                    else{
+                                      $data['hhh'] ="kk";
+                                    }
+                                }
+                            }
+
+                        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                         
+
+
+                      }
+
+                  }
+
+
+              }
+
+            }
+
+
+
+          
+
+        }
+        else{
+          $data['status'] ="False";
+          $data['message'] = " No Course information for this course id.";
+        }
+
+      }
+      else{
+        $data['status'] = "False";
+        $data['message'] = "Course_id cannot null. Please set course course id.";
+      }
+
+      $this->set([
+        'response' => $data,
+         '_serialize' => ['response']
+       ]);
+
+
+
+  }
+
+
+
    /*
     * function getUserRoleByid
     *
@@ -1007,6 +1138,7 @@ class CoursesController extends AppController{
     }
     return $user;
   }
+
 
 
   // Function to get courses of a grade : for main course (math) parent_id=0; but course (number system) parent_id=course_id of math is as skill, but for course(number system) parent_id=course_id of number system as subkill.
