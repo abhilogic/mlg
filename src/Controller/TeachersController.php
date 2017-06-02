@@ -2961,7 +2961,7 @@ public function addStudent() {
         $answer = TableRegistry::get('answer_master');
         $course_details = TableRegistry::get('course_details');
         $courses = TableRegistry::get('courses');
-        $question_count = $question->find()->where(['user_id'=> $user_id ,'id' => $id])->count();
+        $question_count = $question->find()->where(['created_by'=> $user_id ,'id' => $id])->count();
         if($question_count > 0){
           $question_details = $question->find()->where(['created_by'=> $user_id ,'id' => $id])->toArray();
           foreach ($question_details as $key => $value) {
