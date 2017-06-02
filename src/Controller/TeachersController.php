@@ -2352,13 +2352,12 @@ public function addStudent() {
               $event_detail->course_id = $this->request->data['course_id'];
             }
             if($this->request->data['event_for'] == 'people') {
-              $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
+              $event_detail->created_for = $this->request->data['event_for_id'];
               $event_detail->grade_id = $this->request->data['grade'];
               $event_detail->grade_name = $this->request->data['grade_name'];
               $event_detail->course_id = $this->request->data['course_id'];
             }
             if($this->request->data['event_for'] == 'class') {
-              print_r( implode(',',$this->request->data['event_for_id']));
               $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
               $event_detail->grade_id = $this->request->data['grade'];
               $event_detail->grade_name = $this->request->data['grade_name'];
