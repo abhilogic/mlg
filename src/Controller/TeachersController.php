@@ -2781,11 +2781,13 @@ public function curlPost($url, $data) {
         }
         $limit = 'limit ' . ($current_page - 1) * 10 . ',' . 10;
         $connection = ConnectionManager::get('default');
-        $sql = " SELECT * ,question_master.status from question_master"
+        $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
                   . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
                   . " WHERE question_master.created_by = ".$user_id
                   ." ORDER BY question_master.id DESC ".$limit;
         $users_record = $connection->execute($sql)->fetchAll('assoc');
+
+        
       }
     }catch(Exception $e) {
       $this->log('Error in getUserQuestions function in Teachers Controller.'
@@ -2813,6 +2815,7 @@ public function curlPost($url, $data) {
         $uniqId = trim($this->request->data['unique_id']);
         $sql_point = "delete from user_points where question_id = ".$this->request->data['id'];
         if($connection->execute($sql_point)) {
+
           $sql_question = "delete from question_master where id = ".$this->request->data['id'];
           if($connection->execute($sql_question)) {
             $sql_option = "delete from option_master where uniqueId ='".$uniqId."'";
