@@ -571,7 +571,7 @@ class TeachersController extends AppController {
             $standard_type = implode(',', $this->request->data['standard_type']);
             $content = $template_detail->newEntity();
             $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
-            $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
+            $content->created_by = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
             $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
             $content->standard = $standard;
             $content->standard_type = $standard_type;
@@ -619,7 +619,7 @@ class TeachersController extends AppController {
             $question = implode(',',$this->request->data['ques_type']);
             $content = $template_detail->newEntity();
             $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
-            $content->user_id = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
+            $content->created_by = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
             $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
             $content->standard = $standard;
             //$content->standard_type = $standard_type;
@@ -660,16 +660,13 @@ class TeachersController extends AppController {
       $content = array();
       $content_detail = array();
       $template_detail= TableRegistry::get('ContentTemplate');
-      $template = $template_detail->find('all')->where(['user_id' => $user_id ,'content_type'=>$type]);
+      $template = $template_detail->find('all')->where(['created_by' => $user_id ,'content_type'=>$type]);
       foreach ($template as $key => $value) {
         $content_detail['id'] = $value['id'];
         $content_detail['template_name'] = $value['template_name'];
         $content_detail['user_id'] = $value['user_id'];
         $content_detail['grade'] = $value['grade'];
         $content_detail['standard'] = explode(',', $value['standard']);
-        if($type == 'lesson'){
-			
-	      }
         $content_detail['standard_type'] = explode(',', $value['standard_type']);
         $content_detail['course_id'] = $value['course_id'];
         $content_detail['skills'] = explode(',', $value['skill_ids']);
@@ -1621,7 +1618,7 @@ public function addStudent() {
       $connection = ConnectionManager::get('default');
       if($this->request->is('post')) {
         if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
-            $message = "please select a grade.";
+          $message = "please select a grade.";
         }elseif ($this->request->data['course'] == '-1') {
           $message = "please select a course.";
         }elseif (empty($this->request->data['standard'])) {
@@ -1660,7 +1657,7 @@ public function addStudent() {
             $unique_id = date('Ymd',time()).uniqid(9);
             $question_master = TableRegistry::get('question_master');
             $question = $question_master->newEntity();
-            $question->user_id = $this->request->data['tid'];
+            $question->created_by = $this->request->data['tid'];
             $question->questionName = $this->request->data['question'];
             $question->grade_id = $this->request->data['grade'];
             $question->grade = $this->request->data['grade_name'];
@@ -1845,10 +1842,10 @@ public function addStudent() {
     $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,
                  mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,cm.state, GUID,ParentGUID, AuthorityGUID, Document, Label, Number,Description,Year, createdDate
               FROM mlg.question_master AS qm
-              JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
+              LEFT JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
               LEFT JOIN mlg.mime_master AS mm ON mm.uniqueId = qm.uniqueId
               LEFT JOIN mlg.paragraph_master as pm on pm.question_id=qm.docId
-              JOIN  mlg.compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
+              LEFT JOIN  mlg.compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
               where qm.course_id IN '.$subjects.' and qm.grade_id='.$grade_id;
 
               
@@ -2776,7 +2773,7 @@ public function addStudent() {
             $current_page = $pnum;
         }
         $question = TableRegistry::get('question_master');  
-        $count = $question->find()->where(['user_id' => $user_id])->count();
+        $count = $question->find()->where(['created_by' => $user_id])->count();
         $last_page = ceil($count / 10);
         if ($current_page < 1) {
             $current_page = 1;
@@ -2785,11 +2782,13 @@ public function addStudent() {
         }
         $limit = 'limit ' . ($current_page - 1) * 10 . ',' . 10;
         $connection = ConnectionManager::get('default');
-        $sql = " SELECT * ,question_master.status from question_master"
+        $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
                   . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
-                  . " WHERE question_master.user_id = ".$user_id
+                  . " WHERE question_master.created_by = ".$user_id
                   ." ORDER BY question_master.id DESC ".$limit;
         $users_record = $connection->execute($sql)->fetchAll('assoc');
+
+        
       }
     }catch(Exception $e) {
       $this->log('Error in getUserQuestions function in Teachers Controller.'
@@ -2808,7 +2807,7 @@ public function addStudent() {
   /**
    * This function is used for deleting question of teacher.
    **/
-  public function deleteTeacherQuestions($user_id=null,$pnum=1) {
+  public function deleteTeacherQuestions() {
     try{
       $message = '';
       $status = FALSE;
@@ -2817,6 +2816,7 @@ public function addStudent() {
         $uniqId = trim($this->request->data['unique_id']);
         $sql_point = "delete from user_points where question_id = ".$this->request->data['id'];
         if($connection->execute($sql_point)) {
+
           $sql_question = "delete from question_master where id = ".$this->request->data['id'];
           if($connection->execute($sql_question)) {
             $sql_option = "delete from option_master where uniqueId ='".$uniqId."'";
@@ -2869,7 +2869,7 @@ public function addStudent() {
             $current_page = $pnum;
         }
         $question = TableRegistry::get('question_master');  
-        $count = $question->find()->where(['user_id' => $user_id])->count();
+        $count = $question->find()->where(['created_by' => $user_id])->count();
         $last_page = ceil($count / 10);
         if ($current_page < 1) {
             $current_page = 1;
@@ -2897,23 +2897,23 @@ public function addStudent() {
           if($grade == -1 && $course == -1 && $skill == -1) {//000
             $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
-                    . " WHERE question_master.user_id = ".$user_id
+                    . " WHERE question_master.created_by = ".$user_id
                     ." ORDER BY question_master.id DESC ".$limit; 
           }else if($grade != -1 && $course == -1 && $skill == -1) {//100
             $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
-                    . " WHERE question_master.user_id = ".$user_id ." AND question_master.grade_id = ". $grade
+                    . " WHERE question_master.created_by = ".$user_id ." AND question_master.grade_id = ". $grade
                     ." ORDER BY question_master.id DESC ".$limit; 
           }else if($grade != -1 && $course != -1 && $skill == -1) {//110
            echo $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
-                    . " WHERE question_master.user_id = ".$user_id ." AND question_master.grade_id =". $grade." AND question_master.course_id IN (".implode(',',$subskills).")"
+                    . " WHERE question_master.created_by = ".$user_id ." AND question_master.grade_id =". $grade." AND question_master.course_id IN (".implode(',',$subskills).")"
                     ." ORDER BY question_master.id DESC ".$limit;
 
           }else if($grade != -1 && $course != -1 && $skill != -1) {//111
             $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
-                    . " WHERE question_master.user_id = ".$user_id ." AND grade_id =". $grade." AND course_id =".$skill
+                    . " WHERE question_master.created_by = ".$user_id ." AND grade_id =". $grade." AND course_id =".$skill
                     ." ORDER BY question_master.id DESC ".$limit; 
           }
           $users_record = $connection->execute($sql)->fetchAll('assoc');
@@ -2962,7 +2962,7 @@ public function addStudent() {
         $courses = TableRegistry::get('courses');
         $question_count = $question->find()->where(['user_id'=> $user_id ,'id' => $id])->count();
         if($question_count > 0){
-          $question_details = $question->find()->where(['user_id'=> $user_id ,'id' => $id])->toArray();
+          $question_details = $question->find()->where(['created_by'=> $user_id ,'id' => $id])->toArray();
           foreach ($question_details as $key => $value) {
             $question_unique_id = $value['uniqueId'];
             $subskill = $value['course_id'];
