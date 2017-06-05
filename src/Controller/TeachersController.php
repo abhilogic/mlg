@@ -971,6 +971,7 @@ public function addStudent() {
 
               $postdata['promocode_id']=isset($this->request->data['vcode'])?$this->request->data['vcode']:'0'; 
 
+
               /*$postdata['package_id']=isset($this->request->data['package_id'])?$this->request->data['package_id']:$data['message'][7]="Please select package for your child";
               $postdata['plan_id']=isset($this->request->data['plan_id'])?$this->request->data['plan_id']:$data['message'][8]="Please slelect Plans for your child";
               $postdata['level_id']=$this->request->data['level_id'];*/
@@ -993,6 +994,7 @@ public function addStudent() {
                               $parentinfo['email']=$parent_record['email'];
                               $parentinfo['first_name']=$parent_record['first_name'];
                               $parentinfo['last_name']=$parent_record['last_name'];
+                              $parentinfo['subscription_end_date']=$parent_record['subscription_end_date'];                             
                           }                      
 
                         $from = 'logicdeveloper7@gmail.com';
@@ -1003,11 +1005,15 @@ public function addStudent() {
                                   User Name :".$postdata['username'] ." 
                                   Password : ".$pass;
                           
-                        $to=$postdata['email']; 
+                        $to=$postdata['email'];
+
+                         // To get the subscription of teacher to define the subscription date of student.
+                        $postdata['subscription_end_date'] = $parentinfo['subscription_end_date'];
+
 
                       //1. User Table
 
-                      //$postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $postdata['subscription_days'];
+                      
                       $new_user = $users->newEntity($postdata);
                       if ($result=$users->save($new_user)) { 
                           /*if($this->sendEmail($to, $from, $subject,$email_message)){
@@ -2073,7 +2079,7 @@ public function addStudent() {
             $date=date("Y-m-d H:i:s");    
             $epoch=date("Ymd-His");
             $quiz_info['name'] = "teacherCustomAssignment-".$epoch;
-            $quiz_info['quiz_type'] = 5;
+            $quiz_info['quiz_type_id'] = 5;
             $quiz_info['is_graded'] = 1;
             $quiz_info['is_time'] = 1;            
             $quiz_info['duration'] = '1'; 
@@ -2098,7 +2104,7 @@ public function addStudent() {
 
           $quiz_info['attachedresource'] = isset($this->request->data['attachedresource']) ? $this->request->data['attachedresource'] : null;
 
-           $quiz_info['schedule_time'] = isset($this->request->data['schedule_time']) ? $this->request->data['schedule_time'] : '0000-00-00 00:00:00';          
+           $quiz_info['schedule_time'] = isset($this->request->data['schedule_time']) ? $this->request->data['schedule_time'] : time();          
 
 
           $quiz_info['assignment_for'] = isset($this->request->data['assignmentFor'])? $this->request->data['assignmentFor'] : null;
