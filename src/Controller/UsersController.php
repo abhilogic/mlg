@@ -9,6 +9,7 @@ use Cake\Auth\DefaultPasswordHasher;
 use Cake\Mailer\Email;
 use Cake\Routing\Router;
 use Cake\Datasource\ConnectionManager;
+use DateTime;
 use App\Controller\PaymentController;
 
 /**
@@ -598,6 +599,36 @@ class UsersController extends AppController{
             if (strtotime($user['created']) == strtotime($user['modfied'])) {
               $first_time_login = TRUE;
             }
+
+            //saving user login time for user time calculation
+            $user_login_sessions = TableRegistry::get('user_login_sessions');
+            $user_login_sessions_row = $user_login_sessions->find()->where(['user_id' =>  $user['id'], 'check_out IS NULL']);
+            if ($user_login_sessions_row->count() > 0) {
+              foreach ($user_login_sessions_row as $value) {
+                $check_in = (array)$value->check_in;
+                $chcek_in_dateTime = new DateTime($check_in['date']);
+                $current_dateTime = date('Y-m-d H:i:s');
+                $chcek_out_dateTime = new DateTime($current_dateTime);
+
+                $value->check_out = $current_dateTime;
+                $diff = $chcek_out_dateTime->diff($chcek_in_dateTime);
+
+                $seconds = $diff->s;
+                $minutes = $diff->i;
+                $hours = $diff->h;
+                $total_seconds = $seconds + ($minutes*60) + ($hours*60*60) + ($diff->days*24*60*60);
+
+                $value->time_spent = $total_seconds;
+                break;
+              }
+              $user_login_sessions->save($value);
+            }
+            $user_new_login_session = $user_login_sessions->newEntity(array(
+              'user_id' => $user['id'],
+              'check_in' => time()
+            ));
+            $user_login_sessions->save($user_new_login_session);
+
             if ($user['status'] != 0) {
               $subscription_end_date = !empty($user['subscription_end_date']) ? strtotime($user['subscription_end_date']) : 0;
               if ($user['status'] != 2) {
@@ -1288,7 +1319,7 @@ class UsersController extends AppController{
 
 
        public function logout() {
-            $this->loadComponent('Auth', [
+         $this->loadComponent('Auth', [
           'authenticate' => [
             'Form' => [
               'fields' => [
@@ -1298,13 +1329,35 @@ class UsersController extends AppController{
             ]
           ],
             
-        ]);
-            $this->Auth->logout();
+         ]);
+         $user_id = $this->Auth->user('id');
+         $user_login_sessions = TableRegistry::get('user_login_sessions');
+         $user_login_sessions_row = $user_login_sessions->find()->where(['user_id' =>  $user_id, 'check_out IS NULL']);
+         if ($user_login_sessions_row->count() > 0) {
+           foreach ($user_login_sessions_row as $value) {
+             $check_in = (array)$value->check_in;
+             $chcek_in_dateTime = new DateTime($check_in['date']);
+             $current_dateTime = date('Y-m-d H:i:s');
+             $chcek_out_dateTime = new DateTime($current_dateTime);
 
-            $this->set([           
-             'response' => true,
-             '_serialize' => ['response']
-           ]);
+             $value->check_out = $current_dateTime;
+             $diff = $chcek_out_dateTime->diff($chcek_in_dateTime);
+
+             $seconds = $diff->s;
+             $minutes = $diff->i;
+             $hours = $diff->h;
+             $total_seconds = $seconds + ($minutes*60) + ($hours*60*60) + ($diff->days*24*60*60);
+
+             $value->time_spent = $total_seconds;
+             break;
+           }
+           $user_login_sessions->save($value);
+         }
+         $this->Auth->logout();
+         $this->set([
+           'response' => true,
+           '_serialize' => ['response']
+         ]);
        }
 
       

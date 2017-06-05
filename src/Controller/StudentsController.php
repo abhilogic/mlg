@@ -28,9 +28,9 @@ class StudentsController extends AppController {
        // $users=TableRegistry::get('Users')->find('all')->contain(['UserCourses','Courses']);
       $sql ="SELECT * FROM courses as cr
                 INNER JOIN user_courses as uc ON cr.id = uc.course_id 
-                INNER JOIN users as u ON u.id=uc.user_id
+                INNER JOIN users as u ON u.id=uc.user_id 
+                INNER JOIN levels as l ON l.id = cr.level_id 
                 WHERE uc.user_id =$uid";
-
       $users = $connection->execute($sql)->fetchAll('assoc');
        if (!empty($users)) {
           foreach($users as $user){
@@ -38,6 +38,8 @@ class StudentsController extends AppController {
                 $user_courses['course_name']=$user['course_name'];
                 $data['student_courses'][]= $user_courses;           
                 $data['student_class']=$user['level_id'];
+                $data['student_class_name']=$user['name'];
+                $data['student_grade_id']=$user['level_id'];
            }
           //$data['student_courses']=$user_courses;
           $data['status']="TRUE";
