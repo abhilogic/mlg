@@ -1323,7 +1323,7 @@ public function addStudent() {
               if(count($student_groups) > 0){
                   foreach ($student_groups as $stgroup) {
                      if(empty($stgroup['group_icon']) || $stgroup['group_icon'] =="" || $stgroup['group_icon']==null){ 
-                            $stgroup['group_icon']= "group_images/default_group.png";                      
+                            $stgroup['group_icon']= "default_group.png";                      
                       }
                       $stgroup['URL_title'] = str_replace(' ', '-', strtolower($stgroup['title']));
                       $data['groups'][] = $stgroup;
@@ -1745,8 +1745,7 @@ public function addStudent() {
       $base_url = Router::url('/', true);
 
 
-      if(!empty($teacher_id) && !empty($subject_id) && !empty($grade_id)){       
-       
+      if(!empty($teacher_id) && !empty($subject_id) && !empty($grade_id)){     
 
         if($this->request->data['skill_id'] !=''  && $this->request->data['subskill_id']!=''){
             
@@ -1776,12 +1775,12 @@ public function addStudent() {
           $dataToGetQuestions['difficulty'] = $difficulty; // eg Easy|Difficult|mod
           
           
-          $json_questionslist = $this->curlPost($base_url.'teachers/getQuestionsListForAssg/', $dataToGetQuestions ) ;          
+          $json_questionslist = $this->curlPost($base_url.'teachers/getQuestionsListForAssg/', $dataToGetQuestions ) ;                  
           $array_qlist = (array)json_decode($json_questionslist);           
 
           if($array_qlist['response']->status=="True"){
               $data['status'] = "True";
-              $data['questions'] = $array_qlist['response']->questions ;              
+              $data['questions'] = $array_qlist['response']->questions ;             
 
           }else{
               $data['status'] = $array_qlist['response']->status ;
@@ -1808,7 +1807,7 @@ public function addStudent() {
 
   // Function to get List of questions in assignment
 
-  public function getQuestionsListForAssg($subjects=null,$grade_id=null, $standard='CCSS.MATH.CONTENT.8.EE.A.3', $limit=5,$target=null,$dok=null,$difficulty='Easy',$type=null,$user_id=null,$removed_questions_id=null, $existing_questions_id=null){
+  public function getQuestionsListForAssg($subjects=null,$grade_id=null, $standard=null, $limit=5,$target=null,$dok=null,$difficulty='Easy',$type=null,$user_id=null,$removed_questions_id=null, $existing_questions_id=null){
 
       $subjects =isset($this->request->data['subjects']) ? $this->request->data['subjects']:$subjects;
       $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id']:$grade_id; 
@@ -2350,13 +2349,12 @@ public function addStudent() {
               $event_detail->course_id = $this->request->data['course_id'];
             }
             if($this->request->data['event_for'] == 'people') {
-              $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
+              $event_detail->created_for = $this->request->data['event_for_id'];
               $event_detail->grade_id = $this->request->data['grade'];
               $event_detail->grade_name = $this->request->data['grade_name'];
               $event_detail->course_id = $this->request->data['course_id'];
             }
             if($this->request->data['event_for'] == 'class') {
-              print_r( implode(',',$this->request->data['event_for_id']));
               $event_detail->created_for = implode(',',$this->request->data['event_for_id']);
               $event_detail->grade_id = $this->request->data['grade'];
               $event_detail->grade_name = $this->request->data['grade_name'];
@@ -2960,7 +2958,7 @@ public function addStudent() {
         $answer = TableRegistry::get('answer_master');
         $course_details = TableRegistry::get('course_details');
         $courses = TableRegistry::get('courses');
-        $question_count = $question->find()->where(['user_id'=> $user_id ,'id' => $id])->count();
+        $question_count = $question->find()->where(['created_by'=> $user_id ,'id' => $id])->count();
         if($question_count > 0){
           $question_details = $question->find()->where(['created_by'=> $user_id ,'id' => $id])->toArray();
           foreach ($question_details as $key => $value) {
