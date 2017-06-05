@@ -47,17 +47,16 @@ class StudentsController extends AppController {
        else{
             $data['status']="FALSE";
             //throw new Exception("Subscribe Us to purchase the courses for your child");
-       }       
-
+       }   
     }
     catch (Exception $ex) {
       $this->logs('Error in setTeacherRecord function in Teachers Controller'
               . $e->getMessage().'(' . __METHOD__ . ')');
     }
-    $this->set([
-        'response' => $data,
-        '_serialize' => ['response']
- ]);
+      $this->set([
+          'response' => $data,
+          '_serialize' => ['response']
+   ]);
 
   }
 
@@ -67,18 +66,19 @@ public function getStudentAssignments($user_id = null){
       $user_id = isset($_GET['user_id']) ? $_GET['user_id'] : $user_id ;
       if(!empty($user_id)){
             $connection = ConnectionManager::get('default');
+            $base_url = Router::url('/', true);
 
 
             // To find user assignment
             $sql ="SELECT
-
               adetails.id as assignment_id, grade_id, course_id, cr.course_name, group_id, student_id,assignment_for, schedule_time, adetails.comments,
 
-              qz.id as quiz_id, qz.name as quiz_name, max_marks, max_questions, qz.modified as created         
+              qz.id as quiz_id, qz.name as quiz_name, qz.quiz_type_id, max_marks, max_questions, qz.modified as created, qt.name as type, qt.id as type_id       
               
               from assignment_details as  adetails "                
                 ." INNER JOIN quizes as qz ON qz.id = adetails.quiz_id " 
-                ." INNER JOIN courses as cr ON  cr.id = adetails.course_id "          
+                ." INNER JOIN courses as cr ON  cr.id = adetails.course_id "
+                ." INNER JOIN quiz_types as qt ON  qt.id = qz.quiz_type_id "          
                 . " WHERE FIND_IN_SET(".$user_id." , student_id)" ;                  
           
             $results = $connection->execute($sql)->fetchAll('assoc');
@@ -88,27 +88,44 @@ public function getStudentAssignments($user_id = null){
             if($count > 0){
                 foreach ($results as $result) {
                  // $assg['items'] = $result;
-                  $assg['assignment_id'] =$result['assignment_id'];
-                  $assg['student_id'] = $result['student_id']; 
+                  $assg['assignment_id'] =$result['assignment_id'];                   
                   $assg['quiz_id'] = $result['quiz_id']; 
+                  $assg['type']   = $result['type']; 
+                  $assg['type_id']   = $result['type_id']; 
+                  $assg['student_id'] = $result['student_id'];
                   $assg['quiz_name'] = $result['quiz_name']; 
                   $assg['max_marks'] = $result['max_marks']; 
                   $assg['max_questions'] = $result['max_questions']; 
                   $assg['created'] = $result['created']; 
                   $assg['grade_id'] = $result['grade_id'];  
                   $assg['course_id'] = $result['course_id'];
-                  $assg['course_name'] = $result['course_name']; 
+                  $assg['course_name'] = $result['course_name'];
 
-                  $data['assignment'][]= $assg;
-                 } 
-                 $data['status'] ="True";            
+
+                  // to get main course/subject of the class
+                  $json_courseinfo = $this->curlPost($base_url.'courses/getCourseInfo/'.$result['course_id'], array() ) ;                  
+                 $array_courseinfo = (array)json_decode($json_courseinfo);
+                 
+                   if(isset($array_courseinfo['response'])) {
+                      if(isset($array_courseinfo['response']->parent_info_of_skill)){
+                        $assg['subject_id'] = $array_courseinfo['response']->parent_info_of_skill->id;
+                        $assg['subject_name'] = $array_courseinfo['response']->parent_info_of_skill->course_name;
+                        $assg['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
+                      }
+                  }else{
+                    $assg['subject_id'] = 'issue/not found';
+                  }
+
+                $data['assignment'][]= $assg;
+           } 
+                 $data['status'] =True;            
             }
             else{
-                $data['status'] ="False";
+                $data['status'] =False;
                 $data['message'] ="No data found";
             }            
         }else{
-          $data['status'] ="False";
+          $data['status'] =False;
           $data['message'] ="user_id cannot null.";
       }
     $this->set([
@@ -155,12 +172,23 @@ public function getAssignmentItems($assignment_id = null){
      $this->set([
             'response' => $data,
             '_serialize' => ['response']
-     ]);
-
-
-       
+     ]);      
 
 }
+
+
+
+// API to call curl 
+  /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
+  public function curlPost($url, $data) {
+      $ch = curl_init($url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      $response = curl_exec($ch);
+      curl_close($ch);
+
+      return $response;
+  }
  
 
  
