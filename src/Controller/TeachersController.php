@@ -2896,6 +2896,14 @@ public function addStudent() {
           if (empty($subskills)) {
            $message = 'Result Not Found.'; 
           }
+        } if($skill != '-1') {
+         $subskill = $course_detail->find()->where(['parent_id IN'=> $skill])->toArray();
+          foreach ($subskill as $key => $value) {
+            $subskils[$key] = $value['course_id'];
+          }
+          if (empty($subskils)) {
+           $message = 'Result Not Found.'; 
+          }
         }
         $connection = ConnectionManager::get('default');
         if($message == '') {
@@ -2916,9 +2924,9 @@ public function addStudent() {
                     ." ORDER BY question_master.id DESC ".$limit;
 
           }else if($grade != -1 && $course != -1 && $skill != -1) {//111
-            $sql = " SELECT * ,question_master.status from question_master"
+             $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "                      
-                    . " WHERE question_master.created_by = ".$user_id ." AND grade_id =". $grade." AND course_id =".$skill
+                    . " WHERE question_master.created_by = ".$user_id ." AND question_master.grade_id =". $grade." AND question_master.course_id IN (".implode(',',$subskils).")"
                     ." ORDER BY question_master.id DESC ".$limit; 
           }
           $users_record = $connection->execute($sql)->fetchAll('assoc');
