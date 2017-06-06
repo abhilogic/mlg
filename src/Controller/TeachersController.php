@@ -2802,8 +2802,8 @@ public function addStudent() {
     $this->set([
       'data'=> $users_record,
       'lastPage' => $last_page,
-      'start'=> (($current_page - 1) * 10)+1,
-      'last' => (($current_page - 1) * 10)+10,
+      'start'=> (($current_page - 1) * $range)+1,
+      'last' => (($current_page - 1) * $range)+$range,
       'total' => $count,
       '_serialize' => ['data','lastPage','start','last','total']
     ]);
@@ -2864,6 +2864,7 @@ public function addStudent() {
       $result = '';
       $subskills = '';
       $users_record = '';
+      $range = 10;
       if($user_id == NULL) {
         $message = 'login first';
         throw new Exception('login first');
@@ -2875,13 +2876,13 @@ public function addStudent() {
         }
         $question = TableRegistry::get('question_master');  
         $count = $question->find()->where(['created_by' => $user_id])->count();
-        $last_page = ceil($count / 10);
+        $last_page = ceil($count / $range);
         if ($current_page < 1) {
             $current_page = 1;
         } elseif ($current_page > $last_page && $last_page > 0) {
             $current_page = $last_page;
         }
-        $limit = 'limit ' . ($current_page - 1) * 10 . ',' . 10;
+        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
         if($course != -1) {
           $course_detail = TableRegistry::get('course_details');
           $result = $course_detail->find('all')->where(['parent_id'=> $course])->toArray();
@@ -2939,8 +2940,8 @@ public function addStudent() {
     $this->set([
       'data'=> $users_record,
       'lastPage' => $last_page,
-      'start'=> (($current_page - 1) * 10)+1,
-      'last' => (($current_page - 1) * 10)+10,
+      'start'=> (($current_page - 1) * $range)+1,
+      'last' => (($current_page - 1) * $range)+$range,
       'total' => $count,
       '_serialize' => ['data','lastPage','start','last','total']
     ]);
@@ -3344,6 +3345,7 @@ public function getLessonDetailForListing($user_id=null,$pnum=1){
     $message = '';
     $count = '';
     $users_record = '';
+    $range = 10;
     if($user_id == NULL) {
       $message = 'login first';
       throw new Exception('login first');
@@ -3355,13 +3357,13 @@ public function getLessonDetailForListing($user_id=null,$pnum=1){
       }
       $question = TableRegistry::get('question_master');  
       $count = $question->find()->where(['created_by' => $user_id])->count();
-      $last_page = ceil($count / 10);
+      $last_page = ceil($count / $range);
       if ($current_page < 1) {
           $current_page = 1;
       } elseif ($current_page > $last_page && $last_page > 0) {
           $current_page = $last_page;
       }
-      $limit = ($current_page - 1) * 10 . ',' . 10;
+      $limit = ($current_page - 1) * $range . ',' . $range;
       $course_content = TableRegistry::get('course_contents');
       $course_details = $course_content->find()->where(['created_by' =>$user_id])->orderDESC('id'); 
     }
@@ -3371,10 +3373,89 @@ public function getLessonDetailForListing($user_id=null,$pnum=1){
   $this->set([
       'data'=> $course_details,
       'lastPage' => $last_page,
-      'start'=> (($current_page - 1) * 10)+1,
-      'last' => (($current_page - 1) * 10)+10,
+      'start'=> (($current_page - 1) * $range)+1,
+      'last' => (($current_page - 1) * $range)+$range,
       'total' => $count,
       '_serialize' => ['data','lastPage','start','last','total']
     ]);
-}
+  }
+  public function filteredTeacherLessons($user_id=null,$pnum=1,$grade,$course,$skill) {
+    try{
+      $message = '';
+      $count = '';
+      $result = '';
+      $subskills = '';
+      $users_record = '';
+      $range = 10;
+      if($user_id == NULL) {
+        $message = 'login first';
+        throw new Exception('login first');
+      }
+      if($message == '') {
+        $current_page = 1;
+        if (!empty($pnum)) {
+            $current_page = $pnum;
+        }
+        $course_content = TableRegistry::get('course_contents');  
+        $count = $course_content->find()->where(['created_by' => $user_id])->count();
+        $last_page = ceil($count /$range);
+        if ($current_page < 1) {
+            $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+            $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+        $connection = ConnectionManager::get('default');
+        if($message == '') {
+          $course_detail = TableRegistry::get('course_details');
+          if($grade != -1 && $course == -1 && $skill == -1) {
+            $query = "SELECT cd.course_id from courses as cs  "
+                      . "INNER JOIN course_details as cd ON cd.parent_id = cs.id "
+                      . "WHERE cs.level_id = ".$grade;
+            $temp_result = $connection->execute($query)->fetchAll('assoc');
+            foreach ($temp_result as $key => $value) {
+              $skils[$key] = $value['course_id'];
+            }
+            $subskil = $course_detail->find('all')->where(['parent_id IN'=> $skils]);
+            foreach ($subskil as $key => $value) {
+              $subskill[$key] = $value['course_id'];
+            }
+          }else if($grade != -1 && $course != -1 && $skill == -1) { 
+            $result = $course_detail->find('all')->where(['parent_id'=> $course])->toArray();
+            $skills = '';
+            foreach ($result as $key => $value) {
+              $skills[$key] = $value['course_id'];
+            }
+            $subskills = $course_detail->find('all')->where(['parent_id IN'=> $skills]);
+            foreach ($subskills as $key => $value) {
+              $subskill[$key] = $value['course_id'];
+            }
+            if (empty($subskill)) {
+             $message = 'Result Not Found.'; 
+            }
+          } else if($grade != -1 && $course != -1 && $skill != -1) {
+           $subskil = $course_detail->find()->where(['parent_id IN'=> $skill])->toArray();
+            foreach ($subskil as $key => $value) {
+              $subskill[$key] = $value['course_id'];
+            }
+            if (empty($subskill)) {
+             $message = 'Result Not Found.'; 
+            }
+          }
+          $users_record = $course_content->find('all')->where(['course_detail_id IN' => $subskill,'created_by' => $user_id])->toArray();
+        }
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserQuestions function in Teachers Controller.'
+              .$e->getMessage().'(' . __METHOD__ . ')'); 
+    }
+    $this->set([
+      'data'=> $users_record,
+      'lastPage' => $last_page,
+      'start'=> (($current_page - 1) * $range)+1,
+      'last' => (($current_page - 1) * 10)+10,
+      'total' => $count,
+      '_serialize' => ['data','lastPage','start','last','total']
+    ]);  
+  }
 }
