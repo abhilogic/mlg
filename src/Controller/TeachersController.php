@@ -1508,7 +1508,7 @@ public function addStudent() {
                 $data['message']="teacher_id cannot be null. Please check it";
             }
 
-           
+          
             $this->set([           
               'response' => $data,
                '_serialize' => ['response']
@@ -2742,10 +2742,14 @@ public function addStudent() {
   }
   // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
-  public function curlPost($url, $data) {
+  public function curlPost($url, $data = array(), $json_postfields = FALSE) {
       $ch = curl_init($url);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
       curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      if ($json_postfields) {
+        $headers[] = "Content-Type: application/json";
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+      }
       $response = curl_exec($ch);
       curl_close($ch);
 
@@ -3224,4 +3228,161 @@ public function addStudent() {
     ]);
   }
 
+  /*
+   * getTeachersOfStudents().
+   */
+  public function getTeachersOfStudents() {
+    try{
+      $status = FALSE;
+      $record_found = 0;
+      $relationship = array();
+      $message = '';
+      if (!isset($this->request->data['sid'])) {
+        $message = 'Please provide student id';
+        throw new Exception('Please provide student id');
+      }
+      if (!empty($this->request->data['sid'])) {
+        $sid = $this->request->data['sid'];
+        if (is_array($sid)) {
+          $sid = implode(',', $sid);
+        }
+      } else {
+        $message = 'student id cannot be empty';
+        throw new Exception('student id cannot be empty');
+      }
+      $student_teachers_table = TableRegistry::get('student_teachers');
+      $students_teachers = $student_teachers_table->find()->where(['student_id IN ('. $sid .')']);
+      if ($record_found = $students_teachers->count()) {
+        $status = 2;
+        foreach ($students_teachers as $data) {
+          $relationship[$data->student_id] = $data->teacher_id;
+        }
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'record_found' => $record_found,
+      'student_teacher_relation' => $relationship,
+      '_serialize' => ['status', 'message', 'student_teacher_relation', 'record_found']
+    ]);
+  }
+
+  /**
+   * timeSpentByClassOnPlatform()
+   */
+  public function timeSpentByClassOnPlatform() {
+    try {
+      $base_url = Router::url('/', true);
+      $request = $this->request;
+      $user_ids['user_ids'] = array();
+      $date = '';
+      $total_duration_in_secs = $total_duration_in_hrs = $average_duration_in_hrs = 0;
+      $number_of_students = 0;
+      $status = FALSE;
+      $message = '';
+      if ($request->is('post')) {
+        if (isset($request->data['sid'])) {
+          $json_teacher_of_student = $this->curlPost($base_url.'teachers/getTeachersOfStudents/', json_encode(array('sid' => $request->data['sid'])), TRUE);
+          $teacher_of_student = json_decode($json_teacher_of_student, TRUE);
+          if ($teacher_of_student['status'] == TRUE) {
+            $request->data['tid'] = $teacher_of_student['student_teacher_relation'][$request->data['sid']];
+          }
+        }
+        if (!isset($request->data['tid'])) {
+          $message = 'Teacher id not found';
+          throw new Exception('Teacher Id not found');
+        }
+        $json_students_of_teacher = $this->curlPost($base_url.'teachers/getStudentOfTeacher/' . $request->data['tid']);
+        $students_of_teacher = json_decode($json_students_of_teacher, TRUE);
+        if (!empty($students_of_teacher)) {
+          foreach ($students_of_teacher['response']['students'] as $student) {
+            $user_ids['user_ids'][] = $student['id'];
+          }
+        }
+        if (!empty($user_ids['user_ids'])) {
+          $status = TRUE;
+          $json_time_spent_on_platform = $this->curlPost($base_url.'teachers/timeSpentOnPlatform/', json_encode($user_ids), TRUE);
+          $time_spent_by_class_on_platform = json_decode($json_time_spent_on_platform, TRUE);
+          if ($time_spent_by_class_on_platform['status'] == TRUE) {
+            $total_duration_in_secs = $time_spent_by_class_on_platform['total_duration_in_secs'];
+            $total_duration_in_hrs = $time_spent_by_class_on_platform['total_duration_in_hrs'];
+            $number_of_students = count($user_ids['user_ids']);
+            if ($number_of_students != 0) {
+              $average_duration_in_hrs = round($total_duration_in_hrs/$number_of_students, 2);
+            }
+          }
+        } else {
+          $message = 'There are no students related to teacher';
+        }
+      } else {
+        $message = 'Some error occured';
+        throw new Exception('Request is not POST');
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+     'total_duration_in_secs' => $total_duration_in_secs,
+     'total_duration_in_hrs' => $total_duration_in_hrs,
+     'average_duration_in_hrs' => $average_duration_in_hrs,
+     'user_ids' => $user_ids['user_ids'],
+     'number_of_students' => $number_of_students,
+     'date' => $date,
+      '_serialize' => ['status', 'message', 'total_duration_in_secs',
+        'total_duration_in_hrs', 'user_ids', 'average_duration_in_hrs', 'number_of_students', 'date']
+    ]);
+  }
+
+  /**
+   * timeSpentOnPlatform().
+   */
+  public function timeSpentOnPlatform() {
+    try {
+      $request = $this->request;
+      $request_data = $request->data;
+      $total_duration_in_secs = $total_duration_in_hrs = 0;
+      $status = FALSE;
+      $message = '';
+      $week = isset($request_data['week']) ? $request_data['week'] : -1;
+      $date = date("Y-m-d", strtotime("$week week"));
+      if ($request->is('post')) {
+        $user_login_sessions = TableRegistry::get('user_login_sessions');
+        $query = $user_login_sessions->find();
+        $query_result = $query->select(['sum' => $query->func()->sum('user_login_sessions.time_spent')])
+          ->where([
+            'check_in >=' => $date,
+            'user_id IN (' . implode(',', $request_data['user_ids']) . ')',
+            'time_spent IS NOT NULL'
+        ]);
+        if (!empty($query_result)) {
+          foreach ($query_result as $query_response) {
+            $status = TRUE;
+            $total_duration_in_secs = !empty($query_response->sum) ? $query_response->sum : 0;
+            $total_duration_in_hrs = round($total_duration_in_secs / (60*60), 2);
+          }
+        } else {
+          $message = 'No record found';
+        }
+      } else {
+        $message = 'Some error occured';
+        throw new Exception('Request is not POST');
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+     'total_duration_in_secs' => $total_duration_in_secs,
+     'total_duration_in_hrs' => $total_duration_in_hrs,
+     'date' => $date,
+     'user_ids' => $request->data['user_ids'],
+      '_serialize' => ['status', 'message', 'total_duration_in_secs', 'total_duration_in_hrs', 'user_ids', 'date']
+    ]);
+  }
 }
