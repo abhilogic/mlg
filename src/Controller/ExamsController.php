@@ -321,7 +321,14 @@ public function setUserQuizResponse(){
                       $postdata['exam_date']  =time();       
                       $item_id =isset($attendQuizRes['item_id'])?$attendQuizRes['item_id']:"null";
                       $itemid = explode('-', $item_id);
-                      $postdata['item_id']=$itemid[1];
+
+                      if(isset($itemid[1])){
+                        $postdata['item_id']=$itemid[1];
+                      }
+                      else{
+                        $postdata['item_id']=$item_id;
+                      }
+                      
 
                       $new_userQuizResponse = $userQuizResponses->newEntity($postdata);
                       if ($userQuizResponses->save($new_userQuizResponse)) {
