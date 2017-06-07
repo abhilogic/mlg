@@ -141,12 +141,13 @@ public function getAssignmentItems($assignment_id = null){
 
     if(!empty($assignment_id)){
         // To find items of quiz/assignment            
-        $sql ="SELECT
-            qitem.item_id as question_id, qz.id as quiz_id, qz.name as quiz_name, max_marks, max_questions,qitem.item_id as question_id, qz.modified as created, adetails.id as assignment_id, grade_id, course_id, cr.course_name, group_id, student_id,assignment_for, schedule_time , adetails.comments        
-           from quizes as qz"                    
-               . " INNER JOIN quiz_items as qitem ON qz.id = qitem.exam_id "
-                ." INNER JOIN assignment_details as adetails ON qz.id = adetails.quiz_id " 
-                ." INNER JOIN courses as cr ON  cr.id = adetails.course_id "          
+       $sql ="SELECT
+             qz.id as quiz_id, qz.name as quiz_name, qz.max_marks, qz.max_questions, qz.modified as created, qitem.item_id as question_id, adetails.id as assignment_id, adetails.grade_id, adetails.course_id, adetails.comments,  adetails.group_id, adetails.student_id,adetails.assignment_for, adetails.schedule_time ,cr.course_name,qm.*       
+           from assignment_details as adetails" 
+                ." INNER JOIN quizes as qz ON qz.id = adetails.quiz_id "              
+               . " INNER JOIN quiz_items as qitem ON qz.id = qitem.exam_id "          
+                ." INNER JOIN courses as cr ON  cr.id = adetails.course_id "
+                ." INNER JOIN question_master as qm ON  qitem.item_id = qm.id "       
                 . " WHERE adetails.id=$assignment_id" ;
 
               $connection = ConnectionManager::get('default');
@@ -156,16 +157,76 @@ public function getAssignmentItems($assignment_id = null){
             $data['counts'] = $count;
             if($count > 0){
                 foreach ($results as $result) {
-                  $data['items'][] = $result; 
+                  //$data['items'][] = $result; 
+
+                $assign_detail['assignment_id']   = $result['assignment_id'];        
+                $assign_detail['course_id']       = $result['course_id'];
+                $assign_detail['course_name']     = $result['course_name'];
+                $assign_detail['assignment_for']  = $result['assignment_for'];
+                $assign_detail['grade_id']        = $result['grade_id']; 
+                $assign_detail['group_id']        = $result['group_id'];
+                $assign_detail['student_id']      = $result['student_id']; 
+                $assign_detail['schedule_time']   = $result['schedule_time'];        
+                $assign_detail['comments']        = $result['comments'];
+                $assign_detail['quiz_id']         = $result['quiz_id'];
+                $assign_detail['quiz_name']       = $result['quiz_name'];
+                $assign_detail['max_questions']   = $result['max_questions'];
+                $assign_detail['max_marks']       = $result['max_marks'];
+                $assign_detail['created']         = $result['created'];
+
+                //Question Details
+                $assign_ques['question_id']   = $result['question_id'];
+                $assign_ques['question_name']   = $result['questionName'];
+                $assign_ques['type']        = $result['type'];
+                $assign_ques['level']        = $result['level'];
+                $assign_ques['uniqueId']        = $result['uniqueId'];
+
+
+                // to get the options of question
+                // Find option to question
+                   $option_sql = "SELECT * FROM option_master WHERE uniqueId ='".$result['uniqueId']."'";
+                   $optionRecords = $connection->execute($option_sql)->fetchAll('assoc');
+                   $optionArray =[];  
+                   if(count($optionRecords) > 0){                                     
+                      foreach ($optionRecords as $optionRow) {
+                        $optionArray[]=array('value'=>$optionRow['options'],'label'=>$optionRow['options']);                         
+                      }
+                      $assign_ques['options'] =  $optionArray;             
+                                             
+                   }else{
+                    $assign_ques['options'] = [];
+                    $assign_ques ['option_message'] = "Option is not available in data";
+                   }
+
+
+                   // Find Answers for a question
+                   $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='".$result['uniqueId']."'";
+                   $answerRecords = $connection->execute($answer_sql)->fetchAll('assoc');
+                   $answerArray =[];
+                   if(count($answerRecords) > 0){                       
+                      foreach ($answerRecords as $answerRow) {
+                        $answerArray[]=array('value'=>$answerRow['answers'],'score'=>1);                        
+                      } 
+                     $assign_ques['answer'] =  $answerArray;
+                                       
+                   }else{
+                    $assign_ques['answer'] = [];
+                    $assign_ques ['answer_message'] = "No correct answer available.";
+                   }
+
+                   $data['status'] =True;
+                   $data['assignment_details'] = $assign_detail ;
+                   $data['questions'][] =$assign_ques;
                 }
-                $data['status'] ="True";
+                
+                
             }else{
-              $data['status'] ="False";
+              $data['status'] =False;
               $data['message'] ="No record found fir this assignments.";
             }
 
     }else{
-      $data['status'] ="False";
+      $data['status'] =False;
       $data['message'] ="assignment_id id cannot null.";
     }
 
