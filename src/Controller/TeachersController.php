@@ -1719,8 +1719,8 @@ class TeachersController extends AppController {
                 $rel = $relation->newEntity();
                 $rel->template_id = $this->request->data['template_id'];
                 $rel->template_type = 'question';
-                $rel->created_by = $temp[0]['created_by'];
-                $rel->content_id = $temp[0]['content_id'];
+                $rel->created_by = $this->request->data['tid'];
+                $rel->content_id = $insertedId;
                 $relation->save($rel);
               }
             } else {
