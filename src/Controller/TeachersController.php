@@ -2994,7 +2994,10 @@ class TeachersController extends AppController {
           }
           $subject = $courses->find()->where(['id IN' => $temp_sub_id])->toArray();
           $temp_tpl = $template->find()->where(['content_id IN' => $id, 'created_by' => $user_id, 'template_type' => 'question'])->toArray();
-          $temp_details = $template_detail->find('all')->where(['id' => $temp_tpl[0]['template_id']])->toArray();
+          $temp_details = '';
+          if (isset($temp_tpl[0]['template_id']) && !empty($temp_tpl[0]['template_id'])) {
+            $temp_details = $template_detail->find('all')->where(['id' => $temp_tpl[0]['template_id']])->toArray();
+          }
           $status = TRUE;
         } else {
           $message = 'Question Not found.';
@@ -3441,7 +3444,6 @@ class TeachersController extends AppController {
       }
     } catch (Exception $e) {
       $this->log('Error in getUserQuestions function in Teachers Controller.'
-<<<<<<< Updated upstream
         . $e->getMessage() . '(' . __METHOD__ . ')');
     }
     $this->set([
