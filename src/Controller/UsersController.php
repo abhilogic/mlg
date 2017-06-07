@@ -1330,7 +1330,8 @@ class UsersController extends AppController{
           ],
             
          ]);
-         $user_id = $this->Auth->user('id');
+         $user = $this->Auth->identify();
+         $user_id = $user['id'];
          $user_login_sessions = TableRegistry::get('user_login_sessions');
          $user_login_sessions_row = $user_login_sessions->find()->where(['user_id' =>  $user_id, 'check_out IS NULL']);
          if ($user_login_sessions_row->count() > 0) {
