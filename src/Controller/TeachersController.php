@@ -1588,7 +1588,7 @@ class TeachersController extends AppController {
     }
   }
 
-  protected function sendEmail($to, $from, $subject = null, $email_message = null) {
+  /*protected function sendEmail($to, $from, $subject = null, $email_message = null) {
     try {
       $status = FALSE;
       //send mail
@@ -1602,7 +1602,40 @@ class TeachersController extends AppController {
       $this->log($ex->getMessage());
     }
     return $status;
-  }
+  }*/
+
+  sendEmail($to = null, $from = null, $subject = null, $email_message = null) {
+          try {
+            $status = FALSE;
+            $message = '';
+            $to = isset($this->request->data['to']) ? $this->request->data['to'] : $to;
+            $from = isset($this->request->data['from']) ? $this->request->data['from'] : $from;
+            $subject = isset($this->request->data['from']) ? $this->request->data['subject'] : $subject;
+            $email_message = isset($this->request->data['email_message']) ? $this->request->data['email_message'] : $email_message;
+
+            if (empty($to)) {
+              $message = "Mail Address 'to' cannot be empty";
+              throw new Exception($message);
+            }
+            if (empty($from)) {
+              $message = "Mail Address 'from' cannot be empty";
+              throw new Exception($message);
+            }
+            //send mail
+            $email = new Email();
+            $email->to($to)->from($from);
+            $email->subject($subject);
+            $email->emailFormat('html');
+            if ($email->send($email_message)) {
+              $status = TRUE;
+            }else{
+              $status = FALSE;
+            }
+          } catch (Exception $ex) {
+            $this->log($ex->getMessage());
+          }
+          return $status;
+       }
 
   /**
    * create an api for save question.
