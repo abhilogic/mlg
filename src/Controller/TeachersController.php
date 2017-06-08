@@ -1604,7 +1604,7 @@ class TeachersController extends AppController {
     return $status;
   }*/
 
-  sendEmail($to = null, $from = null, $subject = null, $email_message = null) {
+  public function sendEmail($to = null, $from = null, $subject = null, $email_message = null) {
           try {
             $status = FALSE;
             $message = '';
