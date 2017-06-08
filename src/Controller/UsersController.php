@@ -165,7 +165,7 @@ class UsersController extends AppController{
       if ($user_record > 0) {
         $data['user'] = $this->Users->get($id);
         $data['user_all_details'] = $this->Users->find('all')->where(['user_id' => $id])->contain(['UserDetails']);
-        $data['image_directory'] = Router::url('/', true) . 'upload';
+        $data['image_directory'] = Router::url('/', true);
       } else {
         $data['response'] = "Record is not found";
       }
@@ -2796,7 +2796,7 @@ class UsersController extends AppController{
                 $user_details_table = TableRegistry::get('UserDetails');
                 $user_details = $user_details_table->find()->where(['user_id' => $data['user_id']]);
                 foreach ($user_details as $user_detail) {
-                  $user_detail->profile_pic = $response['file_name'];
+                  $user_detail->profile_pic = DEFAULT_IMAGE_DIRECTORY . $response['file_name'];
                 }
                 if (!$user_details_table->save($user_detail)) {
                   $message = 'unable to save Profile image';
