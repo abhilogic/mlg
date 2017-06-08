@@ -1500,8 +1500,8 @@ public function addStudent() {
                           }else{
                             $student['profile_pic'] = $studentrow['profile_pic'];
                           }
-                          $data['students'][]=$student;
-                      }    
+                          $data['students'][] = $student;
+                      }
                       $data['status']="true";                  
 
                   }else{
@@ -1517,7 +1517,8 @@ public function addStudent() {
           
             $this->set([           
               'response' => $data,
-               '_serialize' => ['response']
+              'number_of_students' => isset($data['students']) ? count($data['students']) : 0,
+              '_serialize' => ['response', 'number_of_students']
           ]);
 
 
@@ -3590,6 +3591,14 @@ public function addStudent() {
       $week = isset($request_data['week']) ? $request_data['week'] : -1;
       $date = date("Y-m-d", strtotime("$week week"));
       if ($request->is('post')) {
+        if (!isset($request_data['user_ids'])) {
+          $message = 'user id required';
+          throw new Exception('user id required');
+        }
+        if (empty($request_data['user_ids'])) {
+          $message = 'user id can not be empty';
+          throw new Exception('user id can not be empty');
+        }
         $user_login_sessions = TableRegistry::get('user_login_sessions');
         $query = $user_login_sessions->find();
         $query_result = $query->select(['sum' => $query->func()->sum('user_login_sessions.time_spent')])
@@ -3622,6 +3631,43 @@ public function addStudent() {
       'date' => $date,
       'user_ids' => $request->data['user_ids'],
       '_serialize' => ['status', 'message', 'total_duration_in_secs', 'total_duration_in_hrs', 'user_ids', 'date']
+    ]);
+  }
+
+  /**
+   * saveQuotation.
+   */
+  public function setQuotation() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+       $message = 'user id not exist';
+       throw new Exception($message);
+      }
+      if (!isset($this->request->data['quotation'])) {
+        $message = "Quotation not exist";
+        throw new Exception($message);
+      }
+      $quotations_table = TableRegistry::get('quotations');
+      $new_quotation = $quotations_table->newEntity(array(
+        'user_id' => $this->request->data['user_id'],
+        'quotation_content' => json_encode($this->request->data['quotation']),
+        'created' => time(),
+      ));
+      if (!$quotations_table->save($new_quotation)) {
+        $message = 'Some Error occured while saving Quotation';
+        throw new Exception($message);
+      } else {
+        $status = TRUE;
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
     ]);
   }
 }
