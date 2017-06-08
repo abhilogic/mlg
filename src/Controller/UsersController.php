@@ -2535,7 +2535,7 @@ class UsersController extends AppController{
           $imgData = base64_decode($img);
           $image =  'Avtar_'.$id.'.png';
           // Path where the image is going to be saved
-          $filePath = WWW_ROOT .'/Avtar/'.$image;
+          $filePath = WWW_ROOT .'/upload/Avtar/'.$image;
           // Delete previously uploaded image
           if (file_exists($filePath)) {
            unlink($filePath);
@@ -2547,7 +2547,7 @@ class UsersController extends AppController{
           $user = TableRegistry::get('user_details');
           $query = $user->query();
           $result = $query->update()->set([
-                'profile_pic' => '/Avtar/'.$image,
+                'profile_pic' => '/upload/Avtar/'.$image,
                 'step_completed' => '1',
              ])->where(['user_id' => $id ])->execute();
           $row_count = $result->rowCount();

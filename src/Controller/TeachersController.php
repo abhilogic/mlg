@@ -553,6 +553,7 @@ class TeachersController extends AppController {
       $connection = ConnectionManager::get('default');
       $status = FALSE;
       $message = '';
+      $id = '';
       $template_detail = TableRegistry::get('ContentTemplate');
       $relation = TableRegistry::get('content_template_relation');
       if (isset($this->request->data) && !empty($this->request->data)) {
@@ -574,6 +575,7 @@ class TeachersController extends AppController {
           } else if (empty($this->request->data['temp_name'])) {
             $message = 'Please give template name.';
           } else {
+            //content_share_mode column in course_content 0 privat 1 public
             $standard = implode(',', $this->request->data['standard']);
             $standard_type = implode(',', $this->request->data['standard_type']);
             $content = $template_detail->newEntity();
@@ -658,7 +660,7 @@ class TeachersController extends AppController {
           }
         }
       }
-      if ($status == TRUE) {
+      if ($status == TRUE && isset($this->request->data['last_question_id']) && !empty($this->request->data['last_question_id'])) {
           $rel = $relation->newEntity();
           $rel->template_id = $id;
           $rel->template_type = $this->request->data['cont_type'];
