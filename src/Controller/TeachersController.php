@@ -408,7 +408,7 @@ class TeachersController extends AppController {
           foreach ($subskill as $key => $value) {
             $detail = $course_detail->newEntity();
             if ($id != 0) {
-              $detail->id = $id;
+              $detail->id = $id+1;
             }
             $detail->created_by = $uid;
             $detail->lesson_name = isset($this->request->data['lesson']) ? $this->request->data['lesson'] : '';
@@ -586,7 +586,10 @@ class TeachersController extends AppController {
             $content->skill_ids = implode(',', $this->request->data['skills']);
             $content->sub_skill_ids = implode(',', $this->request->data['sub_skill']);
             $content->content_type = isset($this->request->data['cont_type']) ? $this->request->data['cont_type'] : '';
-            if ($template_detail->save($content)) {
+            $content->content_type = isset($this->request->data['cont_type']) ? $this->request->data['cont_type'] : '';
+            $content->template_status = isset($this->request->data['template_status']) ? $this->request->data['template_status'] : '';
+            $id = $template_detail->save($content)->id;
+            if (is_numeric($id) && $id > 0) {
               $message = 'Value Inserted Successfully';
               $status = TRUE;
             }

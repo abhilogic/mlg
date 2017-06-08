@@ -2548,6 +2548,7 @@ class UsersController extends AppController{
           $query = $user->query();
           $result = $query->update()->set([
                 'profile_pic' => '/Avtar/'.$image,
+                'step_completed' => '1',
              ])->where(['user_id' => $id ])->execute();
           $row_count = $result->rowCount();
           if ($row_count == '1') {
