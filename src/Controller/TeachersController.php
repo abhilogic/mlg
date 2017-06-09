@@ -784,10 +784,10 @@ class TeachersController extends AppController {
 
   public function getUserContent() {
     try {
-//      print_r($this->request->data);
       $status = FALSE;
       $content = '';
-      $course_content = TableRegistry::get('course_contents');
+//      $course_content = TableRegistry::get('course_contents');
+      $connection = ConnectionManager::get('default');
       if ($this->request->is('post')) {
         if (isset($this->request->data['uid']) && empty($this->request->data['uid'])) {
           $content = 'please login';
@@ -798,8 +798,12 @@ class TeachersController extends AppController {
         }
       }
       if ($content == '') {
-        $skills = $this->request->data['subskills'];
-        $content = $course_content->find('all')->where(['created_by' => $this->request->data['uid'], 'course_detail_id IN' => $skills]);
+        $skills = implode(',',$this->request->data['subskills']);
+        $sql = "Select * ,cs.id as id from course_contents as cs "
+                . "INNER JOIN course_details as cd ON cd.course_id = cs.course_detail_id"
+                . " where created_by = ".$this->request->data['uid']." AND course_detail_id IN ($skills)";
+        $content = $connection->execute($sql)->fetchAll('assoc');
+//        $content = $course_content->find('all')->where(['created_by' => $this->request->data['uid'], 'course_detail_id IN' => $skills]);
         $status = TRUE;
       }
     } catch (Exception $e) {
@@ -1646,7 +1650,9 @@ class TeachersController extends AppController {
       $message = '';
       $status = FALSE;
       $insertedId = '';
+      $marks = '';
       $connection = ConnectionManager::get('default');
+      $difficulty = TableRegistry::get('difficulties');
       $relation = TableRegistry::get('content_template_relation');
       if ($this->request->is('post')) {
         if (isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
@@ -1684,6 +1690,10 @@ class TeachersController extends AppController {
         }
         if ($message == '') {
           $subskill = $this->request->data['sub_skill'];
+          $result = $difficulty->find()->where(['id'=> $this->request->data['ques_diff']])->toArray();
+          foreach($result as $kei=> $val){
+            $marks = $val['marks'];
+          }   
           foreach ($subskill as $key => $value) {
             $answer_list = explode(',', $this->request->data['answer']);
             $unique_id = date('Ymd', time()) . uniqid(9);
@@ -1700,6 +1710,7 @@ class TeachersController extends AppController {
             $question->type = implode(',', $this->request->data['ques_type']);
             $question->standard = implode(',', $this->request->data['standard']);
             $question->status = 'approved';
+            $question->marks = $marks;
             $question->uniqueId = $unique_id;
             $insertedId = $question_master->save($question)->id;
             if (is_numeric($insertedId)) {
