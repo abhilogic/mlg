@@ -21,7 +21,7 @@ class TeachersController extends AppController {
         $this->loadComponent('RequestHandler');
          $this->RequestHandler->renderAs($this, 'json');
   }
-  
+ 
   /***
     * This api is used for set teacher detail in database.
     * @return Boolean value.
@@ -3635,23 +3635,39 @@ public function addStudent() {
   }
 
   /**
-   * saveQuotation.
+   * function setQuotation.
    */
   public function setQuotation() {
     try {
       $status = FALSE;
       $message = '';
       if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
-       $message = 'user id not exist';
-       throw new Exception($message);
+        $message = 'user id not exist';
+        throw new Exception($message);
+      }
+      if (!isset($this->request->data['first_name']) && empty(trim($this->request->data['first_name']))) {
+        $message = 'first name cannot be empty';
+        throw new Exception($message);
       }
       if (!isset($this->request->data['quotation'])) {
         $message = "Quotation not exist";
         throw new Exception($message);
       }
+      $first_name = $this->request->data['first_name'];
+      $last_name = $this->request->data['last_name'];
+      $email = isset($this->request->data['email']) ? $this->request->data['email'] : '';
+      if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = 'Email is not valid';
+        throw new Exception($message);
+      }
+      $phone_number = isset($this->request->data['phone_number']) ? $this->request->data['phone_number'] : '';
       $quotations_table = TableRegistry::get('quotations');
       $new_quotation = $quotations_table->newEntity(array(
         'user_id' => $this->request->data['user_id'],
+        'first_name' => $first_name,
+        'last_name' => $last_name,
+        'email' => $email,
+        'phone_number' => $phone_number,
         'quotation_content' => json_encode($this->request->data['quotation']),
         'created' => time(),
       ));
@@ -3670,4 +3686,85 @@ public function addStudent() {
       '_serialize' => ['status', 'message']
     ]);
   }
+
+  /**
+   * function getQuotation.
+   */
+  public function getQuotation() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $conditions = $quotation_contents = $quotation_fields = array();
+      $quotations_table = TableRegistry::get('quotations');
+      if (isset($this->request->data['user_id']) && !empty($this->request->data['user_id'])) {
+        $conditions['user_id'] = $this->request->data['user_id'];
+      }
+      if (isset($this->request->data['first_name']) && !empty(trim($this->request->data['first_name']))) {
+        $conditions['first_name'] = $this->request->data['first_name'];
+      }
+      if (isset($this->request->data['email']) && !empty($this->request->data['email'])) {
+        $conditions['email'] = $this->request->data['email'];
+      }
+      if (isset($this->request->data['phone_number']) && !empty($this->request->data['phone_number'])) {
+        $conditions['phone_number'] = $this->request->data['phone_number'];
+      }
+      if (!empty($conditions)) {
+        $quotation_result = $quotations_table->find()->where($conditions);
+        if ($quotation_result->count()) {
+          $status = TRUE;
+          foreach ($quotation_result as $quotation) {
+            $quotation_contents[] = $quotation->quotation_content;
+          }
+          if (!empty($quotation_contents)) {
+            foreach ($quotation_contents as $quotation_content) {
+              $contents = json_decode($quotation_content, TRUE);
+              $data = array(
+                'first_name' => isset($contents['first_name']) ? $contents['first_name'] : '',
+                'last_name' => isset($contents['last_name']) ? $contents['last_name'] : '',
+                'email' => isset($contents['email']) ? $contents['email'] : '',
+                'phone_number' => isset($contents['phone_number']) ? $contents['phone_number'] : '',
+                'position' => isset($contents['position']) ? $contents['position'] : '',
+                'school' => isset($contents['school']) ? $contents['school'] : '',
+                'street' => isset($contents['street']) ? $contents['street'] : '',
+                'city' => isset($contents['city']) ? $contents['city'] : '',
+                'district' => isset($contents['district']) ? $contents['district'] : '',
+                'zip_code' => isset($contents['zip_code']) ? $contents['zip_code'] : '',
+                'country' => isset($contents['country']) ? $contents['country'] : '',
+                'country' => isset($contents['country']) ? $contents['country'] : '',
+                'licence' => isset($contents['licence']) ? $contents['licence'] : '',
+                'number_of_student' => isset($contents['number_of_student']) ? $contents['number_of_student'] : '',
+                'comment_for_mlg' => isset($contents['comment_for_mlg']) ? $contents['comment_for_mlg'] : '',
+              );
+              if (isset($contents['selected_course_values']) && !empty($contents['selected_course_values'])) {
+                $selected_courses = $contents['selected_course_values'];
+                foreach ($selected_courses as $courses) {
+                  $data['selected_courses'][$courses['level_id']][] = array(
+                    'id' => $courses['id'],
+                    'name' => $courses['name'],
+                    'level_id' => $courses['level_id']
+                  );
+                }
+              }
+              $quotation_fields[] = $data;
+            }
+          } else {
+            $message = 'No qutation found in your Records';
+          }
+        } else {
+          $message = 'No record found';
+        }
+      } else {
+        $message = 'At least one condition should be mentioned';
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'data' => $quotation_fields,
+      '_serialize' => ['status', 'message', 'data']
+    ]);
+  }
+
 }
