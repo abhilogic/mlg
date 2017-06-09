@@ -553,6 +553,7 @@ class TeachersController extends AppController {
       $connection = ConnectionManager::get('default');
       $status = FALSE;
       $message = '';
+      $id = '';
       $template_detail = TableRegistry::get('ContentTemplate');
       $relation = TableRegistry::get('content_template_relation');
       if (isset($this->request->data) && !empty($this->request->data)) {
@@ -574,6 +575,7 @@ class TeachersController extends AppController {
           } else if (empty($this->request->data['temp_name'])) {
             $message = 'Please give template name.';
           } else {
+            //content_share_mode column in course_content 0 privat 1 public
             $standard = implode(',', $this->request->data['standard']);
             $standard_type = implode(',', $this->request->data['standard_type']);
             $content = $template_detail->newEntity();
@@ -658,7 +660,7 @@ class TeachersController extends AppController {
           }
         }
       }
-      if ($status == TRUE) {
+      if ($status == TRUE && isset($this->request->data['last_question_id']) && !empty($this->request->data['last_question_id'])) {
           $rel = $relation->newEntity();
           $rel->template_id = $id;
           $rel->template_type = $this->request->data['cont_type'];
@@ -1586,7 +1588,7 @@ class TeachersController extends AppController {
     }
   }
 
-  protected function sendEmail($to, $from, $subject = null, $email_message = null) {
+  /*protected function sendEmail($to, $from, $subject = null, $email_message = null) {
     try {
       $status = FALSE;
       //send mail
@@ -1600,7 +1602,40 @@ class TeachersController extends AppController {
       $this->log($ex->getMessage());
     }
     return $status;
-  }
+  }*/
+
+  public function sendEmail($to = null, $from = null, $subject = null, $email_message = null) {
+          try {
+            $status = FALSE;
+            $message = '';
+            $to = isset($this->request->data['to']) ? $this->request->data['to'] : $to;
+            $from = isset($this->request->data['from']) ? $this->request->data['from'] : $from;
+            $subject = isset($this->request->data['from']) ? $this->request->data['subject'] : $subject;
+            $email_message = isset($this->request->data['email_message']) ? $this->request->data['email_message'] : $email_message;
+
+            if (empty($to)) {
+              $message = "Mail Address 'to' cannot be empty";
+              throw new Exception($message);
+            }
+            if (empty($from)) {
+              $message = "Mail Address 'from' cannot be empty";
+              throw new Exception($message);
+            }
+            //send mail
+            $email = new Email();
+            $email->to($to)->from($from);
+            $email->subject($subject);
+            $email->emailFormat('html');
+            if ($email->send($email_message)) {
+              $status = TRUE;
+            }else{
+              $status = FALSE;
+            }
+          } catch (Exception $ex) {
+            $this->log($ex->getMessage());
+          }
+          return $status;
+       }
 
   /**
    * create an api for save question.
