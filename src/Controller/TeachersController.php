@@ -1892,6 +1892,7 @@ class TeachersController extends AppController {
     $data['message'] = "";
     $connection = ConnectionManager::get('default');
 
+//pr($this->request->data);
 
     $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,
                  mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,cm.state, GUID,ParentGUID, AuthorityGUID, Document, Label, Number,Description,Year, createdDate
@@ -2016,14 +2017,14 @@ class TeachersController extends AppController {
 
 
         // Find Answers for a question
-        $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
+         $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
         $answerRecords = $connection->execute($answer_sql)->fetchAll('assoc');
         if ($answerRecords > 0) {
           foreach ($answerRecords as $answerRow) {
             $answerArray[] = array('value' => $answerRow['answers'], 'score' => 1);
             $quiz_marks = $quiz_marks + 1;
           }
-          // $question_info['answers'] =  $answerArray; 
+           $question_info['answers'] =  $answerArray; 
           $answerArray = [];
         } else {
           $question_info ['answer_message'] = "No Answer Found for this question";
@@ -2031,16 +2032,20 @@ class TeachersController extends AppController {
 
         //Question Collections
         $questions[] = $question_info;
+
       }
 
       //Result 1-  if quiz is a custom Assignment  
-      if ($user_id == null) {
+      if ($user_id == null) {        
         $data['questions'] = $questions;
       }
       // Result 2-  if quiz is auto generated
       else {
-        // Create Quiz                
-        $quiz = $this->createQuiz($limit, $ques_ids, $quiz_marks, $user_id);
+
+        // Create Quiz 
+        $epoch = date("YmdHis");
+      $quiz_name = "autoStudentSubskillQuiz-" . $epoch;                      
+        $quiz = $this->createQuiz($quiz_name, $limit, $ques_ids, $quiz_marks, $user_id);
         if ($quiz['status'] == "True") {
           $quiz_id = $quiz['quiz_id'];
         } else {
@@ -2049,8 +2054,10 @@ class TeachersController extends AppController {
 
         foreach ($questions as $ques) {
           $questions_detail['quiz_id'] = $quiz_id;
-          $data[] = array_merge($questions_detail, $ques);
+          $quesList[] = array_merge($questions_detail, $ques);
+
         }
+        $data['questions'] = $quesList;
       }
     } else {
       $data['status'] = "False";
@@ -2064,11 +2071,12 @@ class TeachersController extends AppController {
     ]);
   }
 
-  public function createQuiz($limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
+  public function createQuiz($quiz_name,$limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
     if (!empty($itemsIds) && !empty($limit) && !empty($quiz_marks)) {
       $date = date("Y-m-d H:i:s");
       $epoch = date("YmdHis");
-      $quiz_info['name'] = "external-" . $epoch;
+      $quiz_name = "external-" . $epoch;
+      $quiz_info['name'] = isset($this->request->data['quiz_name']) ? $this->request->data['quiz_name'] : $quiz_name;
       $quiz_info['is_graded'] = 1;
       $quiz_info['is_time'] = 1;
       $quiz_info['max_marks'] = $quiz_marks;
