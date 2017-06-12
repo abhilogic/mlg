@@ -793,7 +793,17 @@ class CoursesController extends AppController{
      }
        
      public function getAllCourseList($parent_id=0, $type=null, $course_id = null, $user_id = null){
-      try{
+      try {
+        $base_url = Router::url('/', true);
+        $teacher_controller = new TeachersController();
+        if ($parent_id == null || $parent_id == 'null') {
+          $json_course_parent_response = $teacher_controller->curlPost($base_url.'courses/getCourseInfo/' . $course_id);
+          $course_parent_response = json_decode($json_course_parent_response, TRUE);
+          if (isset($course_parent_response['response']) && $course_parent_response['response']['skill_info_of_subskill']
+            && !empty($course_parent_response['response']['skill_info_of_subskill'])) {
+            $parent_id = $course_parent_response['response']['skill_info_of_subskill']['id'];
+          }
+        }
         $khan_api_slugs = array();
         $teacher_contents = array();
         $khan_api_content_title = array();
@@ -831,8 +841,6 @@ class CoursesController extends AppController{
           }
           if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
             $teacher_id = '';
-            $teacher_controller = new TeachersController();
-            $base_url = Router::url('/', true);
             $json_student_teacher_response = $teacher_controller->curlPost($base_url.'teachers/getTeachersOfStudents/', json_encode(array('sid' => $user_id)), TRUE);
             $student_teacher_response = json_decode($json_student_teacher_response, TRUE);
             if ($student_teacher_response['status'] == TRUE) {
