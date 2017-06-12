@@ -7,6 +7,7 @@ use Cake\I18n\Time;
 use Cake\Core\Exception\Exception;
 use Cake\Routing\Router;
 use Cake\Datasource\ConnectionManager;
+use App\Controller\TeachersController;
 
 /**
  * Courses Controller
@@ -762,7 +763,8 @@ class CoursesController extends AppController{
 */
 
      public function getCourseListForLevel($grade=null){
-        if($grade!=null){
+       $data = array('message' => '', 'courses' => array(), 'course_list' => '');
+       if($grade!=null){
           $courses_count= $this->Courses->find('all')->where(['level_id'=>$grade])->count();
          /*$courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails'=>['CourseContents'] ]);*/
           $courses= $this->Courses->find('all')->where(['level_id'=>$grade , 'parent_id'=>0])->contain(['CourseDetails']);
@@ -770,7 +772,7 @@ class CoursesController extends AppController{
               foreach ($courses as $course) {
                 $data['message']="Records to course level $grade ";
                 $data['courses'][]= $course;
-                 $data['course_list']= 1;
+                $data['course_list']= 1;
               }
           }else{
             $data['message']="Records is not found ";
@@ -790,7 +792,7 @@ class CoursesController extends AppController{
 
      }
        
-     public function getAllCourseList($parent_id=0, $type=null, $course_id = null){
+     public function getAllCourseList($parent_id=0, $type=null, $course_id = null, $user_id = null){
       try{
         $khan_api_slugs = array();
         $teacher_contents = array();
@@ -829,6 +831,17 @@ class CoursesController extends AppController{
           }
           if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
             $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
+            $teacher_id = '';
+            $teacher_controller = new TeachersController();
+            $base_url = Router::url('/', true);
+            $json_student_teacher_response = $teacher_controller->curlPost($base_url.'teachers/getTeachersOfStudents/', json_encode(array('sid' => $user_id)), TRUE);
+            $student_teacher_response = json_decode($json_student_teacher_response, TRUE);
+            if ($student_teacher_response['status'] == TRUE) {
+              if (isset($student_teacher_response['student_teacher_relation'][$user_id])) {
+                $teacher_id = $student_teacher_response['student_teacher_relation'][$user_id];
+              }
+            }
+            $sql.= ' AND created_by = ' . "'" . $teacher_id . "'";
             $course_detail['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
           }
           if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
