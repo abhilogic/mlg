@@ -830,7 +830,6 @@ class CoursesController extends AppController{
             }
           }
           if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
-            $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
             $teacher_id = '';
             $teacher_controller = new TeachersController();
             $base_url = Router::url('/', true);
@@ -841,7 +840,8 @@ class CoursesController extends AppController{
                 $teacher_id = $student_teacher_response['student_teacher_relation'][$user_id];
               }
             }
-            $sql.= ' AND created_by = ' . "'" . $teacher_id . "'";
+            $sql = "SELECT DISTINCT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
+            $sql.= ' AND (created_by = ' . "'" . $teacher_id . "'" . ' OR shared_mode = 1)';
             $course_detail['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
           }
           if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
