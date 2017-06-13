@@ -276,6 +276,46 @@ public function mapItemsToQuiz($examid=null, $sectionid=null) {
 }
 
 
+public function createQuizOnSubskill($grade_id=null, $subskill_id=null,$user_id=null){
+
+  // Step-1 auto generate 15 questions
+  
+  $base_url = Router::url('/', true);
+  $grade_id = isset($this->request->data['grade_id'])? $this->request->data['grade_id'] : grade_id ;  
+  $subskill_id = isset($this->request->data['subskill_id']) ? $this->request->data['subskill_id']: $subskill_id;
+
+    $questions_limit = 15;
+   $difficulty_level = 'Easy|Moderate|Difficult';
+  $user_id = isset($this->request->data['user_id'] )? $this->request->data['user_id'] : $user_id ;   
+
+  $dataToGetQuestions['subjects'] = $subskill_id; // ids of course as eg 3,13,15
+  $dataToGetQuestions['user_id'] = $user_id;
+  $dataToGetQuestions['grade_id'] = $grade_id;
+  $dataToGetQuestions['limit'] = $questions_limit;
+  $dataToGetQuestions['difficulty'] = 'Moderate|Easy|Difficult'; // eg Easy|Difficult|mod
+
+  $json_questionslist = $this->curlPost($base_url . 'teachers/getQuestionsListForAssg/', $dataToGetQuestions);
+
+ 
+    $array_qlist = (array) json_decode($json_questionslist);   
+
+    if ($array_qlist['response']->status == "True") {
+        $data['status'] = True;
+        $data['questions'] = $array_qlist['response']->questions;
+    } else {
+          $data['status'] = $array_qlist['response']->status;
+          $data['message'] = $array_qlist['response']->message;
+        }
+
+        $this->set(array(
+                'data' => $data,
+                '_serialize' => ['data']
+           ));
+
+
+}
+
+
 
 // To add the value of attamped question response in Table user quiz response
 public function setUserQuizResponse(){   
@@ -321,7 +361,14 @@ public function setUserQuizResponse(){
                       $postdata['exam_date']  =time();       
                       $item_id =isset($attendQuizRes['item_id'])?$attendQuizRes['item_id']:"null";
                       $itemid = explode('-', $item_id);
-                      $postdata['item_id']=$itemid[1];
+
+                      if(isset($itemid[1])){
+                        $postdata['item_id']=$itemid[1];
+                      }
+                      else{
+                        $postdata['item_id']=$item_id;
+                      }
+                      
 
                       $new_userQuizResponse = $userQuizResponses->newEntity($postdata);
                       if ($userQuizResponses->save($new_userQuizResponse)) {
@@ -532,7 +579,16 @@ public function getUserQuizResponse($uid=null,$exam_id=null,$quiz_id=null){
   }
 
 
-
+public function curlPost($url, $data = array()) {
+      $ch = curl_init($url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      //$headers[] = "Content-Type: application/json";
+        //curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);     
+      $response = curl_exec($ch);
+      curl_close($ch);
+    return $response;
+  }
   
 
 

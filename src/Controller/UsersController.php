@@ -165,7 +165,7 @@ class UsersController extends AppController{
       if ($user_record > 0) {
         $data['user'] = $this->Users->get($id);
         $data['user_all_details'] = $this->Users->find('all')->where(['user_id' => $id])->contain(['UserDetails']);
-        $data['image_directory'] = Router::url('/', true) . 'upload';
+        $data['image_directory'] = Router::url('/', true);
       } else {
         $data['response'] = "Record is not found";
       }
@@ -2536,7 +2536,7 @@ class UsersController extends AppController{
           $imgData = base64_decode($img);
           $image =  'Avtar_'.$id.'.png';
           // Path where the image is going to be saved
-          $filePath = WWW_ROOT .'/Avtar/'.$image;
+          $filePath = WWW_ROOT .'/upload/Avtar/'.$image;
           // Delete previously uploaded image
           if (file_exists($filePath)) {
            unlink($filePath);
@@ -2548,7 +2548,8 @@ class UsersController extends AppController{
           $user = TableRegistry::get('user_details');
           $query = $user->query();
           $result = $query->update()->set([
-                'profile_pic' => '/Avtar/'.$image,
+                'profile_pic' => '/upload/Avtar/'.$image,
+                'step_completed' => '1',
              ])->where(['user_id' => $id ])->execute();
           $row_count = $result->rowCount();
           if ($row_count == '1') {
@@ -2796,7 +2797,7 @@ class UsersController extends AppController{
                 $user_details_table = TableRegistry::get('UserDetails');
                 $user_details = $user_details_table->find()->where(['user_id' => $data['user_id']]);
                 foreach ($user_details as $user_detail) {
-                  $user_detail->profile_pic = $response['file_name'];
+                  $user_detail->profile_pic = DEFAULT_IMAGE_DIRECTORY . $response['file_name'];
                 }
                 if (!$user_details_table->save($user_detail)) {
                   $message = 'unable to save Profile image';
