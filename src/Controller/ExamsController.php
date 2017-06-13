@@ -297,15 +297,23 @@ public function createQuizOnSubskill($grade_id=null, $subskill_id=null,$user_id=
   $json_questionslist = $this->curlPost($base_url . 'teachers/getQuestionsListForAssg/', $dataToGetQuestions);
 
  
-    $array_qlist = (array) json_decode($json_questionslist);   
+    $array_qlist = (array) json_decode($json_questionslist);
 
-    if ($array_qlist['response']->status == "True") {
-        $data['status'] = True;
-        $data['questions'] = $array_qlist['response']->questions;
-    } else {
-          $data['status'] = $array_qlist['response']->status;
-          $data['message'] = $array_qlist['response']->message;
-        }
+    if( isset($array_qlist['response']) ){        
+        if ($array_qlist['response']->status == "True") {
+            $data['status'] = True;
+            $data['questions'] = $array_qlist['response']->questions;
+        } else {
+              $data['status'] = $array_qlist['response']->status;
+              $data['message'] = $array_qlist['response']->message;
+            }
+
+    }else{
+      $data ['status'] = "False";
+      $data ['message'] = "Opps... No question get.";
+    }
+
+
 
         $this->set(array(
                 'data' => $data,
@@ -318,12 +326,16 @@ public function createQuizOnSubskill($grade_id=null, $subskill_id=null,$user_id=
 
 
 // To add the value of attamped question response in Table user quiz response
-public function setUserQuizResponse(){   
+public function setUserQuizResponse(){ 
+ 
     if ($this->request->is('post')) {  
         $quiz_marks=0;  
         $student_score=0;
-        $attamp_questions=0; 
+        $attamp_questions=0;
+        $skip_count=0; 
+        $quiz_questions =0;
        $attendQuizResponses= $this->request->data;
+
 
          // Array traverse to get User Quiz Result
         foreach ($attendQuizResponses as $attendQuizResponse) {
@@ -331,16 +343,24 @@ public function setUserQuizResponse(){
               $eid=$attendQuizResponse['exam_id'];
               $quiz_marks=$quiz_marks+$attendQuizResponse['item_marks'];
               $student_score=($student_score)+($attendQuizResponse['score']);
-              $attamp_questions++;                 
+              $quiz_questions++;
+             if($attendQuizResponse['skip_count']==1){ $skip_count++; }
+             else{ $attamp_questions++;  }                               
         }
-
        
+
        // add Student Quiz Result in user_quiz table
+      if(!empty($quiz_marks) ){         
+
         $quiz_result= ($student_score*100)/($quiz_marks);
-        if($quiz_result<60){ $pass=0;}
+        //echo QUIZ_PASS_SCORE ; //constant 80%
+        if($quiz_result< QUIZ_PASS_SCORE){ $pass=0;}
         else{ $pass=1;}
+
+        // Points managements on pass of students
+
         $userQuizes = TableRegistry::get('UserQuizes');
-        $new_userQuizes = $userQuizes->newEntity(array('user_id'=>$uid, 'exam_id'=>$eid,'exam_marks'=>$quiz_marks,'attempts' =>$attamp_questions,'created' => time(),'score'=>$student_score,'status'=>1, 'pass'=>$pass ) );
+        $new_userQuizes = $userQuizes->newEntity(array('user_id'=>$uid, 'exam_id'=>$eid,'exam_marks'=>$quiz_marks,'quiz_questions' =>$quiz_questions,'attempts' =>$attamp_questions,'created' => time(),'score'=>$student_score,'status'=>1, 'pass'=>$pass ) );
             
               if ($result=$userQuizes->save($new_userQuizes)) { 
                 $postdata['user_quiz_id']  = $result->id;               
@@ -360,14 +380,10 @@ public function setUserQuizResponse(){
                       $postdata['time_taken'] =isset($attendQuizRes['time_taken'])?$attendQuizRes['time_taken']:"0";
                       $postdata['exam_date']  =time();       
                       $item_id =isset($attendQuizRes['item_id'])?$attendQuizRes['item_id']:"null";
+                      
                       $itemid = explode('-', $item_id);
-
-                      if(isset($itemid[1])){
-                        $postdata['item_id']=$itemid[1];
-                      }
-                      else{
-                        $postdata['item_id']=$item_id;
-                      }
+                      if(isset($itemid[1])){ $postdata['item_id']=$itemid[1]; }
+                      else{ $postdata['item_id']=$item_id;  }
                       
 
                       $new_userQuizResponse = $userQuizResponses->newEntity($postdata);
@@ -381,11 +397,18 @@ public function setUserQuizResponse(){
                           $data['quiz_attampt']=$postdata['user_quiz_id'];
                           $data['status']="false";
                        }
+
+
                   }
               }else{
                   $data['message']="opps data is not saved in user quiz table";
                   $data['status']="false";
               }
+
+            }else{
+              $data['message'] ="Issue in calculating marks.";
+              $data['status'] = "false";
+            }
 
             }else{
               $data['message']="No post data to save";

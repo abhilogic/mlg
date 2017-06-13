@@ -1890,8 +1890,9 @@ class TeachersController extends AppController {
     $connection = ConnectionManager::get('default');
 
 
-    $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,
-                 mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,cm.state, GUID,ParentGUID, AuthorityGUID, Document, Label, Number,Description,Year, createdDate
+    $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,qm.marks as question_marks,
+                 mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,
+                 cm.state, cm.GUID, cm.ParentGUID, cm.AuthorityGUID, cm.Document, cm.Label, cm.Number, cm.Description, cm.Year, createdDate
               FROM mlg.question_master AS qm
               LEFT JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
               LEFT JOIN mlg.mime_master AS mm ON mm.uniqueId = qm.uniqueId
@@ -1986,11 +1987,12 @@ class TeachersController extends AppController {
     $question_info = array();
     $quiz_marks = 0;
     $ques_ids = array();
-    $questionRecords = $connection->execute($sql)->fetchAll('assoc');
-    if ($questionRecords) {
+    $questionRecords = $connection->execute($sql)->fetchAll('assoc');    
+    if (count($questionRecords) >0) {
       $data['status'] = "True";
       foreach ($questionRecords as $questionRow) {
         $ques_ids[] = $questionRow ['id'];
+
 
         foreach ($questionRow as $key => $value) {
           $question_info[$key] = $value;
@@ -2001,7 +2003,7 @@ class TeachersController extends AppController {
         // Find option to question
         $option_sql = "SELECT * FROM mlg.option_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
         $optionRecords = $connection->execute($option_sql)->fetchAll('assoc');
-        if ($optionRecords > 0) {
+        if (count($optionRecords) > 0) {
           foreach ($optionRecords as $optionRow) {
             $optionArray[] = array('value' => $optionRow['options'], 'label' => $optionRow['options']);
           }
@@ -2013,15 +2015,16 @@ class TeachersController extends AppController {
 
 
         // Find Answers for a question
+
+        $quiz_marks = $quiz_marks + $questionRow ['question_marks'];
          $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
         $answerRecords = $connection->execute($answer_sql)->fetchAll('assoc');
-        if ($answerRecords > 0) {
+        if (count($answerRecords) > 0) {
           foreach ($answerRecords as $answerRow) {
-            $answerArray[] = array('value' => $answerRow['answers'], 'score' => 1);
-            $quiz_marks = $quiz_marks + 1;
+            $answerArray[] = array('value' => $answerRow['answers'], 'score' => $questionRow ['question_marks']);
           }
            $question_info['answers'] =  $answerArray; 
-          $answerArray = [];
+          $answerArray = [];          
         } else {
           $question_info ['answer_message'] = "No Answer Found for this question";
         }
@@ -2041,19 +2044,23 @@ class TeachersController extends AppController {
         // Create Quiz 
         $epoch = date("YmdHis");
       $quiz_name = "autoStudentSubskillQuiz-" . $epoch;                      
-        $quiz = $this->createQuiz($quiz_name, $limit, $ques_ids, $quiz_marks, $user_id);
+        $quiz = $this->createQuiz($quiz_name, $limit, $ques_ids, $quiz_marks, $user_id);      
         if ($quiz['status'] == "True") {
           $quiz_id = $quiz['quiz_id'];
+
+              foreach ($questions as $ques) {
+              $questions_detail['quiz_id'] = $quiz_id;
+              $quesList[] = array_merge($questions_detail, $ques);
+
+            }
+            $data['questions'] = $quesList;
+
         } else {
           $data['quiz_status'] = $quiz;
+          $data['status'] = "False";
         }
 
-        foreach ($questions as $ques) {
-          $questions_detail['quiz_id'] = $quiz_id;
-          $quesList[] = array_merge($questions_detail, $ques);
-
-        }
-        $data['questions'] = $quesList;
+        
       }
     } else {
       $data['status'] = "False";
@@ -2068,6 +2075,7 @@ class TeachersController extends AppController {
   }
 
   public function createQuiz($quiz_name,$limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
+
     if (!empty($itemsIds) && !empty($limit) && !empty($quiz_marks)) {
       $date = date("Y-m-d H:i:s");
       $epoch = date("YmdHis");
@@ -2102,16 +2110,16 @@ class TeachersController extends AppController {
             $data ['message'] = "quiz is created.";
           } else {
             $data['status'] = "False";
-            $data ['message'] = "Not able to create quiz item. Please consult with admin";
+            $data ['message'] = "Not able to create quiz item. Please consult with admin1";
           }
         }
       } else {
         $data['status'] = "False";
-        $data ['message'] = "Not able to create quiz. Please consult with admin";
+        $data ['message'] = "Not able to create quiz. Please consult with admin2";
       }
     } else {
       $data['status'] = "False";
-      $data ['message'] = "Not able to create quiz. Please consult with admin";
+      $data ['message'] = "Not able to create quiz. Please consult with admin3";
     }
 
     return($data);
