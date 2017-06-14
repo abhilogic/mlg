@@ -238,6 +238,260 @@ public function getAssignmentItems($assignment_id = null){
 }
 
 
+  // Function to get List of questions in subskill quiz
+  public function getQuestionsList($subjects = null, $grade_id = null, $standard = null, $limit = 5, $target = null, $dok = null, $difficulty = 'Easy', $type = null, $user_id = null, $quiz_type_id=0) {
+
+    $subjects = isset($this->request->data['subjects']) ? $this->request->data['subjects'] : $subjects;
+
+    $course_ids = isset($this->request->data['subjects']) ? $this->request->data['subjects'] : $subjects;
+
+    $grade_id = isset($this->request->data['grade_id']) ? $this->request->data['grade_id'] : $grade_id;
+
+    $standard = isset($this->request->data['standard']) ? $this->request->data['standard'] : $standard;
+
+    $quiz_type_id = isset($this->request->data['quiz_type_id']) ? $this->request->data['quiz_type_id'] : $quiz_type_id;
+
+    $quiz_name = isset($this->request->data['quiz_name']) ? $this->request->data['quiz_name'] : 'mlg'.date("YmdHis");
+
+
+    $limit = isset($this->request->data['limit']) ? $this->request->data['limit'] : $limit;
+
+    $target = isset($this->request->data['target']) ? $this->request->data['target'] : $target;
+
+    $dok = isset($this->request->data['dok']) ? $this->request->data['dok'] : $dok;
+
+    $difficulty = isset($this->request->data['difficulty']) ? $this->request->data['difficulty'] : $difficulty;
+
+    $type = isset($this->request->data['type']) ? $this->request->data['type'] : $type;
+
+    $user_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : $user_id;    
+
+
+    // $subj= '('.implode(',', $subj).')';
+    $subjects = '(' . $subjects . ')';
+    $data['status'] = "False";
+    $data['message'] = "";
+    $connection = ConnectionManager::get('default');
+
+
+    $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.grade_id,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,qm.marks as question_marks,
+                 mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,
+                 cm.state, cm.GUID, cm.ParentGUID, cm.AuthorityGUID, cm.Document, cm.Label, cm.Number, cm.Description, cm.Year, createdDate
+              FROM question_master AS qm
+              LEFT JOIN header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
+              LEFT JOIN mime_master AS mm ON mm.uniqueId = qm.uniqueId
+              LEFT JOIN paragraph_master as pm on pm.question_id=qm.docId
+              LEFT JOIN  compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
+              where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id;
+
+
+
+    if ($standard !== NULL) {
+      $standard = explode("|", $standard);
+      $sql.=" and `CCSS-MC` in (";
+      $countArray = 0;
+      foreach ($standard as $std) {
+        ++$countArray;
+        $sql.="'" . $std . "' ";
+        if (!empty($standard[$countArray])) {
+          $sql.=",";
+        }
+      }
+
+      $sql.=")";
+    }
+
+    if ($difficulty !== NULL) {
+
+      $difficulty = explode("|", $difficulty);
+      $sql.=" and qm.level in (";
+      $countArray = 0;
+      foreach ($difficulty as $level):
+        ++$countArray;
+        $sql.="'" . $level . "' ";
+        if (!empty($difficulty[$countArray])) {
+          $sql.=",";
+        }
+      endforeach;
+
+      $sql.=")";
+    }
+
+    if ($type !== NULL) {
+      $type = explode("|", $type);
+      $sql.=" and qm.type in (";
+      $countArray = 0;
+      foreach ($type as $typos):
+        ++$countArray;
+        $sql.="'" . $typos . "' ";
+        if (!empty($type[$countArray])) {
+          $sql.=",";
+        }
+      endforeach;
+
+      $sql.=")";
+    }
+
+    //if($skills !== NULL){ $sql.=" and skills = '".$skills."'";  }
+    if ($target !== NULL) {
+      $sql.=" and target ='" . $target . "'";
+    }
+    if ($dok !== NULL) {
+      $sql.=" and hm.DOK ='" . $dok . "'";
+    }
+    if ($limit !== null) {
+      $sql.="ORDER BY RAND() limit " . $limit;
+    }
+
+    $question_info = array();
+    $quiz_marks = 0;
+    $ques_ids = array();
+    $questionRecords = $connection->execute($sql)->fetchAll('assoc');    
+    if (count($questionRecords) >0) {
+      $data['status'] = "True";
+      foreach ($questionRecords as $questionRow) {
+        $ques_ids[] = $questionRow ['id'];
+
+
+        foreach ($questionRow as $key => $value) {
+          $question_info[$key] = $value;
+        }
+        $question_info['id'] = 'response_id-' . $questionRow['id'];
+        $question_info['question_id'] = $questionRow['id'];
+        $question_info['questionName'] = $questionRow['questionName'];
+        // Find option to question
+        $option_sql = "SELECT * FROM option_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
+        $optionRecords = $connection->execute($option_sql)->fetchAll('assoc');
+        if (count($optionRecords) > 0) {
+          foreach ($optionRecords as $optionRow) {
+            $optionArray[] = array('value' => $optionRow['options'], 'label' => $optionRow['options']);
+          }
+          $question_info['options'] = $optionArray;
+          $optionArray = [];
+        } else {
+          $question_info ['option_message'] = "No option Found for this question";
+        }
+
+
+        // Find Answers for a question
+
+        $quiz_marks = $quiz_marks + $questionRow ['question_marks'];
+         $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
+        $answerRecords = $connection->execute($answer_sql)->fetchAll('assoc');
+        if (count($answerRecords) > 0) {
+          foreach ($answerRecords as $answerRow) {
+            $answerArray[] = array('value' => $answerRow['answers'], 'score' => $questionRow ['question_marks']);
+          }
+           $question_info['answers'] =  $answerArray; 
+          $answerArray = [];          
+        } else {
+          $question_info ['answer_message'] = "No Answer Found for this question";
+        }
+
+        //Question Collections
+        $questions[] = $question_info;
+
+      }
+
+      //Result 1-  if quiz is a custom Assignment  
+      if ($user_id == null) {        
+        $data['questions'] = $questions;
+      }
+      // Result 2-  if quiz is auto generated
+      else {
+
+        // Create Quiz                             
+        $quiz = $this->createQuiz($quiz_name, $quiz_type_id, $course_ids, $grade_id, $limit, $ques_ids, $quiz_marks, $user_id);      
+        if ($quiz['status'] == True || $quiz['status'] ==1) {
+          $quiz_id = $quiz['quiz_id'];
+
+              foreach ($questions as $ques) {
+              $questions_detail['quiz_id'] = $quiz_id;
+              $quesList[] = array_merge($questions_detail, $ques);
+
+            }
+            $data['questions'] = $quesList;
+
+        } else {
+          $data['quiz_status'] = $quiz;
+          $data['status'] = "False";
+        }
+
+        
+      }
+    } else {
+      $data['status'] = "False";
+      $data['message'] = "No question found in our dataware house.";
+    }
+
+   // return ($data);
+    $this->set([
+        'response' => $data,
+        '_serialize' => ['response']
+    ]);
+    
+  }
+
+  public function createQuiz($quiz_name, $quiz_type_id, $course_ids, $grade_id,$limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
+
+    if(isset($quiz_name) && isset($quiz_type_id) && isset($course_ids) && isset($grade_id) ){
+      if (!empty($itemsIds) && !empty($limit) && !empty($quiz_marks)) {
+         
+          $quiz_info['quiz_name'] =$quiz_name;
+          $quiz_info['quiz_type_id'] =$quiz_type_id;
+          $quiz_info['course_id'] =$course_ids;
+          $quiz_info['grade_id'] =$grade_id;
+          $quiz_info['is_graded'] = 1;
+          $quiz_info['is_time'] = 1;
+          $quiz_info['max_marks'] = $quiz_marks;
+          $quiz_info['max_questions'] = count($itemsIds);
+          $quiz_info['duration'] = '1';
+          $quiz_info['status'] = 1;
+          $quiz_info['created_by'] = $user_id;
+          $quiz_info['created'] = time();
+          $quiz_info['modified'] = time();  
+
+          $Quizes = TableRegistry::get('Quizes');
+          $new_quiz = $Quizes->newEntity($quiz_info);
+          if ($qresult = $Quizes->save($new_quiz)) {
+            $quiz_item['exam_id'] = $qresult->id;
+            $quiz_item['created'] = time();
+            $quiz_item['status'] = 1;
+
+            foreach ($itemsIds as $key => $value) {
+
+              $quiz_item['item_id'] = $value;
+
+              $QuizItems = TableRegistry::get('QuizItems');
+              $new_quizitem = $QuizItems->newEntity($quiz_item);
+              if ($qitemresult = $QuizItems->save($new_quizitem)) {
+                $data['status'] = True;
+                $data['quiz_id'] = $qresult->id;
+                $data ['message'] = "quiz is created.";
+              } else {
+                $data['status'] = False;
+                $data ['message'] = "Not able to create quiz item. Please consult with admin1";
+              }
+            }
+          } else {
+            $data['status'] = False;
+            $data ['message'] = "Not able to create quiz. Please consult with admin2";
+          }
+        } else {
+          $data['status'] = False;
+          $data ['message'] = "Not able to create quiz. Please consult with admin3";
+        }
+      }
+      else{
+        $data['status'] =False;
+        $data['message'] = "Please set quiz_name, quiz_type_id, course_ids and grade_id";
+      }
+    return($data);
+  }
+
+
+
+
 
 // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */

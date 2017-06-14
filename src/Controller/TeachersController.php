@@ -1893,11 +1893,11 @@ class TeachersController extends AppController {
     $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,qm.marks as question_marks,
                  mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,
                  cm.state, cm.GUID, cm.ParentGUID, cm.AuthorityGUID, cm.Document, cm.Label, cm.Number, cm.Description, cm.Year, createdDate
-              FROM mlg.question_master AS qm
-              LEFT JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
-              LEFT JOIN mlg.mime_master AS mm ON mm.uniqueId = qm.uniqueId
-              LEFT JOIN mlg.paragraph_master as pm on pm.question_id=qm.docId
-              LEFT JOIN  mlg.compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
+              FROM question_master AS qm
+              LEFT JOIN header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
+              LEFT JOIN mime_master AS mm ON mm.uniqueId = qm.uniqueId
+              LEFT JOIN paragraph_master as pm on pm.question_id=qm.docId
+              LEFT JOIN  compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
               where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id;
 
 
@@ -1909,7 +1909,7 @@ class TeachersController extends AppController {
     if ($existing_questions_id != null) {
       $previous_selected_id = $removed_questions_id . ',' . $existing_questions_id;
 
-      $substr = 'SELECT  distinct qm.id FROM mlg.question_master AS qm where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id . ' and qm.id NOT IN (' . $previous_selected_id . ') Limit 0,1';
+      $substr = 'SELECT  distinct qm.id FROM question_master AS qm where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id . ' and qm.id NOT IN (' . $previous_selected_id . ') Limit 0,1';
 
       $subqids = $connection->execute($substr)->fetchAll('assoc');
 
@@ -2001,7 +2001,7 @@ class TeachersController extends AppController {
         $question_info['question_id'] = $questionRow['id'];
         $question_info['questionName'] = $questionRow['questionName'];
         // Find option to question
-        $option_sql = "SELECT * FROM mlg.option_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
+        $option_sql = "SELECT * FROM option_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
         $optionRecords = $connection->execute($option_sql)->fetchAll('assoc');
         if (count($optionRecords) > 0) {
           foreach ($optionRecords as $optionRow) {
@@ -2074,13 +2074,14 @@ class TeachersController extends AppController {
     ]);
   }
 
-  public function createQuiz($quiz_name,$limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
+  public function createQuiz($quiz_name=null,$limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
+
 
     if (!empty($itemsIds) && !empty($limit) && !empty($quiz_marks)) {
       $date = date("Y-m-d H:i:s");
       $epoch = date("YmdHis");
-      $quiz_name = "external-" . $epoch;
-      $quiz_info['name'] = isset($this->request->data['quiz_name']) ? $this->request->data['quiz_name'] : $quiz_name;
+      $quiz_name1 = 'mlg'. $epoch;
+      $quiz_info['name'] = !empty($quiz_name) ? $quiz_name : $quiz_name1;
       $quiz_info['is_graded'] = 1;
       $quiz_info['is_time'] = 1;
       $quiz_info['max_marks'] = $quiz_marks;
