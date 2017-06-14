@@ -490,7 +490,101 @@ public function getAssignmentItems($assignment_id = null){
   }
 
 
+public function checkKnightChallengeEnable($skill_id=null){
+    //Query - how can prevent to send a assignment by teacher/parent if student mastered.
+    if(!empty($skill_id)){
+      $data['hello'] ="kkk";
+    }else{
+      $data['status'] = "";
+      $data['message'] ="please set skill_id";
+    }
 
+     $this->set([
+        'response' => $data,
+        '_serialize' => ['response']
+    ]);
+
+}
+
+public function studentReport($user_id=null){
+    if(!empty($user_id)){
+          //$UserQuizes = TableRegistry::get('UserQuizes') ;
+          //$results= $UserQuizes->find('all')->where(['user_id' => $uid])->order(['id'=>'ASC']);
+          
+          $connection = ConnectionManager::get('default');
+          $sql = "SELECT uq.*, cr.id,cr.course_name,cr.level_id as grade_id FROM user_quizes as uq, courses as cr WHERE uq.course_id=cr.id ANd uq.grade_id=cr.level_id
+           AND uq.user_id=$user_id";
+           $results = $connection->execute($sql)->fetchAll('assoc');
+          
+          if(count($results) > 0){                 
+            foreach ($results as $result) {               
+                
+              $row['user_quiz_id'] = $result['id'];  
+              $row['grade_id']=$result['grade_id'];
+              $row['course_id']=$result['course_id'];
+              $row['quiz_type_id'] = $result['quiz_type_id'];  
+              
+              $row['quiz_id'] = $result['exam_id'];                                      
+              $row['exam_marks']=$result['exam_marks'];
+              $row['student_score']=$result['score'];
+              $row['course_name']=$result['course_name'];
+                    
+              if($result['exam_marks']!=0){
+                $row['student_result_percent']=(int)( ($result['score']/$result['exam_marks'])*(100));
+              }else{ 
+                  $row['student_result_percent'] = 0;
+                  $row['message'] = "Either quiz is not started or quiz attempted incomplete.";
+              } 
+
+             // $data['details'][] = $row;
+
+              // To check other students on same course_id and grade_id
+              $UserQuizes = TableRegistry::get('UserQuizes') ;
+              $userquiz_results= $UserQuizes->find('all')->where(['course_id'=>$row['course_id'], 'user_id !='=> $user_id,'quiz_type_id'=>$row['quiz_type_id'] ])->order(['id'=>'ASC']);
+              if($userquiz_results->count()>0){
+                  $othersts_score_percent = 0;
+                  $st_count = 0;
+                  foreach ($userquiz_results as $otherstrow) {
+                     $othersts_score_percent = $othersts_score_percent +( ($otherstrow['score']/$otherstrow['exam_marks'])*(100) );
+                      $st_count = $st_count +1;
+                  }
+                  $row['status'] = True;
+                  $row['other_Student_average'] = $othersts_score_percent / $st_count;
+
+                  $data['details'][] = $row;
+                  ///$row =[];
+
+              }
+              else{
+                $data['status'] = False;
+                $data['message'] = 'No students found for same course';
+                $data['other_Student_average'] ="";
+              }
+
+
+            }               
+          }
+            else{
+                $data['status'] = False;
+                $data['message'] = "No result found.";
+            }
+
+
+
+
+
+    }else{
+      $data['status'] = "";
+      $data['message'] ="please set user_id";
+    }
+
+     $this->set([
+        'response' => $data,
+        '_serialize' => ['response']
+    ]);
+
+
+}
 
 
 // API to call curl 
