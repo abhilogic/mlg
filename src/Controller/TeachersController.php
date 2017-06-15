@@ -3816,4 +3816,146 @@ class TeachersController extends AppController {
     ]);
   }
 
+  /*
+   * function getTeacherSettings().
+   */
+  public function getTeacherSettings() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $user_setting = array();
+      $data = $this->request->data;
+      if ($this->request->is('post')) {
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['level_id']) || empty($data['level_id'])) {
+          $message = 'Level id cannot be null';
+          throw new Exception('level id cannot be null');
+        }
+        if (!isset($data['course_id']) || empty($data['course_id'])) {
+          $message = 'course id cannot be null';
+          throw new Exception('course Id cannot be null');
+        }
+        $user_setting = TableRegistry::get('teacher_settings')
+           ->find()->where(['user_id' => $data['user_id'], 'course_id' => $data['course_id'], 'level_id' => $data['level_id']]);
+        if ($user_setting->count()) {
+          $status = TRUE;
+        } else {
+          $message = 'user setting not found';
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'result' => $user_setting->first(),
+      '_serialize' => ['status', 'message', 'result']
+    ]);
+  }
+
+  /*
+   * function setTeacherSettings().
+   */
+  public function setTeacherSettings() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $data = $this->request->data;
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['level_id']) || empty($data['level_id'])) {
+          $message = 'Level id cannot be null';
+          throw new Exception('level id cannot be null');
+        }
+        if (!isset($data['course_id']) || empty($data['course_id'])) {
+          $message = 'course id cannot be null';
+          throw new Exception('course Id cannot be null');
+        }
+        if (!isset($data['course_name']) || empty($data['course_name'])) {
+          $message = 'course name cannot be null';
+          throw new Exception('course name cannot be null');
+        }
+        if (!isset($data['settings'])) {
+          $message = 'Settings not found';
+          throw new Exception('Settings key not present in post data');
+        }
+        $user_setting_table = TableRegistry::get('teacher_settings');
+
+        $user_settings = $user_setting_table->find('all')->where(['user_id' => $data['user_id'], 'course_id' => $data['course_id'], 'level_id' => $data['level_id']]);
+        $settings_decoded_json = array();
+        if ($user_settings->count()) {
+          foreach ($user_settings as $user) {
+            $settings_decoded_json = json_decode($user->settings, TRUE);
+            break;
+          }
+
+          foreach ($data['settings'] as $key => $value) {
+            $settings_decoded_json[$key] = $value;
+          }
+
+          $saved_user_setting = $user_setting_table->query()->update()->set(['settings' => json_encode($settings_decoded_json)])
+            ->where(['user_id' => $data['user_id'], 'course_id' => $data['course_id'], 'level_id' => $data['level_id']])->execute();
+          if ($saved_user_setting) {
+            $status = TRUE;
+          } else {
+            $message = 'unable to update your settings';
+          }
+        } else {
+          //settings defaut settings for new user
+          $data_settings = $this->_setDefaultSettings($data['settings']);
+          $data['settings'] = json_encode($data_settings);
+          if ($user_setting_table->save($user_setting_table->newEntity($data))) {
+            $status = TRUE;
+          } else {
+            $message = 'Unable to save your settings';
+          }
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
+
+  /**
+   * setDefaultSettings().
+   */
+  private function _setDefaultSettings($user_settings = array()) {
+    try {
+      $default_settings = array(
+        'student_chat_enabled' => FALSE,
+        'parent_chat_enabled' => FALSE,
+        'chat_status' => TRUE,
+        'group_builder' => FALSE,
+        'placement_test' => TRUE,
+        'auto-progression' => TRUE,
+        'fill_in_the_blanks_question' => TRUE,
+        'single_choice_question' => TRUE,
+        'multiple_choice_question' => TRUE,
+        'true_false_question' => TRUE,
+      );
+      foreach ($user_settings as $settings_key => $settings_value) {
+        if (array_key_exists($settings_key, $default_settings)) {
+          $default_settings[$settings_key] = $settings_value;
+        } else {
+          $default_settings[$settings_key] = $settings_value;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $default_settings;
+  }
+
 }
