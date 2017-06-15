@@ -572,7 +572,7 @@ class UsersController extends AppController{
      * loadComponent is defiened in this function for a time being. */
     public function login() {
       try {
-        $this->loadComponent('Auth', [
+         $this->loadComponent('Auth', [
           'authenticate' => [
             'Form' => [
               'fields' => [
@@ -581,11 +581,13 @@ class UsersController extends AppController{
               ]
             ]
           ],
-  //          'loginAction' => [
-  //            'controller' => 'Users',
-  //            'action' => 'login'
-  //          ]
+//          'loginAction' => [
+//            'controller' => 'Users',
+//            'action' => 'login'
+//          ]
         ]);
+        $role_id = '';
+        $user = array();
         $status = $first_time_login = 'false';
         $child_info = array();
         $token = $message = $role_id = '';
@@ -663,6 +665,7 @@ class UsersController extends AppController{
                 if ($valid_user->count()) {
                   $this->Auth->setUser($user);
                   $token = $this->request->session()->id();
+//                  $this->request->session()->write('Auth.User.token', $token);
                   $status = 'success';
                 } else {
                   $user = array();
@@ -2761,8 +2764,14 @@ class UsersController extends AppController{
                 throw new Exception('Unable to save user Preference data');
               }
             } else {
-              $message = 'User Preference not found';
-              throw new Exception('User id not found in userPreferences');
+              $new_preferences = $user_preferences_table->newEntity(array(
+                'user_id' => isset($user['user_id']) ? $user['user_id'] : '',
+                'mobile' => isset($user['mobile']) ? $user['mobile'] : ''
+              ));
+              if (!$user_preferences_table->save($new_preferences)) {
+                $message = 'User Preference not found and unable to save new preferences';
+                throw new Exception('User id not found in userPreferences');
+              }
             }
           }
         } else {
