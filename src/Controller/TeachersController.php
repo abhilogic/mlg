@@ -21,13 +21,12 @@ class TeachersController extends AppController {
     $this->loadComponent('RequestHandler');
     $this->RequestHandler->renderAs($this, 'json');
   }
-
-  /*   * *
+  
+  /***
    * This api is used for set teacher detail in database.
    * @return Boolean value.
    * 
-   * * */
-
+    * **/ 
   public function setTeacherRecord() {
     try {
       $status = FALSE;
@@ -784,10 +783,10 @@ class TeachersController extends AppController {
 
   public function getUserContent() {
     try {
-//      print_r($this->request->data);
       $status = FALSE;
       $content = '';
-      $course_content = TableRegistry::get('course_contents');
+//      $course_content = TableRegistry::get('course_contents');
+      $connection = ConnectionManager::get('default');
       if ($this->request->is('post')) {
         if (isset($this->request->data['uid']) && empty($this->request->data['uid'])) {
           $content = 'please login';
@@ -798,8 +797,12 @@ class TeachersController extends AppController {
         }
       }
       if ($content == '') {
-        $skills = $this->request->data['subskills'];
-        $content = $course_content->find('all')->where(['created_by' => $this->request->data['uid'], 'course_detail_id IN' => $skills]);
+        $skills = implode(',',$this->request->data['subskills']);
+        $sql = "Select * ,cs.id as id from course_contents as cs "
+                . "INNER JOIN course_details as cd ON cd.course_id = cs.course_detail_id"
+                . " where created_by = ".$this->request->data['uid']." AND course_detail_id IN ($skills)";
+        $content = $connection->execute($sql)->fetchAll('assoc');
+//        $content = $course_content->find('all')->where(['created_by' => $this->request->data['uid'], 'course_detail_id IN' => $skills]);
         $status = TRUE;
       }
     } catch (Exception $e) {
@@ -1420,7 +1423,7 @@ class TeachersController extends AppController {
 
   // API to get the student of a subject Added by a teacher
   public function getStudentsOfSubjectForTeacher($tid = null, $course_id = null) {
-
+    
     $tid = isset($_GET['teacher_id']) ? $_GET['teacher_id'] : $tid;
     $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id;
 
@@ -1452,7 +1455,6 @@ class TeachersController extends AppController {
           } else {
             $student['profile_pic'] = $studentrow['profile_pic'];
           }
-
           $data['students'][] = $student;
         }
         $data['status'] = "true";
@@ -1469,7 +1471,8 @@ class TeachersController extends AppController {
         '_serialize' => ['response']
     ]);
   }
-
+  
+  
   // The function to show all students of a teacher for his/her all subjects
   public function getStudentOfTeacher($tid = null) {
 
@@ -1511,8 +1514,6 @@ class TeachersController extends AppController {
       $data['status'] = "false";
       $data['message'] = "teacher_id cannot be null. Please check it";
     }
-
-
     $this->set([
         'response' => $data,
         '_serialize' => ['response']
@@ -1646,7 +1647,9 @@ class TeachersController extends AppController {
       $message = '';
       $status = FALSE;
       $insertedId = '';
+      $marks = '';
       $connection = ConnectionManager::get('default');
+      $difficulty = TableRegistry::get('difficulties');
       $relation = TableRegistry::get('content_template_relation');
       if ($this->request->is('post')) {
         if (isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
@@ -1684,6 +1687,10 @@ class TeachersController extends AppController {
         }
         if ($message == '') {
           $subskill = $this->request->data['sub_skill'];
+          $result = $difficulty->find()->where(['id'=> $this->request->data['ques_diff']])->toArray();
+          foreach($result as $kei=> $val){
+            $marks = $val['marks'];
+          }   
           foreach ($subskill as $key => $value) {
             $answer_list = explode(',', $this->request->data['answer']);
             $unique_id = date('Ymd', time()) . uniqid(9);
@@ -1700,6 +1707,7 @@ class TeachersController extends AppController {
             $question->type = implode(',', $this->request->data['ques_type']);
             $question->standard = implode(',', $this->request->data['standard']);
             $question->status = 'approved';
+            $question->marks = $marks;
             $question->uniqueId = $unique_id;
             $insertedId = $question_master->save($question)->id;
             if (is_numeric($insertedId)) {
@@ -1882,13 +1890,14 @@ class TeachersController extends AppController {
     $connection = ConnectionManager::get('default');
 
 
-    $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,
-                 mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,cm.state, GUID,ParentGUID, AuthorityGUID, Document, Label, Number,Description,Year, createdDate
-              FROM mlg.question_master AS qm
-              LEFT JOIN mlg.header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
-              LEFT JOIN mlg.mime_master AS mm ON mm.uniqueId = qm.uniqueId
-              LEFT JOIN mlg.paragraph_master as pm on pm.question_id=qm.docId
-              LEFT JOIN  mlg.compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
+    $sql = 'SELECT  distinct qm.id, type, qm.grade,qm.subject,qm.standard,qm.course_id, qm.docId, qm.uniqueId, questionName,  qm.level,qm.marks as question_marks,
+                 mimeType, paragraph, item,Claim,Domain,Target,`CCSS-MC`,`CCSS-MP`,
+                 cm.state, cm.GUID, cm.ParentGUID, cm.AuthorityGUID, cm.Document, cm.Label, cm.Number, cm.Description, cm.Year, createdDate
+              FROM question_master AS qm
+              LEFT JOIN header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
+              LEFT JOIN mime_master AS mm ON mm.uniqueId = qm.uniqueId
+              LEFT JOIN paragraph_master as pm on pm.question_id=qm.docId
+              LEFT JOIN  compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
               where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id;
 
 
@@ -1900,7 +1909,7 @@ class TeachersController extends AppController {
     if ($existing_questions_id != null) {
       $previous_selected_id = $removed_questions_id . ',' . $existing_questions_id;
 
-      $substr = 'SELECT  distinct qm.id FROM mlg.question_master AS qm where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id . ' and qm.id NOT IN (' . $previous_selected_id . ') Limit 0,1';
+      $substr = 'SELECT  distinct qm.id FROM question_master AS qm where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id . ' and qm.id NOT IN (' . $previous_selected_id . ') Limit 0,1';
 
       $subqids = $connection->execute($substr)->fetchAll('assoc');
 
@@ -1978,11 +1987,12 @@ class TeachersController extends AppController {
     $question_info = array();
     $quiz_marks = 0;
     $ques_ids = array();
-    $questionRecords = $connection->execute($sql)->fetchAll('assoc');
-    if ($questionRecords) {
+    $questionRecords = $connection->execute($sql)->fetchAll('assoc');    
+    if (count($questionRecords) >0) {
       $data['status'] = "True";
       foreach ($questionRecords as $questionRow) {
         $ques_ids[] = $questionRow ['id'];
+
 
         foreach ($questionRow as $key => $value) {
           $question_info[$key] = $value;
@@ -1991,9 +2001,9 @@ class TeachersController extends AppController {
         $question_info['question_id'] = $questionRow['id'];
         $question_info['questionName'] = $questionRow['questionName'];
         // Find option to question
-        $option_sql = "SELECT * FROM mlg.option_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
+        $option_sql = "SELECT * FROM option_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
         $optionRecords = $connection->execute($option_sql)->fetchAll('assoc');
-        if ($optionRecords > 0) {
+        if (count($optionRecords) > 0) {
           foreach ($optionRecords as $optionRow) {
             $optionArray[] = array('value' => $optionRow['options'], 'label' => $optionRow['options']);
           }
@@ -2005,41 +2015,52 @@ class TeachersController extends AppController {
 
 
         // Find Answers for a question
-        $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
+
+        $quiz_marks = $quiz_marks + $questionRow ['question_marks'];
+         $answer_sql = "SELECT * FROM answer_master WHERE uniqueId ='" . $questionRow['uniqueId'] . "'";
         $answerRecords = $connection->execute($answer_sql)->fetchAll('assoc');
-        if ($answerRecords > 0) {
+        if (count($answerRecords) > 0) {
           foreach ($answerRecords as $answerRow) {
-            $answerArray[] = array('value' => $answerRow['answers'], 'score' => 1);
-            $quiz_marks = $quiz_marks + 1;
+            $answerArray[] = array('value' => $answerRow['answers'], 'score' => $questionRow ['question_marks']);
           }
-          // $question_info['answers'] =  $answerArray; 
-          $answerArray = [];
+           $question_info['answers'] =  $answerArray; 
+          $answerArray = [];          
         } else {
           $question_info ['answer_message'] = "No Answer Found for this question";
         }
 
         //Question Collections
         $questions[] = $question_info;
+
       }
 
       //Result 1-  if quiz is a custom Assignment  
-      if ($user_id == null) {
+      if ($user_id == null) {        
         $data['questions'] = $questions;
       }
       // Result 2-  if quiz is auto generated
       else {
-        // Create Quiz                
-        $quiz = $this->createQuiz($limit, $ques_ids, $quiz_marks, $user_id);
+
+        // Create Quiz 
+        $epoch = date("YmdHis");
+      $quiz_name = "autoStudentSubskillQuiz-" . $epoch;                      
+        $quiz = $this->createQuiz($quiz_name, $limit, $ques_ids, $quiz_marks, $user_id);      
         if ($quiz['status'] == "True") {
           $quiz_id = $quiz['quiz_id'];
+
+              foreach ($questions as $ques) {
+              $questions_detail['quiz_id'] = $quiz_id;
+              $quesList[] = array_merge($questions_detail, $ques);
+
+            }
+            $data['questions'] = $quesList;
+
         } else {
           $data['quiz_status'] = $quiz;
+          $data['status'] = "False";
         }
 
-        foreach ($questions as $ques) {
-          $questions_detail['quiz_id'] = $quiz_id;
-          $data[] = array_merge($questions_detail, $ques);
-        }
+        
       }
     } else {
       $data['status'] = "False";
@@ -2053,11 +2074,14 @@ class TeachersController extends AppController {
     ]);
   }
 
-  public function createQuiz($limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
+  public function createQuiz($quiz_name=null,$limit = null, $itemsIds = array(), $quiz_marks = null, $user_id = null) {
+
+
     if (!empty($itemsIds) && !empty($limit) && !empty($quiz_marks)) {
       $date = date("Y-m-d H:i:s");
       $epoch = date("YmdHis");
-      $quiz_info['name'] = "external-" . $epoch;
+      $quiz_name1 = 'mlg'. $epoch;
+      $quiz_info['name'] = !empty($quiz_name) ? $quiz_name : $quiz_name1;
       $quiz_info['is_graded'] = 1;
       $quiz_info['is_time'] = 1;
       $quiz_info['max_marks'] = $quiz_marks;
@@ -2087,16 +2111,16 @@ class TeachersController extends AppController {
             $data ['message'] = "quiz is created.";
           } else {
             $data['status'] = "False";
-            $data ['message'] = "Not able to create quiz item. Please consult with admin";
+            $data ['message'] = "Not able to create quiz item. Please consult with admin1";
           }
         }
       } else {
         $data['status'] = "False";
-        $data ['message'] = "Not able to create quiz. Please consult with admin";
+        $data ['message'] = "Not able to create quiz. Please consult with admin2";
       }
     } else {
       $data['status'] = "False";
-      $data ['message'] = "Not able to create quiz. Please consult with admin";
+      $data ['message'] = "Not able to create quiz. Please consult with admin3";
     }
 
     return($data);
@@ -2762,7 +2786,6 @@ class TeachersController extends AppController {
         'total_amount' => $request_data['amount'],
         'error' => $error);
   }
-
   // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
   public function curlPost($url, $data = array(), $json_postfields = FALSE) {
@@ -3618,6 +3641,14 @@ class TeachersController extends AppController {
       $week = isset($request_data['week']) ? $request_data['week'] : -1;
       $date = date("Y-m-d", strtotime("$week week"));
       if ($request->is('post')) {
+        if (!isset($request_data['user_ids'])) {
+          $message = 'user id required';
+          throw new Exception('user id required');
+        }
+        if (empty($request_data['user_ids'])) {
+          $message = 'user id can not be empty';
+          throw new Exception('user id can not be empty');
+        }
         $user_login_sessions = TableRegistry::get('user_login_sessions');
         $query = $user_login_sessions->find();
         $query_result = $query->select(['sum' => $query->func()->sum('user_login_sessions.time_spent')])
@@ -3651,6 +3682,282 @@ class TeachersController extends AppController {
       'user_ids' => $request->data['user_ids'],
       '_serialize' => ['status', 'message', 'total_duration_in_secs', 'total_duration_in_hrs', 'user_ids', 'date']
     ]);
+  }
+ /**
+   * function setQuotation.
+   */
+  public function setQuotation() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+        $message = 'user id not exist';
+        throw new Exception($message);
+      }
+      if (!isset($this->request->data['first_name']) && empty(trim($this->request->data['first_name']))) {
+        $message = 'first name cannot be empty';
+        throw new Exception($message);
+      }
+      if (!isset($this->request->data['quotation'])) {
+        $message = "Quotation not exist";
+        throw new Exception($message);
+      }
+      $first_name = $this->request->data['first_name'];
+      $last_name = $this->request->data['last_name'];
+      $email = isset($this->request->data['email']) ? $this->request->data['email'] : '';
+      if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = 'Email is not valid';
+        throw new Exception($message);
+      }
+      $phone_number = isset($this->request->data['phone_number']) ? $this->request->data['phone_number'] : '';
+      $quotations_table = TableRegistry::get('quotations');
+      $new_quotation = $quotations_table->newEntity(array(
+        'user_id' => $this->request->data['user_id'],
+        'first_name' => $first_name,
+        'last_name' => $last_name,
+        'email' => $email,
+        'phone_number' => $phone_number,
+        'quotation_content' => json_encode($this->request->data['quotation']),
+        'created' => time(),
+      ));
+      if (!$quotations_table->save($new_quotation)) {
+        $message = 'Some Error occured while saving Quotation';
+        throw new Exception($message);
+      } else {
+        $status = TRUE;
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
+
+  /**
+   * function getQuotation.
+   */
+  public function getQuotation() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $conditions = $quotation_contents = $quotation_fields = array();
+      $quotations_table = TableRegistry::get('quotations');
+      if (isset($this->request->data['user_id']) && !empty($this->request->data['user_id'])) {
+        $conditions['user_id'] = $this->request->data['user_id'];
+      }
+      if (isset($this->request->data['first_name']) && !empty(trim($this->request->data['first_name']))) {
+        $conditions['first_name'] = $this->request->data['first_name'];
+      }
+      if (isset($this->request->data['email']) && !empty($this->request->data['email'])) {
+        $conditions['email'] = $this->request->data['email'];
+      }
+      if (isset($this->request->data['phone_number']) && !empty($this->request->data['phone_number'])) {
+        $conditions['phone_number'] = $this->request->data['phone_number'];
+      }
+      if (!empty($conditions)) {
+        $quotation_result = $quotations_table->find()->where($conditions);
+        if ($quotation_result->count()) {
+          $status = TRUE;
+          foreach ($quotation_result as $quotation) {
+            $quotation_contents[] = $quotation->quotation_content;
+          }
+          if (!empty($quotation_contents)) {
+            foreach ($quotation_contents as $quotation_content) {
+              $contents = json_decode($quotation_content, TRUE);
+              $data = array(
+                'first_name' => isset($contents['first_name']) ? $contents['first_name'] : '',
+                'last_name' => isset($contents['last_name']) ? $contents['last_name'] : '',
+                'email' => isset($contents['email']) ? $contents['email'] : '',
+                'phone_number' => isset($contents['phone_number']) ? $contents['phone_number'] : '',
+                'position' => isset($contents['position']) ? $contents['position'] : '',
+                'school' => isset($contents['school']) ? $contents['school'] : '',
+                'street' => isset($contents['street']) ? $contents['street'] : '',
+                'city' => isset($contents['city']) ? $contents['city'] : '',
+                'district' => isset($contents['district']) ? $contents['district'] : '',
+                'zip_code' => isset($contents['zip_code']) ? $contents['zip_code'] : '',
+                'country' => isset($contents['country']) ? $contents['country'] : '',
+                'country' => isset($contents['country']) ? $contents['country'] : '',
+                'licence' => isset($contents['licence']) ? $contents['licence'] : '',
+                'number_of_student' => isset($contents['number_of_student']) ? $contents['number_of_student'] : '',
+                'comment_for_mlg' => isset($contents['comment_for_mlg']) ? $contents['comment_for_mlg'] : '',
+              );
+              if (isset($contents['selected_course_values']) && !empty($contents['selected_course_values'])) {
+                $selected_courses = $contents['selected_course_values'];
+                foreach ($selected_courses as $courses) {
+                  $data['selected_courses'][$courses['level_id']][] = array(
+                    'id' => $courses['id'],
+                    'name' => $courses['name'],
+                    'level_id' => $courses['level_id']
+                  );
+                }
+              }
+              $quotation_fields[] = $data;
+            }
+          } else {
+            $message = 'No qutation found in your Records';
+          }
+        } else {
+          $message = 'No record found';
+        }
+      } else {
+        $message = 'At least one condition should be mentioned';
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'data' => $quotation_fields,
+      '_serialize' => ['status', 'message', 'data']
+    ]);
+  }
+
+  /*
+   * function getTeacherSettings().
+   */
+  public function getTeacherSettings() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $user_setting = array();
+      $data = $this->request->data;
+      if ($this->request->is('post')) {
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['level_id']) || empty($data['level_id'])) {
+          $message = 'Level id cannot be null';
+          throw new Exception('level id cannot be null');
+        }
+        if (!isset($data['course_id']) || empty($data['course_id'])) {
+          $message = 'course id cannot be null';
+          throw new Exception('course Id cannot be null');
+        }
+        $user_setting = TableRegistry::get('teacher_settings')
+           ->find()->where(['user_id' => $data['user_id'], 'course_id' => $data['course_id'], 'level_id' => $data['level_id']]);
+        if ($user_setting->count()) {
+          $status = TRUE;
+        } else {
+          $message = 'user setting not found';
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'result' => $user_setting->first(),
+      '_serialize' => ['status', 'message', 'result']
+    ]);
+  }
+
+  /*
+   * function setTeacherSettings().
+   */
+  public function setTeacherSettings() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $data = $this->request->data;
+        if (!isset($data['user_id']) || empty($data['user_id'])) {
+          $message = 'Kindly login';
+          throw new Exception('User Id cannot be null');
+        }
+        if (!isset($data['level_id']) || empty($data['level_id'])) {
+          $message = 'Level id cannot be null';
+          throw new Exception('level id cannot be null');
+        }
+        if (!isset($data['course_id']) || empty($data['course_id'])) {
+          $message = 'course id cannot be null';
+          throw new Exception('course Id cannot be null');
+        }
+        if (!isset($data['course_name']) || empty($data['course_name'])) {
+          $message = 'course name cannot be null';
+          throw new Exception('course name cannot be null');
+        }
+        if (!isset($data['settings'])) {
+          $message = 'Settings not found';
+          throw new Exception('Settings key not present in post data');
+        }
+        $user_setting_table = TableRegistry::get('teacher_settings');
+
+        $user_settings = $user_setting_table->find('all')->where(['user_id' => $data['user_id'], 'course_id' => $data['course_id'], 'level_id' => $data['level_id']]);
+        $settings_decoded_json = array();
+        if ($user_settings->count()) {
+          foreach ($user_settings as $user) {
+            $settings_decoded_json = json_decode($user->settings, TRUE);
+            break;
+          }
+
+          foreach ($data['settings'] as $key => $value) {
+            $settings_decoded_json[$key] = $value;
+          }
+
+          $saved_user_setting = $user_setting_table->query()->update()->set(['settings' => json_encode($settings_decoded_json)])
+            ->where(['user_id' => $data['user_id'], 'course_id' => $data['course_id'], 'level_id' => $data['level_id']])->execute();
+          if ($saved_user_setting) {
+            $status = TRUE;
+          } else {
+            $message = 'unable to update your settings';
+          }
+        } else {
+          //settings defaut settings for new user
+          $data_settings = $this->_setDefaultSettings($data['settings']);
+          $data['settings'] = json_encode($data_settings);
+          if ($user_setting_table->save($user_setting_table->newEntity($data))) {
+            $status = TRUE;
+          } else {
+            $message = 'Unable to save your settings';
+          }
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
+
+  /**
+   * setDefaultSettings().
+   */
+  private function _setDefaultSettings($user_settings = array()) {
+    try {
+      $default_settings = array(
+        'student_chat_enabled' => TRUE,
+        'parent_chat_enabled' => TRUE,
+        'chat_status' => TRUE,
+        'group_builder' => FALSE,
+        'placement_test' => TRUE,
+        'frequency_of_challenges_by' => 'all_class',
+        'auto_progression' => TRUE,
+        'auto_progression_by' => 'all_class',
+        'fill_in_the_blanks_question' => TRUE,
+        'single_choice_question' => TRUE,
+        'multiple_choice_question' => TRUE,
+        'true_false_question' => TRUE,
+      );
+      foreach ($user_settings as $settings_key => $settings_value) {
+        if (array_key_exists($settings_key, $default_settings)) {
+          $default_settings[$settings_key] = $settings_value;
+        } else {
+          $default_settings[$settings_key] = $settings_value;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $default_settings;
   }
 
 }

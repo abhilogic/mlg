@@ -27,6 +27,12 @@ define('PRINCIPAL_ROLE_ID', 6);
 //default image directory
 define('DEFAULT_IMAGE_DIRECTORY', 'upload/');
 
+//quiz_pass_score
+define('QUIZ_PASS_SCORE', 80);
+
+
+
+
 //PAYPAL CONSTANTS
 
 //Switch account Sandbox or Live.
