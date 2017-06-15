@@ -3934,12 +3934,14 @@ class TeachersController extends AppController {
   private function _setDefaultSettings($user_settings = array()) {
     try {
       $default_settings = array(
-        'student_chat_enabled' => FALSE,
-        'parent_chat_enabled' => FALSE,
+        'student_chat_enabled' => TRUE,
+        'parent_chat_enabled' => TRUE,
         'chat_status' => TRUE,
         'group_builder' => FALSE,
         'placement_test' => TRUE,
-        'auto-progression' => TRUE,
+        'frequency_of_challenges_by' => 'all_class',
+        'auto_progression' => TRUE,
+        'auto_progression_by' => 'all_class',
         'fill_in_the_blanks_question' => TRUE,
         'single_choice_question' => TRUE,
         'multiple_choice_question' => TRUE,
