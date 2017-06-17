@@ -1184,13 +1184,13 @@ class UsersController extends AppController{
             $parent_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : '';
 
             if (!empty($parent_id)) {
+              $parent_children = array();
               // for a single child
               if (!empty($child_id) && is_numeric($child_id)) {
                 $parent_children = array($child_id);
               } else {
                 $user_details = TableRegistry::get('UserDetails');
                 $user_info = $user_details->find()->select('user_id')->where(['parent_id' => $parent_id]);
-                $parent_children = array();
                 foreach ($user_info as $user) {
                   $parent_children[] = $user->user_id;
                 }
@@ -1747,9 +1747,11 @@ class UsersController extends AppController{
              if  (isset($response['state']) && $response['state'] == 'ok') {
                $data['card_response'] = $message;
                $data['card_token'] = $response['id'];
-               $data['external_cutomer_id'] = $response['external_customer_id'];
+               $data['external_customer_id'] = $response['external_customer_id'];
                $parent_id = $this->request->data['user_id'];
 
+               //If Parent is on trial period, child will get a bonus of 60days membership for free.
+               //else the parent will be charged money as soon as payment completed.
                $parent_info = $this->Users->get($parent_id)->toArray();
                $parent_subcription = (array)$parent_info['subscription_end_date'];
                $subcription_end_date = $parent_subcription['date'];
@@ -1769,7 +1771,7 @@ class UsersController extends AppController{
                    if ($plan_status == 'ACTIVE') {
                      $user_id = $this->request->data['user_id'];
 
-                     //same order date and time will be saved on user orders tabl.
+                     //same order date and time will be saved on user orders table.
                      $order_date = $data['order_date'] = $billing_plan['order_date'];
                      $order_timestamp = $data['order_timestamp'] = $billing_plan['order_timestamp'];
                      $data['trial_period'] = 1;
@@ -1787,6 +1789,15 @@ class UsersController extends AppController{
 
                        // update user orders table.
                        $this->setUserOrders($user_id, $child_id, $data);
+
+                       //setting user purchase items status as paid.
+                       $user_purchase_items_table = TableRegistry::get('user_purchase_items');
+                       $query = $user_purchase_items_table->query();
+                       $query->update()
+                        ->set(['item_paid_status' => 1])
+                        ->where(['order_timestamp' => $order_timestamp, 'user_id' => $child_id])
+                        ->execute();
+
                        $message = 'card added successfully';
                      } else {
                        $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2Bill";
@@ -2168,20 +2179,20 @@ class UsersController extends AppController{
         'amount' => isset($order_details['total_amount']) ? $order_details['total_amount'] : 0,
         'discount' => isset($order_details['discount']) ? $order_details['discount'] : '',
         'order_date' => isset($order_details['order_date']) ? $order_details['order_date'] : '',
-        'trial_period' => $order_details['trial_period'],
+        'trial_period' => ($order_details['trial_period'] == TRUE) ? 1 : 0,
         'card_response' => isset($order_details['card_response']) ? $order_details['card_response'] : '',
         'card_token' => isset($order_details['card_token']) ? $order_details['card_token'] : '',
-        'external_cutomer_id' => isset($order_details['external_cutomer_id']) ? $order_details['external_cutomer_id'] : '',
+        'external_customer_id' => isset($order_details['external_customer_id']) ? $order_details['external_customer_id'] : '',
         'paypal_plan_id' => $order_details['paypal_plan_id'],
         'paypal_plan_status' => $order_details['paypal_plan_status'],
         'billing_id' => $order_details['billing_id'],
         'billing_state' => $order_details['billing_state'],
         'order_timestamp' => isset($order_details['order_timestamp']) ? $order_details['order_timestamp'] : time(),
-        );
-        $user_order = $user_orders->newEntity($order);
-        if ($user_orders->save($user_order)) {
-          $status = TRUE;
-        }
+      );
+      $user_order = $user_orders->newEntity($order);
+      if ($user_orders->save($user_order)) {
+        $status = TRUE;
+      }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
