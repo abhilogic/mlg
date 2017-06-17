@@ -1174,7 +1174,7 @@ class UsersController extends AppController{
        /**
         * function paymentbrief().
         */
-       public function getPaymentbrief($params = null) {
+       public function getPaymentbrief($child_id = null) {
          $status = FALSE;
          $message = '';
          $child_info = array();
@@ -1182,16 +1182,18 @@ class UsersController extends AppController{
          if ($this->request->is('post') || !empty($params)) {
           try {
             $parent_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : '';
-            if (isset($params['user_id']) && !empty($params['user_id'])) {
-              $parent_id = $params['user_id'];
-            }
-            if (!empty($parent_id)) {
 
-              $user_details = TableRegistry::get('UserDetails');
-              $user_info = $user_details->find()->select('user_id')->where(['parent_id' => $parent_id]);
-              $parent_children = array();
-              foreach ($user_info as $user) {
-                $parent_children[] = $user->user_id;
+            if (!empty($parent_id)) {
+              // for a single child
+              if (!empty($child_id) && is_numeric($child_id)) {
+                $parent_children = array($child_id);
+              } else {
+                $user_details = TableRegistry::get('UserDetails');
+                $user_info = $user_details->find()->select('user_id')->where(['parent_id' => $parent_id]);
+                $parent_children = array();
+                foreach ($user_info as $user) {
+                  $parent_children[] = $user->user_id;
+                }
               }
 
               $connection = ConnectionManager::get('default');
@@ -1201,7 +1203,9 @@ class UsersController extends AppController{
                 . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
                 . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
                 . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
-                . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ") GROUP BY user_purchase_items.user_id";
+                . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ") "
+                . " AND user_purchase_items.item_paid_status != 1"
+                . " GROUP BY user_purchase_items.user_id";
               $results = $connection->execute($sql)->fetchAll('assoc');
               if (!empty($results)) {
                 $status = TRUE;
@@ -1368,7 +1372,7 @@ class UsersController extends AppController{
      
 
       public function setCountOfChildrenOfParent($id,$child_count){
-          if(isset($id) && isset($child_count) ){            
+          if(isset($id) && isset($child_count) ){
               $user_details = TableRegistry::get('UserDetails');
               $query = $user_details->query();
               $result=  $query->update()
@@ -1606,6 +1610,7 @@ class UsersController extends AppController{
                                   $postdata['amount']= $postdata['amount']-($postdata['amount']*($pcode_discount*0.01));
                                   }
                                   $postdata['order_timestamp'] = $time;
+                                  $postdata['item_paid_status'] = 0;
                                 //5. User Purchase Item Table
                                 $new_user_purchase_items = $user_purchase_items->newEntity($postdata);
                                 if ($user_purchase_items->save($new_user_purchase_items)) {$data['status']="True";}
@@ -1962,7 +1967,8 @@ class UsersController extends AppController{
          . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
          . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
          . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
-         . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
+         . " WHERE user_purchase_items.user_id IN (" . $uid . ")"
+         . " AND user_purchase_items.item_paid_status != 0";
        if ($recent_order = TRUE) {
          $subquery = "(SELECT MAX(order_timestamp) FROM user_purchase_items"
          . " WHERE user_id = $uid)";
@@ -2014,7 +2020,7 @@ class UsersController extends AppController{
     *
     */
    public function upgrade() {
-     $response = array('status' => FALSE, 'message' => '');
+     $response = array('status' => FALSE, 'message' => '', 'order_timestamp' => '');
      if ($this->request->is('post')) {
        try {
         $total_amount = 0;
@@ -2028,8 +2034,10 @@ class UsersController extends AppController{
 
           //backing up data
           $connection = ConnectionManager::get('default');
-          $col_names = 'user_id, course_id, plan_id, package_id, level_id, discount, amount, order_date';
-          $backup_sql = 'INSERT INTO user_purchase_history (' . $col_names . ') SELECT '. $col_names .  ' FROM user_purchase_items where user_id =' . $child_id;
+          $col_names = 'user_id, course_id, plan_id, package_id, level_id, discount,'
+            . ' promocode_id, course_price, amount, order_date, order_timestamp, item_paid_status';
+          $backup_sql = 'INSERT INTO user_purchase_history (' . $col_names . ') SELECT '. $col_names
+            .' FROM user_purchase_items where user_id =' . $child_id;
           if (!$connection->execute($backup_sql)) {
             $message = "unable to save data";
             throw new Exception('unable to backup');
@@ -2041,7 +2049,7 @@ class UsersController extends AppController{
             $message = "unable to delete previous record";
             throw new Exception($message);
           }
-
+          $time = time();
           //insert row
           foreach ($courses as $course) {
             $total_amount = $total_amount + ($course['price'] * $package['discount'] * 0.01);
@@ -2056,6 +2064,8 @@ class UsersController extends AppController{
                 'amount' => $course['price'],
                 'discount' => $package['discount'],
                 'order_date' => date('Y-m-d H:i:s'),
+                'order_timestamp' => $time,
+                'item_paid_status' => 0,
                 )
             );
             if (!$user_purchase_items->save($user_purchase_item)) {
@@ -2064,24 +2074,8 @@ class UsersController extends AppController{
             }
           }
 
-          //updating table on user_order
-          $user_orders = TableRegistry::get('User_orders');
-          $user_order = $user_orders->newEntity(
-            array(
-              'user_id' => $user_id,
-              'amount' => $total_amount,
-              'discount' => $package['discount'],
-              'order_date' => date('Y-m-d H:i:s'),
-              'status' => 'done',
-              'trial_period' => 0,
-              'card_response' => 'card deducted successfully',
-            )
-          );
-          if (!$user_orders->save($user_order)) {
-            $message = "unable to delete previous record";
-            throw new Exception($message);
-          }
           $response['status'] = TRUE;
+          $response['order_timestamp'] = $time;
         } else {
           $response['message'] = 'Please login to update';
         }
