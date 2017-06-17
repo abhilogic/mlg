@@ -808,18 +808,22 @@ class CoursesController extends AppController{
         $teacher_contents = array();
         $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
+        $courses_table= TableRegistry::get('Courses');
         if ($type == 'type') {
           $connection = ConnectionManager::get('default');
           $sql = "SELECT * FROM course_details WHERE parent_id = $parent_id";
           $course_details = $connection->execute($sql)->fetchAll('assoc');
+          $course_info = $connection->execute("select * from courses where id=$parent_id")->fetchAll('assoc');
 //          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
           $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
+          $course_info = $courses_table->find('all')->where(['id' => $parent_id]);
         }
       }  catch (Exception $e) {
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
+
 
 
       if($type == 'type') {
@@ -876,7 +880,7 @@ class CoursesController extends AppController{
         }
       }
       $this->set([
-         'response' => ['course_details' => $course_details,
+         'response' => ['course_information'=>$course_info ,'course_details' => $course_details,
          'khan_api_slugs' => $khan_api_slugs,
          'khan_api_content_title' => $khan_api_content_title,
          'teacher_contents' => $teacher_contents],
@@ -1076,24 +1080,7 @@ class CoursesController extends AppController{
                                 }
                             }
 
-                        }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                         
+                        }                   
 
 
                       }
