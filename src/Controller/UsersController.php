@@ -1969,7 +1969,7 @@ class UsersController extends AppController{
        $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
          . " user_purchase_items.amount as purchase_amount, user_purchase_items.level_id as level_id,"
          . " user_purchase_items.course_id, user_purchase_items.order_date as order_date,"
-         . " user_purchase_items.order_timestamp as order_timestamp,"
+         . " user_purchase_items.order_timestamp as order_timestamp, user_purchase_items.item_paid_status as paid_status,"
          . " packages.name as package_subjects, packages.id as package_id, "
          . " plans.id as plan_id, plans.name as plan_duration,"
          . " courses.course_name"
@@ -1978,8 +1978,7 @@ class UsersController extends AppController{
          . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
          . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
          . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
-         . " WHERE user_purchase_items.user_id IN (" . $uid . ")"
-         . " AND user_purchase_items.item_paid_status != 0";
+         . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
        if ($recent_order = TRUE) {
          $subquery = "(SELECT MAX(order_timestamp) FROM user_purchase_items"
          . " WHERE user_id = $uid)";
@@ -2003,6 +2002,7 @@ class UsersController extends AppController{
            $purchase_details['order_timestamp'] = $purchase_result['order_timestamp'];
            $total_amount = $total_amount + $purchase_result['purchase_amount'];
            $purchase_details['package_amount'] = $total_amount;
+           $purchase_details['paid_status'] = $purchase_result['paid_status'];
            $purchase_details['purchase_detail'][] = array(
               'purchase_amount' => $purchase_result['purchase_amount'],
               'course_id' => $purchase_result['course_id'],
