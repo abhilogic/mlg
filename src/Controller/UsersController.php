@@ -1567,7 +1567,6 @@ class UsersController extends AppController{
                       $postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $this->request->data['subscription_days'];
                       $new_user = $this->Users->newEntity($postdata);
                       if ($result=$this->Users->save($new_user)) { 
-                          $this->sendEmail($to, $from, $subject,$email_message); 
                       $postdata['user_id']  = $result->id;
 
                       //2.  User Details Table
@@ -1657,7 +1656,9 @@ class UsersController extends AppController{
         catch (Exception $ex) {
            $this->log($ex->getMessage());
         }
-
+          if (strtoupper($data['status']) == 'TRUE') {
+            $this->sendEmail($to, $from, $subject,$email_message);
+          }
           $this->set([           
               'response' => $data,
                '_serialize' => ['response']
@@ -1728,13 +1729,13 @@ class UsersController extends AppController{
          $data = $name = array();
          $trial_period = TRUE;
          $payment_controller = new PaymentController();
-         $access_token = $payment_controller->paypalAccessToken();
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
                $message = 'Please login to submit payment';
                throw new Exception($message);
              }
+             $access_token = $payment_controller->paypalAccessToken();
              $validation = $payment_controller->validatePaymentCardDetail($this->request->data, $access_token);
              $response = $validation['response'];
              $data = $validation['data'];
@@ -2186,7 +2187,7 @@ class UsersController extends AppController{
         'paypal_plan_id' => $order_details['paypal_plan_id'],
         'paypal_plan_status' => $order_details['paypal_plan_status'],
         'billing_id' => $order_details['billing_id'],
-        'billing_state' => $order_details['billing_state'],
+        'billing_state' => strtoupper($order_details['billing_state']),
         'order_timestamp' => isset($order_details['order_timestamp']) ? $order_details['order_timestamp'] : time(),
       );
       $user_order = $user_orders->newEntity($order);
@@ -2875,5 +2876,57 @@ class UsersController extends AppController{
       $response['message'] = 'No such directory exist.';
     }
     return $response;
+  }
+
+  /**
+   * function deactiveUserSubscription().
+   */
+  public function deactivateUserSubscription() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if (!isset($this->request->data['user_id']) || empty($this->request->data['user_id'])) {
+        $message = 'User id is null';
+        throw new Exception('User id is null');
+      }
+      $child_id = 0;
+      if (isset($this->request->data['child_id'])) {
+        $child_id = $this->request->data['child_id'];
+      }
+      $user_id = $this->request->data['user_id'];
+      $user_orders_table = TableRegistry::get('UserOrders');
+      $user_orders_details = $user_orders_table->find()->where(
+        ['user_id' => $user_id,
+         'child_id' => $child_id
+        ])->last()->toArray();
+      $billing_id = $user_orders_details['billing_id'];
+      if (empty($billing_id)) {
+        $message = 'No billing id found';
+        throw new Exception($message);
+      }
+      $payment_controller = new PaymentController();
+      $billiing_cancel_response = $payment_controller->cancelBillingAgreement($billing_id);
+      if (!empty($billiing_cancel_response)) {
+        $user_orders_details['order_date'] = $user_orders_details['order_timestamp'] = time();
+        $user_orders_details['billing_state'] = $billiing_cancel_response;
+        $user_orders_details['total_amount'] = $user_orders_details['amount'];
+        $order_entry = $this->setUserOrders($user_id, $child_id, $user_orders_details);
+        if ($order_entry === TRUE) {
+          $status = TRUE;
+        } else {
+          $message = 'unable to deactivate order';
+          throw new Exception($message);
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    if (isset($this->request->data['requested'])) {
+      return array('status' => $status, 'message' => $message);
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+    ]);
   }
 }

@@ -476,6 +476,33 @@ class PaymentController extends AppController {
     return array('result' => $result, 'error' => $error);
   }
 
+  /**
+   * function cancelBillingAgreement().
+   */
+  public function cancelBillingAgreement($billing_id) {
+    try {
+      $status = '';
+      $access_token = $this->paypalAccessToken();
+      $url = "https://api.sandbox.paypal.com/v1/payments/billing-agreements/$billing_id/cancel";
+      if (USE_SANDBOX_ACCOUNT == FALSE) {
+        $url = "https://api.paypal.com/v1/payments/billing-agreements/$billing_id/cancel";
+      }
+      $param['url'] = $url;
+      $param['json_post_fields'] = TRUE;
+      $param['post_fields'] = array('note' => 'Canceling the profile. billing id: ' . $billing_id);
+      $param['authorization'] = "Bearer $access_token";
+      $param['return_transfer'] = 1;
+      $param['curl_post'] = 1;
+      $curl_response = $this->sendCurl($param);
+      if ($curl_response['http_code'] == 204) {
+        $status = 'DEACTIVE';
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $status;
+  }
+
   /*
    * function sendCurl().
    */
@@ -516,7 +543,8 @@ class PaymentController extends AppController {
       $response['curl_exec_result'] = curl_exec($ch);
       $response['http_code'] = curl_getinfo($ch, CURLINFO_HTTP_CODE);
       curl_close($ch);
-      if ($response['http_code'] == 200 || $response['http_code'] == 201) {
+      $success_http_codes = [200, 201, 204];
+      if (in_array($response['http_code'], $success_http_codes)) {
         $response['status'] = TRUE;
       }
     } catch (Exception $ex) {
