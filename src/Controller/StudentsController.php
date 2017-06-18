@@ -437,7 +437,7 @@ public function getAssignmentItems($assignment_id = null){
     if(isset($quiz_name) && isset($quiz_type_id) && isset($course_ids) && isset($grade_id) ){
       if (!empty($itemsIds) && !empty($limit) && !empty($quiz_marks)) {
          
-          $quiz_info['quiz_name'] =$quiz_name;
+          $quiz_info['name'] =$quiz_name;
           $quiz_info['quiz_type_id'] =$quiz_type_id;
           $quiz_info['course_id'] =$course_ids;
           $quiz_info['grade_id'] =$grade_id;
@@ -490,23 +490,9 @@ public function getAssignmentItems($assignment_id = null){
   }
 
 
-public function checkKnightChallengeEnable($skill_id=null){
-    //Query - how can prevent to send a assignment by teacher/parent if student mastered.
-    if(!empty($skill_id)){
-      $data['hello'] ="kkk";
-    }else{
-      $data['status'] = "";
-      $data['message'] ="please set skill_id";
-    }
 
-     $this->set([
-        'response' => $data,
-        '_serialize' => ['response']
-    ]);
 
-}
-
-public function studentReport($user_id=null){
+public function getStudentReport($user_id=null){
     if(!empty($user_id)){
           //$UserQuizes = TableRegistry::get('UserQuizes') ;
           //$results= $UserQuizes->find('all')->where(['user_id' => $uid])->order(['id'=>'ASC']);
@@ -548,30 +534,29 @@ public function studentReport($user_id=null){
                      $othersts_score_percent = $othersts_score_percent +( ($otherstrow['score']/$otherstrow['exam_marks'])*(100) );
                       $st_count = $st_count +1;
                   }
-                  $row['status'] = True;
-                  $row['other_Student_average'] = $othersts_score_percent / $st_count;
+                 // $row['status'] = True;
+                  $row['other_Student_average'] = round( ($othersts_score_percent / $st_count),1);
 
-                  $data['details'][] = $row;
+                  //$data['details'][] = $row;
                   ///$row =[];
 
               }
               else{
-                $data['status'] = False;
-                $data['message'] = 'No students found for same course';
-                $data['other_Student_average'] ="";
+                //$data['status'] = False;
+                $row['other_Student_average'] ="";
+                $row['message'] = 'No students found for same course';
+                
               }
 
-
+              $data['details'][] = $row;
+              $row['other_Student_average'] ="";
+              $row['message'] ="";
             }               
           }
             else{
                 $data['status'] = False;
                 $data['message'] = "No result found.";
             }
-
-
-
-
 
     }else{
       $data['status'] = "";
