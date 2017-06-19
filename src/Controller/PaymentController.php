@@ -506,7 +506,7 @@ class PaymentController extends AppController {
   /*
    * function sendCurl().
    */
-  protected function sendCurl($param = array()) {
+  public function sendCurl($param = array()) {
     try {
       $response = array('status' => FALSE, 'message' => '', 'curl_exec_result' => '', 'http_code' => '');
       $ch = curl_init();

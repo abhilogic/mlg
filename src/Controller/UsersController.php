@@ -487,6 +487,7 @@ class UsersController extends AppController{
             }
           } else {
             $message = 'Please enter the User Id';
+            throw new Exception('User id missing');
           }
         }
       } catch (Exceptio $e) {
@@ -2927,6 +2928,66 @@ class UsersController extends AppController{
     $this->set([
       'status' => $status,
       'message' => $message,
+      '_serialize' => ['status', 'message']
     ]);
   }
+
+  /**
+   * public deactivateChildrenOnParentDeactivation()
+   */
+  public function deactivateChildrenOnParentDeactivation() {
+    try {
+      $status = FALSE;
+      $number_of_child = 0;
+      $deactivated_child_ids = array();
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['parent_id'])) {
+          $message = 'Parent id cannot be null';
+          throw new Exception('Parent id cannot be null');
+        }
+        $parent_id = $this->request->data['parent_id'];
+        $parent = $this->getUserDetails($parent_id, TRUE);
+        if ($parent['user_all_details']['status'] != 0) {
+          $message = 'Parent is not deactivated yet';
+          throw new Exception("Parent id: $parent_id is active");
+        }
+        $children = $this->getChildrenDetails($parent_id, null,TRUE);
+        if (empty($children)) {
+          $message = 'No child  Found';
+          throw new Exception($message);
+        }
+        $number_of_child = count($children);
+        foreach ($children as $child) {
+          $controller_url = Router::url('/', true) . 'users/';
+          $payment_controller = new PaymentController();
+          $param['url'] = $controller_url . 'setUserStatus';
+          $param['return_transfer'] = 1;
+          $param['post_fields'] = array('id' => $child['user_id'], 'status' => 0);
+          $param['json_post_fields'] = TRUE;
+          $param['curl_post'] = 1;
+          $curl_response = $payment_controller->sendCurl($param);
+          if (!empty($curl_response['curl_exec_result'])) {
+            $set_status_result = json_decode($curl_response['curl_exec_result'], TRUE);
+            if ($set_status_result['status'] == TRUE) {
+              $deactivated_child_ids[] = $child['user_id'];
+            }
+          }
+        }
+        if (count($deactivated_child_ids) === $number_of_child) {
+          $status = TRUE;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'number_of_child' => $number_of_child,
+      'deactivated_child_ids' => $deactivated_child_ids,
+      '_serialize' => ['status', 'message', 'number_of_child', 'deactivated_child_ids']
+    ]);
+  }
+
 }
