@@ -3361,7 +3361,6 @@ class TeachersController extends AppController {
         $opt_id = $option_master->find('all', ['fields' => ['id']])->where(['uniqueId' => $unique_id[0]['uniqueId']])->min('id')->toArray('assoc');
         $option_id = $opt_id['id'];
         if ($this->request->data['type'] == 'text') {
-          print_r('hi');
           $answer_master = TableRegistry::get('answer_master');
           foreach ($corect_answer as $ki => $val) {
             foreach ($option as $key => $value) {
@@ -3380,24 +3379,47 @@ class TeachersController extends AppController {
               }
             }
           }
-        }else{
-          $answer_list = explode(',', $this->request->data['answer']);
-          foreach ($answer_list as $key => $value) {
-            $option_master = TableRegistry::get('option_master');
-            $option = $option_master->newEntity();
-            $option->uniqueId = $unique_id[0]['uniqueId'];
-            $option->options = 'upload/' . $value;
-            $option_master->save($option);
-            if($this->request->data['correctanswer_type'] != 'edit') {
-              print_r($this->request->data['correctanswer_type']);
+        }else if ($this->request->data['type'] == 'image'){
+          $answer_list = explode(':', $this->request->data['answer']);
+          $edit_option = explode(',', $answer_list[0]);
+          $edit_count = count($edit_option);
+          $new_option = explode(',',$answer_list[1]);
+          if($edit_count <= $this->request->data['correctanswer'] ) {
+            foreach($edit_option as $key => $val) {
               if ($key+1  == $this->request->data['correctanswer']) {
                 $answer_master = TableRegistry::get('answer_master');
                 $answer = $answer_master->newEntity();
                 $answer->uniqueId = $unique_id[0]['uniqueId'];
                 $answer->answers = $value;
-                $answer_master->save($answer);
+                if($answer_master->save($answer)){
+                  $status = TRUE;
+                  $message = 'Question updated Successfully.';
+                }
               } 
-            }  
+            }
+          }
+          foreach ($new_option as $key => $value) {
+            $option_master = TableRegistry::get('option_master');
+            $option = $option_master->newEntity();
+            $option->uniqueId = $unique_id[0]['uniqueId'];
+            $option->options = 'upload/' . $value;
+            if($option_master->save($option)) {
+              if($this->request->data['correctanswer_type'] == 'image' && $this->request->data['correctanswer'] > $edit_option) {
+                if ($key+$edit_count+1  == $this->request->data['correctanswer']) {
+                  $answer_master = TableRegistry::get('answer_master');
+                  $answer = $answer_master->newEntity();
+                  $answer->uniqueId = $unique_id[0]['uniqueId'];
+                  $answer->answers = $value;
+                  if($answer_master->save($answer)){
+                    $status = TRUE;
+                    $message = 'Question updated Successfully.';
+                 }
+                } 
+              }else{
+                $status = TRUE;
+                $message = 'Option updated Successfully.';
+              }
+            }   
           }
         }
       }
@@ -4028,16 +4050,16 @@ class TeachersController extends AppController {
       $message = '';
       $status = FALSE;
       if($this->request->is('post')) {
-        if(!isset($this->request->data['uid']) && empty($this->request->data['uid'])) {
+        if(isset($this->request->data['uid']) && empty($this->request->data['uid'])) {
           $message = 'Please login.';
           throw new Exception('Please login.');
-        }else if(!isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
+        }else if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
           $message = 'Choose a grade.';
           throw new Exception('Choose a grade.');
-        }else if(!isset($this->request->data['course_id']) && empty($this->request->data['course_id'])) {
+        }else if(isset($this->request->data['course_id']) && empty($this->request->data['course_id'])) {
           $message = 'Choose a course.';
           throw new Exception('Choose a course.');
-        }else if(!isset($this->request->data['skill_name']) && empty($this->request->data['skill_name'])) {
+        }else if(isset($this->request->data['skill_name']) && empty($this->request->data['skill_name'])) {
           $message = 'Template name can not be empty.';
           throw new Exception('Template name can not be empty.');
         }
@@ -4230,7 +4252,7 @@ class TeachersController extends AppController {
         }else if(isset($this->request->data['type'])&& empty($this->request->data['type'])) {
           $message = 'Some error occurred';
           throw new Exception('Please defined type');
-        }else if(isset($this->request->data['id'])&& empty($this->request->data['id'])) {
+        }else if(isset($this->request->data['id'])&& empty($this->request->data['id']) && $this->request->data['created_for'] != 'class') {
           $message = 'Please select a student/group';
           throw new Exception('Please select a student/group.');
         }else{
@@ -4284,10 +4306,12 @@ class TeachersController extends AppController {
         }else if(isset($this->request->data['type'])&& empty($this->request->data['type'])) {
           $message = 'Please Select for which you want to create the scope.';
           throw new Exception('Please Select for which you want to create the scope.');
-        }else if(isset($this->request->data['people'])&& empty($this->request->data['people'])) {
+        }else if(isset($this->request->data['people']) && $this->request->data['type']== 'people' 
+                && empty($this->request->data['people'])) {
           $message = 'Please select a student.';
           throw new Exception('Please select a student.');
-        }else if(isset($this->request->data['group'])&& empty($this->request->data['group'])) {
+        }else if(isset($this->request->data['group'])&& $this->request->data['type']== 'group'
+                && empty($this->request->data['group'])) {
           $message = 'Please select a group.';
           throw new Exception('Please select a group.');
         }else if(isset($this->request->data['scope'])&& empty($this->request->data['scope'])) {
