@@ -2159,6 +2159,52 @@ class UsersController extends AppController{
     }
 
     /**
+     * function getUserOrders.
+     *
+     * This function is used to store user order to table
+     *
+     * $user_id : Integer
+     *
+     * $child_id : Integer
+     *   if user type is teacher, then child id will be 0
+     *
+     * $order_details : Array
+     *    contains the order details
+     */
+    public function getUserOrders() {
+      try {
+        $status = FALSE;
+        $order_details = array();
+        $message = '';
+        if ($this->request->is('post')) {
+          if (!isset($this->request->data['child_id']) && !empty($this->request->data['child_id'])) {
+            $message = 'child id missing';
+            throw new Exception($message);
+          }
+          $conditions['child_id'] = $this->request->data['child_id'];
+          if (!isset($this->request->data['parent_id']) && !empty($this->request->data['parent_id'])) {
+            $conditions['user_id'] = $this->request->data['parent_id'];
+          }
+          $user_orders = TableRegistry::get('UserOrders');
+          $order_details = $user_orders->find()->where($conditions);
+          if ($order_details->count()) {
+            $status = TRUE;
+          } else {
+            $message = 'No record found';
+          }
+        }
+      } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      }
+      $this->set([
+        'status' => $status,
+        'message' => $message,
+        'data' => (isset($this->request->data['last_order'])) ? array($order_details->last()) : $order_details,
+        '_serialize' => ['status', 'message', 'data']
+      ]);
+    }
+
+    /**
      * function setUserOrders.
      *
      * This function is used to store user order to table
