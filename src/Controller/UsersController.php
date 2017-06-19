@@ -1763,7 +1763,29 @@ class UsersController extends AppController{
 
                $user_ids = $this->request->data['children_ids'];
                foreach ($user_ids as $child_id) {
-               $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, $trial_period);
+
+                //deactivate previously selected billing
+                $param['url'] =  Router::url('/', true) . 'users/deactivateUserSubscription';
+                $param['return_transfer'] = TRUE;
+                $param['post_fields'] = array(
+                  'user_id' => $parent_id,
+                  'child_id' => $child_id
+                );
+                $param['json_post_fields'] = TRUE;
+                $param['curl_post'] = 1;
+                $curl_response = $payment_controller->sendCurl($param);
+                if (!empty($curl_response['curl_exec_result'])) {
+                  $curl_exec_result = json_decode($curl_response['curl_exec_result'], TRUE);
+                  if ($curl_exec_result['status'] == FALSE && $curl_exec_result['is_billing_id_present'] == TRUE) {
+                    $message = 'unable to deactivate previous billing';
+                    throw new Exception($message);
+                  }
+                } else {
+                  $message = 'unable to deactivate previous billing';
+                  throw new Exception('curl not completed successfully');
+                }
+
+                $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, $trial_period);
                 if (!empty($billing_plan['plan_id'])) {
                    $plan_id = $billing_plan['plan_id'];
 
@@ -2218,34 +2240,34 @@ class UsersController extends AppController{
      *    contains the order details
      */
     public function setUserOrders($user_id, $child_id = 0, $order_details = array()) {
-    try {
-      $status = FALSE;
-      $user_orders = TableRegistry::get('UserOrders');
-      $order = array(
-        'user_id' => $user_id,
-        'child_id' => !empty($child_id) ? $child_id : 0,
-        'amount' => isset($order_details['total_amount']) ? $order_details['total_amount'] : 0,
-        'discount' => isset($order_details['discount']) ? $order_details['discount'] : '',
-        'order_date' => isset($order_details['order_date']) ? $order_details['order_date'] : '',
-        'trial_period' => ($order_details['trial_period'] == TRUE) ? 1 : 0,
-        'card_response' => isset($order_details['card_response']) ? $order_details['card_response'] : '',
-        'card_token' => isset($order_details['card_token']) ? $order_details['card_token'] : '',
-        'external_customer_id' => isset($order_details['external_customer_id']) ? $order_details['external_customer_id'] : '',
-        'paypal_plan_id' => $order_details['paypal_plan_id'],
-        'paypal_plan_status' => $order_details['paypal_plan_status'],
-        'billing_id' => $order_details['billing_id'],
-        'billing_state' => strtoupper($order_details['billing_state']),
-        'order_timestamp' => isset($order_details['order_timestamp']) ? $order_details['order_timestamp'] : time(),
-      );
-      $user_order = $user_orders->newEntity($order);
-      if ($user_orders->save($user_order)) {
-        $status = TRUE;
+      try {
+        $status = FALSE;
+        $user_orders = TableRegistry::get('UserOrders');
+        $order = array(
+          'user_id' => $user_id,
+          'child_id' => !empty($child_id) ? $child_id : 0,
+          'amount' => isset($order_details['total_amount']) ? $order_details['total_amount'] : 0,
+          'discount' => isset($order_details['discount']) ? $order_details['discount'] : '',
+          'order_date' => isset($order_details['order_date']) ? $order_details['order_date'] : '',
+          'trial_period' => ($order_details['trial_period'] == TRUE) ? 1 : 0,
+          'card_response' => isset($order_details['card_response']) ? $order_details['card_response'] : '',
+          'card_token' => isset($order_details['card_token']) ? $order_details['card_token'] : '',
+          'external_customer_id' => isset($order_details['external_customer_id']) ? $order_details['external_customer_id'] : '',
+          'paypal_plan_id' => $order_details['paypal_plan_id'],
+          'paypal_plan_status' => $order_details['paypal_plan_status'],
+          'billing_id' => $order_details['billing_id'],
+          'billing_state' => strtoupper($order_details['billing_state']),
+          'order_timestamp' => isset($order_details['order_timestamp']) ? $order_details['order_timestamp'] : time(),
+        );
+        $user_order = $user_orders->newEntity($order);
+        if ($user_orders->save($user_order)) {
+          $status = TRUE;
+        }
+      } catch (Exception $ex) {
+        $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
       }
-    } catch (Exception $ex) {
-      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      return $status;
     }
-    return $status;
-  }
 
   /*
    * function getCouponByUserType()
@@ -2931,6 +2953,7 @@ class UsersController extends AppController{
   public function deactivateUserSubscription() {
     try {
       $status = FALSE;
+      $is_billing_id_present = FALSE;
       $message = '';
       if (!isset($this->request->data['user_id']) || empty($this->request->data['user_id'])) {
         $message = 'User id is null';
@@ -2942,12 +2965,20 @@ class UsersController extends AppController{
       }
       $user_id = $this->request->data['user_id'];
       $user_orders_table = TableRegistry::get('UserOrders');
-      $user_orders_details = $user_orders_table->find()->where(
+      $user_orders = $user_orders_table->find()->where(
         ['user_id' => $user_id,
          'child_id' => $child_id
-        ])->last()->toArray();
+        ]);
+      if ($user_orders->count()) {
+        $is_billing_id_present = TRUE;
+      } else {
+        $message = 'User order not found';
+        throw new Exception($message);
+      }
+      $user_orders_details = $user_orders->last()->toArray();
       $billing_id = $user_orders_details['billing_id'];
       if (empty($billing_id)) {
+        $is_billing_id_present = FALSE;
         $message = 'No billing id found';
         throw new Exception($message);
       }
@@ -2969,17 +3000,18 @@ class UsersController extends AppController{
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
     if (isset($this->request->data['requested'])) {
-      return array('status' => $status, 'message' => $message);
+      return array('status' => $status, 'message' => $message, 'is_billing_id_present' => $billing_id_present);
     }
     $this->set([
       'status' => $status,
       'message' => $message,
-      '_serialize' => ['status', 'message']
+      'is_billing_id_present' => $is_billing_id_present,
+      '_serialize' => ['status', 'message', 'is_billing_id_present']
     ]);
   }
 
   /**
-   * public deactivateChildrenOnParentDeactivation()
+   * function deactivateChildrenOnParentDeactivation()
    */
   public function deactivateChildrenOnParentDeactivation() {
     try {
