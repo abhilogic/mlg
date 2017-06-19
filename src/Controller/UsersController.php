@@ -1764,6 +1764,25 @@ class UsersController extends AppController{
                $user_ids = $this->request->data['children_ids'];
                foreach ($user_ids as $child_id) {
 
+                 // if parent tries to re-purchase order (even in trial period),
+                 //  the order will be considered as purchased without trial period
+                 if ($trial_period == TRUE) {
+                   $curl['url'] = Router::url('/', true) . 'users/getUserOrders';
+                   $curl['return_transfer'] = TRUE;
+                   $curl['post_fields'] = array(
+                    'child_id' => $child_id
+                    );
+                   $curl['json_post_fields'] = TRUE;
+                   $curl['curl_post'] = 1;
+                   $curl_result = $payment_controller->sendCurl($curl);
+                   if (!empty($curl_result['curl_exec_result'])) {
+                     $curl_decoded_result = json_decode($curl_result['curl_exec_result'], TRUE);
+                     if ($curl_decoded_result['status'] == TRUE && $curl_decoded_result['record_found'] != 0) {
+                       $trial_period = FALSE;
+                     }
+                   }
+                 }
+
                 //deactivate previously selected billing
                 $param['url'] =  Router::url('/', true) . 'users/deactivateUserSubscription';
                 $param['return_transfer'] = TRUE;
@@ -1796,7 +1815,7 @@ class UsersController extends AppController{
                      $user_id = $this->request->data['user_id'];
 
                      //same order date and time will be saved on user orders table.
-                     $order_date = $data['order_date'] = $billing_plan['order_date'];
+                     $data['order_date'] = $billing_plan['order_date'];
                      $order_timestamp = $data['order_timestamp'] = $billing_plan['order_timestamp'];
                      $data['trial_period'] = 1;
 
@@ -1810,6 +1829,7 @@ class UsersController extends AppController{
                        $data['paypal_plan_status'] = $plan_status;
                        $data['billing_id'] = $billing_response['result']['id'];
                        $data['billing_state'] = $billing_response['result']['state'];
+                       $data['trial_period'] = $trial_period;
 
                        // update user orders table.
                        $this->setUserOrders($user_id, $child_id, $data);
@@ -2197,6 +2217,7 @@ class UsersController extends AppController{
       try {
         $status = FALSE;
         $order_details = array();
+        $record_found = 0;
         $message = '';
         if ($this->request->is('post')) {
           if (!isset($this->request->data['child_id']) && !empty($this->request->data['child_id'])) {
@@ -2209,7 +2230,7 @@ class UsersController extends AppController{
           }
           $user_orders = TableRegistry::get('UserOrders');
           $order_details = $user_orders->find()->where($conditions);
-          if ($order_details->count()) {
+          if ($record_found = $order_details->count()) {
             $status = TRUE;
           } else {
             $message = 'No record found';
@@ -2222,7 +2243,8 @@ class UsersController extends AppController{
         'status' => $status,
         'message' => $message,
         'data' => (isset($this->request->data['last_order'])) ? array($order_details->last()) : $order_details,
-        '_serialize' => ['status', 'message', 'data']
+        'record_found' => empty($record_found) ? 0 : $record_found,
+        '_serialize' => ['status', 'message', 'data', 'record_found']
       ]);
     }
 
