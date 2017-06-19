@@ -2822,8 +2822,14 @@ class TeachersController extends AppController {
         if (!empty($pnum)) {
           $current_page = $pnum;
         }
-        $question = TableRegistry::get('question_master');
-        $count = $question->find()->where(['created_by' => $user_id])->count();
+//        $question = TableRegistry::get('question_master');
+        $connection = ConnectionManager::get('default');
+        $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
+                . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                . " WHERE question_master.created_by = " . $user_id
+                . " ORDER BY question_master.id DESC ";
+        $count = $connection->execute($sql)->count();
+//         $count = $question->find()->where(['created_by' => $user_id])->count();
         $last_page = ceil($count / $range);
         if ($current_page < 1) {
           $current_page = 1;
@@ -2831,7 +2837,6 @@ class TeachersController extends AppController {
           $current_page = $last_page;
         }
         $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
-        $connection = ConnectionManager::get('default');
         $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
                 . " INNER JOIN user_points ON question_master.id = user_points.question_id "
                 . " WHERE question_master.created_by = " . $user_id
@@ -3303,6 +3308,8 @@ class TeachersController extends AppController {
   public function updateTeacherQuestion() {
     if ($this->request->is('post')) {
       $message = '';
+      $status = false;
+      $count = 0;
       $question_master = TableRegistry::get('question_master');
       if (isset($this->request->data['tid']) && empty($this->request->data['tid'])) {
         $message = 'login';
@@ -3357,6 +3364,10 @@ class TeachersController extends AppController {
                   ])->where(['id' => $question_id])->execute();
         }
         $row_count = $result->rowCount();
+        if($row_count > 0){
+          $status = TRUE;
+          $message = 'Question updated Successfully.';
+        }
         $option_master = TableRegistry::get('option_master');
         $opt_id = $option_master->find('all', ['fields' => ['id']])->where(['uniqueId' => $unique_id[0]['uniqueId']])->min('id')->toArray('assoc');
         $option_id = $opt_id['id'];
@@ -3368,16 +3379,28 @@ class TeachersController extends AppController {
                 $option_id = $option_id + 1;
               }
               $query = $option_master->query();
-              $result = $query->update()->set([
+              $result_opt = $query->update()->set([
                           'options' => $value
                       ])->where(['uniqueId' => $unique_id[0]['uniqueId'], 'id' => $option_id])->execute();
+              $row_count = $result_opt->rowCount();
+              if($row_count > 0){
+                $count++;
+              }
               if ($key + 1 == $val) {
                 $query = $answer_master->query();
-                $result = $query->update()->set([
+                $result_ans = $query->update()->set([
                             'answers' => $value
                         ])->where(['uniqueId' => $unique_id[0]['uniqueId']])->execute();
+                $row_count = $result_ans->rowCount();
+                if($row_count > 0){
+                  $count++;
+                }
               }
             }
+          }
+          if($count > 0) {
+            $message = 'Question updated successfully.';
+            $status = TRUE;
           }
         }else if ($this->request->data['type'] == 'image'){
           $answer_list = explode(':', $this->request->data['answer']);
@@ -3426,6 +3449,7 @@ class TeachersController extends AppController {
     }
     $this->set([
         'message' => $message,
+        'status' => $status,
         '_serialize' => ['status', 'message']
     ]);
   }
