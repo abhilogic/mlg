@@ -2822,8 +2822,14 @@ class TeachersController extends AppController {
         if (!empty($pnum)) {
           $current_page = $pnum;
         }
-        $question = TableRegistry::get('question_master');
-        $count = $question->find()->where(['created_by' => $user_id])->count();
+//        $question = TableRegistry::get('question_master');
+        $connection = ConnectionManager::get('default');
+        $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
+                . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                . " WHERE question_master.created_by = " . $user_id
+                . " ORDER BY question_master.id DESC ";
+        $count = $connection->execute($sql)->count();
+//         $count = $question->find()->where(['created_by' => $user_id])->count();
         $last_page = ceil($count / $range);
         if ($current_page < 1) {
           $current_page = 1;
@@ -2831,7 +2837,6 @@ class TeachersController extends AppController {
           $current_page = $last_page;
         }
         $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
-        $connection = ConnectionManager::get('default');
         $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
                 . " INNER JOIN user_points ON question_master.id = user_points.question_id "
                 . " WHERE question_master.created_by = " . $user_id
@@ -3303,6 +3308,8 @@ class TeachersController extends AppController {
   public function updateTeacherQuestion() {
     if ($this->request->is('post')) {
       $message = '';
+      $status = false;
+      $count = 0;
       $question_master = TableRegistry::get('question_master');
       if (isset($this->request->data['tid']) && empty($this->request->data['tid'])) {
         $message = 'login';
@@ -3357,11 +3364,14 @@ class TeachersController extends AppController {
                   ])->where(['id' => $question_id])->execute();
         }
         $row_count = $result->rowCount();
+        if($row_count > 0){
+          $status = TRUE;
+          $message = 'Question updated Successfully.';
+        }
         $option_master = TableRegistry::get('option_master');
         $opt_id = $option_master->find('all', ['fields' => ['id']])->where(['uniqueId' => $unique_id[0]['uniqueId']])->min('id')->toArray('assoc');
         $option_id = $opt_id['id'];
         if ($this->request->data['type'] == 'text') {
-          print_r('hi');
           $answer_master = TableRegistry::get('answer_master');
           foreach ($corect_answer as $ki => $val) {
             foreach ($option as $key => $value) {
@@ -3369,41 +3379,77 @@ class TeachersController extends AppController {
                 $option_id = $option_id + 1;
               }
               $query = $option_master->query();
-              $result = $query->update()->set([
+              $result_opt = $query->update()->set([
                           'options' => $value
                       ])->where(['uniqueId' => $unique_id[0]['uniqueId'], 'id' => $option_id])->execute();
+              $row_count = $result_opt->rowCount();
+              if($row_count > 0){
+                $count++;
+              }
               if ($key + 1 == $val) {
                 $query = $answer_master->query();
-                $result = $query->update()->set([
+                $result_ans = $query->update()->set([
                             'answers' => $value
                         ])->where(['uniqueId' => $unique_id[0]['uniqueId']])->execute();
+                $row_count = $result_ans->rowCount();
+                if($row_count > 0){
+                  $count++;
+                }
               }
             }
           }
-        }else{
-          $answer_list = explode(',', $this->request->data['answer']);
-          foreach ($answer_list as $key => $value) {
-            $option_master = TableRegistry::get('option_master');
-            $option = $option_master->newEntity();
-            $option->uniqueId = $unique_id[0]['uniqueId'];
-            $option->options = 'upload/' . $value;
-            $option_master->save($option);
-            if($this->request->data['correctanswer_type'] != 'edit') {
-              print_r($this->request->data['correctanswer_type']);
+          if($count > 0) {
+            $message = 'Question updated successfully.';
+            $status = TRUE;
+          }
+        }else if ($this->request->data['type'] == 'image'){
+          $answer_list = explode(':', $this->request->data['answer']);
+          $edit_option = explode(',', $answer_list[0]);
+          $edit_count = count($edit_option);
+          $new_option = explode(',',$answer_list[1]);
+          if($edit_count <= $this->request->data['correctanswer'] ) {
+            foreach($edit_option as $key => $val) {
               if ($key+1  == $this->request->data['correctanswer']) {
                 $answer_master = TableRegistry::get('answer_master');
                 $answer = $answer_master->newEntity();
                 $answer->uniqueId = $unique_id[0]['uniqueId'];
                 $answer->answers = $value;
-                $answer_master->save($answer);
+                if($answer_master->save($answer)){
+                  $status = TRUE;
+                  $message = 'Question updated Successfully.';
+                }
               } 
-            }  
+            }
+          }
+          foreach ($new_option as $key => $value) {
+            $option_master = TableRegistry::get('option_master');
+            $option = $option_master->newEntity();
+            $option->uniqueId = $unique_id[0]['uniqueId'];
+            $option->options = 'upload/' . $value;
+            if($option_master->save($option)) {
+              if($this->request->data['correctanswer_type'] == 'image' && $this->request->data['correctanswer'] > $edit_option) {
+                if ($key+$edit_count+1  == $this->request->data['correctanswer']) {
+                  $answer_master = TableRegistry::get('answer_master');
+                  $answer = $answer_master->newEntity();
+                  $answer->uniqueId = $unique_id[0]['uniqueId'];
+                  $answer->answers = $value;
+                  if($answer_master->save($answer)){
+                    $status = TRUE;
+                    $message = 'Question updated Successfully.';
+                 }
+                } 
+              }else{
+                $status = TRUE;
+                $message = 'Option updated Successfully.';
+              }
+            }   
           }
         }
       }
     }
     $this->set([
         'message' => $message,
+        'status' => $status,
         '_serialize' => ['status', 'message']
     ]);
   }
@@ -4028,16 +4074,16 @@ class TeachersController extends AppController {
       $message = '';
       $status = FALSE;
       if($this->request->is('post')) {
-        if(!isset($this->request->data['uid']) && empty($this->request->data['uid'])) {
+        if(isset($this->request->data['uid']) && empty($this->request->data['uid'])) {
           $message = 'Please login.';
           throw new Exception('Please login.');
-        }else if(!isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
+        }else if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
           $message = 'Choose a grade.';
           throw new Exception('Choose a grade.');
-        }else if(!isset($this->request->data['course_id']) && empty($this->request->data['course_id'])) {
+        }else if(isset($this->request->data['course_id']) && empty($this->request->data['course_id'])) {
           $message = 'Choose a course.';
           throw new Exception('Choose a course.');
-        }else if(!isset($this->request->data['skill_name']) && empty($this->request->data['skill_name'])) {
+        }else if(isset($this->request->data['skill_name']) && empty($this->request->data['skill_name'])) {
           $message = 'Template name can not be empty.';
           throw new Exception('Template name can not be empty.');
         }
@@ -4230,7 +4276,7 @@ class TeachersController extends AppController {
         }else if(isset($this->request->data['type'])&& empty($this->request->data['type'])) {
           $message = 'Some error occurred';
           throw new Exception('Please defined type');
-        }else if(isset($this->request->data['id'])&& empty($this->request->data['id'])) {
+        }else if(isset($this->request->data['id'])&& empty($this->request->data['id']) && $this->request->data['created_for'] != 'class') {
           $message = 'Please select a student/group';
           throw new Exception('Please select a student/group.');
         }else{
@@ -4284,10 +4330,12 @@ class TeachersController extends AppController {
         }else if(isset($this->request->data['type'])&& empty($this->request->data['type'])) {
           $message = 'Please Select for which you want to create the scope.';
           throw new Exception('Please Select for which you want to create the scope.');
-        }else if(isset($this->request->data['people'])&& empty($this->request->data['people'])) {
+        }else if(isset($this->request->data['people']) && $this->request->data['type']== 'people' 
+                && empty($this->request->data['people'])) {
           $message = 'Please select a student.';
           throw new Exception('Please select a student.');
-        }else if(isset($this->request->data['group'])&& empty($this->request->data['group'])) {
+        }else if(isset($this->request->data['group'])&& $this->request->data['type']== 'group'
+                && empty($this->request->data['group'])) {
           $message = 'Please select a group.';
           throw new Exception('Please select a group.');
         }else if(isset($this->request->data['scope'])&& empty($this->request->data['scope'])) {
