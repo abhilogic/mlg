@@ -3138,36 +3138,36 @@ class UsersController extends AppController{
        'user_purchase_items.order_timestamp',
        'UserOrders.trial_period'
       ]);
-     if ($orders_join_purchase_table->count()) {
-       $orders_join_purchase_result = $orders_join_purchase_table->last()->toArray();
-       $plan_id = $orders_join_purchase_result['user_purchase_items']['plan_id'];
-       $order_timestamp = $orders_join_purchase_result['user_purchase_items']['order_timestamp'];
-       $plans_table = TableRegistry::get('plans');
-       $plan = $plans_table->find()->select('num_months')->where(['id' => $plan_id])->first()->toArray();
-       $plan_month = $plan['num_months'];
-       if (!empty($child_id)) {
-         $add_trial_days_timestamp = 0;
+      if ($orders_join_purchase_table->count()) {
+        $orders_join_purchase_result = $orders_join_purchase_table->last()->toArray();
+        $plan_id = $orders_join_purchase_result['user_purchase_items']['plan_id'];
+        $order_timestamp = $orders_join_purchase_result['user_purchase_items']['order_timestamp'];
+        $plans_table = TableRegistry::get('plans');
+        $plan = $plans_table->find()->select('num_months')->where(['id' => $plan_id])->first()->toArray();
+        $plan_month = $plan['num_months'];
+        if (!empty($child_id)) {
+          $add_trial_days_timestamp = 0;
 
-         // if parent on trial subscription. Trial period will be added to child subscription.
-         $parent_info = $this->getParentInfoByChildId($child_id);
-         if ($parent_info['parent_subscription_days_left'] > 0) {
-           $add_trial_days_timestamp = (60 * 60 * 24 * $parent_info['parent_subscription_days_left']);
-         }
-         $new_subscription_time = strtotime("+$plan_month months", $order_timestamp) + $add_trial_days_timestamp;
-         $new_subscription_end_date = date('Y-m-d', $new_subscription_time);
-         $user = $this->Users->find()->where(['user_id' => $child_id]);
-         foreach($user as $info) {
-           $info->subscription_end_date = $new_subscription_time;
-           break;
-         }
-         if ($this->Users->save($info)) {
-           $status = TRUE;
-         }
-       }
-     } else {
-       $message = 'No active record found';
-       throw new Exception($message);
-     }
+          // if parent on trial subscription. Trial period will be added to child subscription.
+          $parent_info = $this->getParentInfoByChildId($child_id);
+          if ($parent_info['parent_subscription_days_left'] > 0) {
+            $add_trial_days_timestamp = (60 * 60 * 24 * $parent_info['parent_subscription_days_left']);
+          }
+          $new_subscription_time = strtotime("+$plan_month months", $order_timestamp) + $add_trial_days_timestamp;
+          $new_subscription_end_date = date('Y-m-d', $new_subscription_time);
+          $user = $this->Users->find()->where(['id' => $child_id]);
+          foreach($user as $info) {
+            $info->subscription_end_date = $new_subscription_time;
+            break;
+          }
+          if ($this->Users->save($info)) {
+            $status = TRUE;
+          }
+        }
+      } else {
+        $message = 'No active record found';
+        throw new Exception($message);
+      }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
