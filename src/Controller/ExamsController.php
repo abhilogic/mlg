@@ -305,9 +305,9 @@ public function createQuizOnStudent($grade_id=null, $subskill_id=null,$user_id=n
   $json_questionslist = $this->curlPost($base_url . 'students/getQuestionsList/', $dataToGetQuestions); 
 
     $array_qlist = (array) json_decode($json_questionslist);
-    
-    if( isset($array_qlist['response']) ){        
-        if ($array_qlist['response']->status == True) {
+   
+    if( isset($array_qlist['response']) ){
+        if ($array_qlist['response']->status == "True") {
             $data['status'] = True;
             $data['questions'] = $array_qlist['response']->questions;
         } else {
@@ -316,7 +316,7 @@ public function createQuizOnStudent($grade_id=null, $subskill_id=null,$user_id=n
             }
 
     }else{
-      $data ['status'] = False;
+      $data ['status'] = "False";
       $data ['message'] = "Opps... No question get.";
     }
 
@@ -529,7 +529,7 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
         $message = 'please select a answer';
       }
       if($message == '') {
-        $question = TableRegistry::get('question_master');
+       $question = TableRegistry::get('question_master');
       $answer = TableRegistry::get('answer_master');
       $user_quiz = TableRegistry::get('user_quiz_responses');
       $ques = $question->find('all')->where(['id' => $this->request->data['question_id']]);
