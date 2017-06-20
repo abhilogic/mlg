@@ -2022,7 +2022,7 @@ class UsersController extends AppController{
          . " user_purchase_items.course_id, user_purchase_items.order_date as order_date,"
          . " user_purchase_items.order_timestamp as order_timestamp, user_purchase_items.item_paid_status as paid_status,"
          . " packages.name as package_subjects, packages.id as package_id, "
-         . " plans.id as plan_id, plans.name as plan_duration, plans.num_months as plan_num_months"
+         . " plans.id as plan_id, plans.name as plan_duration, plans.num_months as plan_num_months,"
          . " courses.course_name"
          . " FROM users"
          . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
