@@ -298,6 +298,12 @@ class PaymentController extends AppController {
       );
 
       if ($trial_period == TRUE) {
+        $parent_response = $user_controller->getParentInfoByChildId($user_id);
+        if ($parent_response['parent_subscription_days_left'] > 0 && $parent_response['parent_subscription_days_left'] <= 30) {
+          $trial_frequency = 'DAY';
+          $trial_frequency_interval = 1;
+          $trial_cycles = $parent_response['parent_subscription_days_left'];
+        }
         $trial_payment_definitions = array(
           "name" => $trial_name,
           "type" => "TRIAL",

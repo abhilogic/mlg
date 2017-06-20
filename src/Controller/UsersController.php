@@ -1565,7 +1565,13 @@ class UsersController extends AppController{
                           else{ $to=$postdata['email'];  }
 
                       //1. User Table
-                      $postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $this->request->data['subscription_days'];
+
+                      // parent and child having same subscription_end_date;
+                      $parent_info = $this->getUserDetails($postdata['parent_id'], TRUE);
+                      $parent_subscription = (array)$parent_info['user_all_details']['subscription_end_date'];
+                      $parent_subscription_end_date = $parent_subscription['date'];
+                      $postdata['subscription_end_date'] = strtotime($parent_subscription_end_date);
+
                       $new_user = $this->Users->newEntity($postdata);
                       if ($result=$this->Users->save($new_user)) { 
                       $postdata['user_id']  = $result->id;
@@ -1752,15 +1758,6 @@ class UsersController extends AppController{
                $data['external_customer_id'] = $response['external_customer_id'];
                $parent_id = $this->request->data['user_id'];
 
-               //If Parent is on trial period, child will get a bonus of 60days membership for free.
-               //else the parent will be charged money as soon as payment completed.
-               $parent_info = $this->Users->get($parent_id)->toArray();
-               $parent_subcription = (array)$parent_info['subscription_end_date'];
-               $subcription_end_date = $parent_subcription['date'];
-               if (time() > strtotime($subcription_end_date)) {
-                 $trial_period = FALSE;
-               }
-
                $user_ids = $this->request->data['children_ids'];
                foreach ($user_ids as $child_id) {
 
@@ -1841,6 +1838,17 @@ class UsersController extends AppController{
                         ->set(['item_paid_status' => 1])
                         ->where(['order_timestamp' => $order_timestamp, 'user_id' => $child_id])
                         ->execute();
+
+                       // update child subscription period
+                       $param['url'] =  Router::url('/', true) . 'users/updateUserSubscriptionPeriod';
+                       $param['return_transfer'] = TRUE;
+                       $param['post_fields'] = array(
+                        'user_id' => $parent_id,
+                        'child_id' => $child_id
+                       );
+                       $param['json_post_fields'] = TRUE;
+                       $param['curl_post'] = 1;
+                       $payment_controller->sendCurl($param);
 
                        $message = 'card added successfully';
                      } else {
@@ -2015,7 +2023,7 @@ class UsersController extends AppController{
          . " user_purchase_items.course_id, user_purchase_items.order_date as order_date,"
          . " user_purchase_items.order_timestamp as order_timestamp, user_purchase_items.item_paid_status as paid_status,"
          . " packages.name as package_subjects, packages.id as package_id, "
-         . " plans.id as plan_id, plans.name as plan_duration,"
+         . " plans.id as plan_id, plans.name as plan_duration, plans.num_months as plan_num_months"
          . " courses.course_name"
          . " FROM users"
          . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
@@ -2040,6 +2048,7 @@ class UsersController extends AppController{
            $purchase_details['package_subjects'] = $purchase_result['package_subjects'];
            $purchase_details['plan_id'] = $purchase_result['plan_id'];
            $purchase_details['plan_duration'] = $purchase_result['plan_duration'];
+           $purchase_details['plan_num_months'] = $purchase_result['plan_num_months'];
            $purchase_details['level_id'] = $purchase_result['level_id'];
            $purchase_details['order_date'] = @current(explode(' ', $purchase_result['order_date']));
            $purchase_details['db_order_date'] = $purchase_result['order_date'];
@@ -3088,6 +3097,134 @@ class UsersController extends AppController{
       'deactivated_child_ids' => $deactivated_child_ids,
       '_serialize' => ['status', 'message', 'number_of_child', 'deactivated_child_ids']
     ]);
+  }
+
+  /**
+   * function updateUserSubscriptionPeriod().
+   *
+   * This function updates user's subscription period
+   * if user is not in TRIAL period.
+   */
+  public function updateUserSubscriptionPeriod() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $new_subscription_end_date = '';
+      $req_data = $this->request->data;
+
+      // usually user_id refers to parent_id or teacher_id.
+      if (!isset($req_data['user_id']) && empty($req_data['user_id'])) {
+        $message = 'User id missing';
+        throw new Exception($message);
+      }
+      $child_id = 0;
+      if (isset($req_data['child_id']) && !empty($req_data['child_id'])) {
+        $child_id = $req_data['child_id'];
+      }
+      $conditions['UserOrders.user_id'] = $req_data['user_id'];
+      $conditions['UserOrders.child_id'] = $child_id;
+
+      $user_orders_table = TableRegistry::get('UserOrders');
+      $user_order = $user_orders_table->find()->where($conditions);
+      $orders_join_purchase_table = $user_order->join([
+        'table' => 'user_purchase_items',
+        'type' => 'INNER',
+        'conditions' => [
+          'user_purchase_items.order_timestamp = UserOrders.order_timestamp',
+          'user_purchase_items.item_paid_status = 1',
+          "UserOrders.billing_state = 'ACTIVE'",
+        ]
+      ])->select([
+       'user_purchase_items.plan_id',
+       'user_purchase_items.order_timestamp',
+       'UserOrders.trial_period'
+      ]);
+     if ($orders_join_purchase_table->count()) {
+       $orders_join_purchase_result = $orders_join_purchase_table->last()->toArray();
+       $plan_id = $orders_join_purchase_result['user_purchase_items']['plan_id'];
+       $order_timestamp = $orders_join_purchase_result['user_purchase_items']['order_timestamp'];
+       $plans_table = TableRegistry::get('plans');
+       $plan = $plans_table->find()->select('num_months')->where(['id' => $plan_id])->first()->toArray();
+       $plan_month = $plan['num_months'];
+       if (!empty($child_id)) {
+         $add_trial_days_timestamp = 0;
+
+         // if parent on trial subscription. Trial period will be added to child subscription.
+         $parent_info = $this->getParentInfoByChildId($child_id);
+         if ($parent_info['parent_subscription_days_left'] > 0) {
+           $add_trial_days_timestamp = (60 * 60 * 24 * $parent_info['parent_subscription_days_left']);
+         }
+         $new_subscription_time = strtotime("+$plan_month months", $order_timestamp) + $add_trial_days_timestamp;
+         $new_subscription_end_date = date('Y-m-d', $new_subscription_time);
+         $user = $this->Users->find()->where(['user_id' => $child_id]);
+         foreach($user as $info) {
+           $info->subscription_end_date = $new_subscription_time;
+           break;
+         }
+         if ($this->Users->save($info)) {
+           $status = TRUE;
+         }
+       }
+     } else {
+       $message = 'No active record found';
+       throw new Exception($message);
+     }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'new_subscription_end_date' => $new_subscription_end_date,
+      '_serialize' => ['status', 'message', 'new_subscription_end_date']
+    ]);
+  }
+
+  /**
+   * function getParentInfoByChildId().
+   */
+  public function getParentInfoByChildId($child_id = NULL) {
+    try {
+      $status = FALSE;
+      $message = '';
+      $parent_info = array();
+      $parent_subscription_days_left = 0;
+      $parent_subscription_timestamp = '';
+      if (empty($child_id)) {
+        $message = 'Child id could not be null';
+        throw new Exception($message);
+      }
+      $child_info = $this->getUserDetails($child_id, TRUE);
+      if (!empty($child_info['user_all_details'])) {
+        $child_details = $child_info['user_all_details'];
+        $parent_id = $child_details['user_detail']['parent_id'];
+        if ($parent_id == 0) {
+          $message = "Unable to find user's Parent";
+          throw new Exception("parent_id is 0");
+        }
+        $parent_info = $this->getUserDetails($parent_id, TRUE);
+        if (empty($parent_info['user_all_details']['subscription_end_date'])) {
+          $message = 'unable to get subscription info';
+          throw new Exception('Subscription period is null or undefiend');
+        }
+        $status = TRUE;
+        $parent_subscription_info = (array)$parent_info['user_all_details']['subscription_end_date'];
+        $parent_subscription_timestamp = strtotime($parent_subscription_info['date']);
+        $parent_subscription_days_left = floor(($parent_subscription_timestamp - time())/(60 * 60 * 24));
+      } else {
+        $message = 'No record found regarding child id';
+        throw new Exception($message);
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return [
+      'status' => $status,
+      'message' => $message,
+      'parent_info' => isset($parent_info['user_all_details']) ? $parent_info['user_all_details'] : array(),
+      'parent_subscription_days_left' => $parent_subscription_days_left,
+      'parent_subscription_timestamp' => $parent_subscription_timestamp
+    ];
   }
 
 }
