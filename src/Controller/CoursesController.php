@@ -816,16 +816,27 @@ class CoursesController extends AppController{
           $course_info = $connection->execute("select * from courses where id=$parent_id")->fetchAll('assoc');
 //          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
-          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
-          $course_info = $courses_table->find('all')->where(['id' => $parent_id]);
+          if($type == 'student') {
+            $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
+            $course_info = $courses_table->find('all')->where(['id' => $parent_id]);
+          }else{
+            $user_role = TableRegistry::get('user_roles');
+            $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+            foreach ($role as $key => $value) {
+              $rol[$key] = $value['user_id'];
+            }
+            $id = implode(',',$rol);
+            $id = $id.','.$user_id;
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+            $course_details = $connection->execute($sql)->fetchAll('assoc');
+            $course_info = $courses_table->find('all')->where(['id' => $parent_id]); 
+          }
         }
       }  catch (Exception $e) {
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
-
-
-
       if($type == 'type') {
         foreach ($course_details as $course_detail) {
           if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
@@ -1182,6 +1193,8 @@ class CoursesController extends AppController{
      '_serialize' => ['response']
   ]);
 }
-
+/**
+ * This api is used 
+ **/
 
 }
