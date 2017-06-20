@@ -419,6 +419,7 @@ class PaymentController extends AppController {
   public function billingAgreementViaCreditCard($user_id = null, $card_details = null, $plan_id = null, $access_token = null) {
     try {
       $result = array();
+      $status = FALSE;
       $user_controller = new UsersController();
       if ($access_token == null) {
         $access_token = $this->paypalAccessToken();
@@ -476,10 +477,11 @@ class PaymentController extends AppController {
         $error = TRUE;
         throw new Exception('Exception occured: ' . json_encode($result));
       }
+      $status = TRUE;
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
-    return array('result' => $result, 'error' => $error);
+    return array('status' => $status, 'result' => $result, 'error' => $error);
   }
 
   /**
