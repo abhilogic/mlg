@@ -3157,7 +3157,7 @@ class UsersController extends AppController{
           $new_subscription_end_date = date('Y-m-d', $new_subscription_time);
           $user = $this->Users->find()->where(['id' => $child_id]);
           foreach($user as $info) {
-            $info->subscription_end_date = $new_subscription_time;
+            $info->subscription_end_date = $new_subscription_end_date;
             break;
           }
           if ($this->Users->save($info)) {
