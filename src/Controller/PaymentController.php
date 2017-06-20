@@ -469,8 +469,10 @@ class PaymentController extends AppController {
       $param['curl_post'] = 1;
       $param['authorization'] = "Bearer $access_token";
       $curl_response = $this->sendCurl($param);
-      if ($curl_response['status'] == TRUE) {
+      if ($curl_response['status'] == TRUE && !empty($curl_response['curl_exec_result'])) {
         $result = json_decode($curl_response['curl_exec_result'], TRUE);
+      } else {
+        throw new Exception('unable to create billing Agreement');
       }
       $error = FALSE;
       if (isset($result['name'])) {
