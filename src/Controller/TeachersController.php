@@ -4080,7 +4080,7 @@ public function getNeedAttention($teacher_id=null, $subject_id=null){
 }
 
   // API to call Analyitic result of students in a subskill
-    public function getSubskillAnalytic($teacher_id=null, $subskill_id=null, $subject_id=null){
+    public function getSubskillAnalytic($teacher_id=null,$subject_id=null,$subskill_id=null){
         $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id'] : $teacher_id;
         $subject_id = isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
         $subskill_id = isset($_REQUEST['subskill_id']) ? $_REQUEST['subskill_id'] : $subskill_id;
@@ -4099,20 +4099,20 @@ public function getNeedAttention($teacher_id=null, $subject_id=null){
 
 
                // get students list for subskills
-               $sql = "SELECT st.student_id,u.username from student_teachers as st, users as u WHERE u.id=st.student_id AND teacher_id = $teacher_id AND course_id=$subject_id GROUP BY teacher_id ORDER BY student_id ASC "; 
+                $sql = "SELECT st.student_id,u.username from student_teachers as st, users as u WHERE u.id=st.student_id AND teacher_id = $teacher_id AND course_id=$subject_id ORDER BY student_id ASC ";  
                 $stRecords = $connection->execute($sql)->fetchAll('assoc');
 
                 if(count($stRecords) > 0){
                   foreach ($stRecords as $stRecord) {
-                      $count_classStudents = $count_classStudents+1;
+                      $count_classStudents++;
                       $class_stud_id = $stRecord['student_id'];
                         
 
                       // get students quiz result for subskills
-                     $sql1 = "SELECT uq.*,qt.name as quiz_type_name, cr.course_name FROM user_quizes as uq
+                      $sql1 = "SELECT uq.*,qt.name as quiz_type_name, cr.course_name FROM user_quizes as uq
                               INNER JOIN courses as cr ON  cr.id=uq.course_id
                               INNER JOIN quiz_types as qt ON qt.id=uq.quiz_type_id
-                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id=2 ORDER BY created DESC ";
+                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id=2 ORDER BY created DESC "; 
                       
                       $stQuizRecords = $connection->execute($sql1)->fetchAll('assoc');
 
@@ -4147,30 +4147,25 @@ public function getNeedAttention($teacher_id=null, $subject_id=null){
 
                       }else{
                          $count_noattack = $count_noattack+1  ;
-                      }
-
-                     
-
+                      }              
                   }
 
-                    $row['percent_classStudents'] = 100;
-                    $row['percent_noattack'] = ($count_noattack*100)/$count_classStudents;
-                    $row['percent_remedial'] = ($count_remedial*100)/$count_classStudents;
-                    $row['percent_struggling']=($count_struggling*100)/$count_classStudents;
-                    $row['percent_ontarget'] = ($count_ontarget*100)/$count_classStudents;
-                    $row['percent_outstanding'] = ($count_outstanding*100)/$count_classStudents;
-                    $row['percent_gifted'] = ($count_gifted*100)/$count_classStudents;
+                    //$row['percent_classStudents'] = 100;
+                    $row['percent_noattack'] = round( (($count_noattack*100)/$count_classStudents),2);
+                    $row['percent_remedial'] = round( (($count_remedial*100)/$count_classStudents),2);
+                    $row['percent_struggling']=round( (($count_struggling*100)/$count_classStudents),2);
+                    $row['percent_ontarget'] = round( (($count_ontarget*100)/$count_classStudents),2);
+                    $row['percent_outstanding'] =round( (($count_outstanding*100)/$count_classStudents),2);
+                    $row['percent_gifted'] = round( (($count_gifted*100)/$count_classStudents),2);
                     $data['student_result']=$row;
-                 
+                    $data['status']=True;
+      
 
               
                 }else{
-                  $data['status'] = "No students found.";
+                  $data['status']=False;
+                  $data['message'] = "No students found.";
                 }
-
-
-
-
 
         }else{
             $data['status'] = False;
