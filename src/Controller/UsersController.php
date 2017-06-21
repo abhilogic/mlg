@@ -1760,24 +1760,13 @@ class UsersController extends AppController{
                $user_ids = $this->request->data['children_ids'];
                foreach ($user_ids as $child_id) {
 
-                 // if parent tries to re-purchase order (even in trial period),
-                 //  the order will be considered as purchased without trial period
-                 if ($trial_period == TRUE) {
-                   $curl['url'] = Router::url('/', true) . 'users/getUserOrders';
-                   $curl['return_transfer'] = TRUE;
-                   $curl['post_fields'] = array(
-                    'child_id' => $child_id
-                    );
-                   $curl['json_post_fields'] = TRUE;
-                   $curl['curl_post'] = 1;
-                   $curl_result = $payment_controller->sendCurl($curl);
-                   if (!empty($curl_result['curl_exec_result'])) {
-                     $curl_decoded_result = json_decode($curl_result['curl_exec_result'], TRUE);
-                     if ($curl_decoded_result['status'] == TRUE && $curl_decoded_result['record_found'] != 0) {
-                       $trial_period = FALSE;
-                     }
-                   }
-                 }
+               //If Parent is on trial period, child will also be in trial period.
+               $parent_info = $this->Users->get($parent_id)->toArray();
+               $parent_subcription = (array)$parent_info['subscription_end_date'];
+               $subcription_end_date = $parent_subcription['date'];
+               if (time() > strtotime($subcription_end_date)) {
+                 $trial_period = FALSE;
+               }
 
                 //deactivate previously selected billing
                 $param['url'] =  Router::url('/', true) . 'users/deactivateUserSubscription';
@@ -1811,12 +1800,12 @@ class UsersController extends AppController{
                      $user_id = $this->request->data['user_id'];
 
                      //same order date and time will be saved on user orders table.
-                     $data['order_date'] = $billing_plan['order_date'];
-                     $order_timestamp = $data['order_timestamp'] = $billing_plan['order_timestamp'];
+                     $data['order_date'] = date('Y-m-d', time());
+                     $order_timestamp = $data['purchase_item_order_timestamp'] = $billing_plan['order_timestamp'];
                      $data['trial_period'] = 1;
 
                      $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
-                     if (!$billing_response['error'] && $billing_response['status'] == TRUE) {
+                     if ($billing_response['status'] == TRUE) {
                        $payment_status = TRUE;
                        $status = TRUE;
 
@@ -1915,6 +1904,7 @@ class UsersController extends AppController{
              'username' => $childRecord['username'],
              'email' => $childRecord['email'],
              'mobile' => $childRecord['mobile'],
+             'created_date' => $childRecord['user']['created'],
              'subscription_end_date' => $childRecord['user']['subscription_end_date'],
            );
 
@@ -2030,7 +2020,7 @@ class UsersController extends AppController{
          . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
          . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
          . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
-       if ($recent_order = TRUE) {
+       if ($recent_order) {
          $subquery = "(SELECT MAX(order_timestamp) FROM user_purchase_items"
          . " WHERE user_id = $uid)";
          $sql.= " AND user_purchase_items.order_timestamp = $subquery";
@@ -2287,7 +2277,7 @@ class UsersController extends AppController{
           'paypal_plan_status' => $order_details['paypal_plan_status'],
           'billing_id' => $order_details['billing_id'],
           'billing_state' => strtoupper($order_details['billing_state']),
-          'order_timestamp' => isset($order_details['order_timestamp']) ? $order_details['order_timestamp'] : time(),
+          'purchase_item_order_timestamp' => isset($order_details['purchase_item_order_timestamp']) ? $order_details['purchase_item_order_timestamp'] : time(),
         );
         $user_order = $user_orders->newEntity($order);
         if ($user_orders->save($user_order)) {
@@ -2983,7 +2973,7 @@ class UsersController extends AppController{
   public function deactivateUserSubscription() {
     try {
       $status = FALSE;
-      $is_billing_id_present = FALSE;
+      $is_billing_id_present = $is_billing_state_active = FALSE;
       $message = '';
       if (!isset($this->request->data['user_id']) || empty($this->request->data['user_id'])) {
         $message = 'User id is null';
@@ -3000,30 +2990,37 @@ class UsersController extends AppController{
          'child_id' => $child_id
         ]);
       if ($user_orders->count()) {
-        $is_billing_id_present = TRUE;
+        $user_orders_details = $user_orders->last()->toArray();
+        if ($user_orders_details['billing_state'] == 'ACTIVE') {
+          $is_billing_state_active = TRUE;
+        } else {
+          $message = 'No active bill found';
+          throw new Exception($message);
+        }
       } else {
         $message = 'User order not found';
         throw new Exception($message);
       }
-      $user_orders_details = $user_orders->last()->toArray();
-      $billing_id = $user_orders_details['billing_id'];
-      if (empty($billing_id)) {
-        $is_billing_id_present = FALSE;
-        $message = 'No billing id found';
-        throw new Exception($message);
-      }
-      $payment_controller = new PaymentController();
-      $billiing_cancel_response = $payment_controller->cancelBillingAgreement($billing_id);
-      if (!empty($billiing_cancel_response)) {
-        $user_orders_details['order_date'] = $user_orders_details['order_timestamp'] = time();
-        $user_orders_details['billing_state'] = $billiing_cancel_response;
-        $user_orders_details['total_amount'] = $user_orders_details['amount'];
-        $order_entry = $this->setUserOrders($user_id, $child_id, $user_orders_details);
-        if ($order_entry === TRUE) {
-          $status = TRUE;
-        } else {
-          $message = 'unable to deactivate order';
+      if ($is_billing_state_active) {
+        $billing_id = $user_orders_details['billing_id'];
+        if (empty($billing_id)) {
+          $is_billing_id_present = FALSE;
+          $message = 'No billing id found';
           throw new Exception($message);
+        }
+        $payment_controller = new PaymentController();
+        $billiing_cancel_response = $payment_controller->cancelBillingAgreement($billing_id);
+        if (!empty($billiing_cancel_response)) {
+          $user_orders_details['order_date'] = $user_orders_details['purchase_item_order_timestamp'] = time();
+          $user_orders_details['billing_state'] = $billiing_cancel_response;
+          $user_orders_details['total_amount'] = $user_orders_details['amount'];
+          $order_entry = $this->setUserOrders($user_id, $child_id, $user_orders_details);
+          if ($order_entry === TRUE) {
+            $status = TRUE;
+          } else {
+            $message = 'unable to deactivate order';
+            throw new Exception($message);
+          }
         }
       }
     } catch (Exception $ex) {
@@ -3129,7 +3126,7 @@ class UsersController extends AppController{
         'table' => 'user_purchase_items',
         'type' => 'INNER',
         'conditions' => [
-          'user_purchase_items.order_timestamp = UserOrders.order_timestamp',
+          'user_purchase_items.order_timestamp = UserOrders.purchase_item_order_timestamp',
           'user_purchase_items.item_paid_status = 1',
           "UserOrders.billing_state = 'ACTIVE'",
         ]

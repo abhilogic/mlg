@@ -472,18 +472,17 @@ class PaymentController extends AppController {
       if ($curl_response['status'] == TRUE && !empty($curl_response['curl_exec_result'])) {
         $result = json_decode($curl_response['curl_exec_result'], TRUE);
       } else {
-        throw new Exception('unable to create billing Agreement');
+        throw new Exception("unable to create billing Agreement. \nResponse: " . json_encode($curl_response));
       }
-      $error = FALSE;
       if (isset($result['name'])) {
-        $error = TRUE;
+        $status = FALSE;
         throw new Exception('Exception occured: ' . json_encode($result));
       }
       $status = TRUE;
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
-    return array('status' => $status, 'result' => $result, 'error' => $error);
+    return array('status' => $status, 'result' => $result);
   }
 
   /**
@@ -556,6 +555,8 @@ class PaymentController extends AppController {
       $success_http_codes = [200, 201, 204];
       if (in_array($response['http_code'], $success_http_codes)) {
         $response['status'] = TRUE;
+      } else {
+        throw new Exception('curl response: ' . json_encode($response['curl_exec_result']));
       }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');

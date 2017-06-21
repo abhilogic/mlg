@@ -2566,7 +2566,7 @@ class TeachersController extends AppController {
 
               //same order date and time will be saved on user orders tabl.
               $order_date = $data['order_date'] = time();
-              $order_timestamp = $data['order_timestamp'] = time();
+              $order_timestamp = $data['purchase_item_order_timestamp'] = time();
               $data['trial_period'] = 1;
 
               $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
