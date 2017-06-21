@@ -4351,7 +4351,7 @@ class TeachersController extends AppController {
               $query = $scope->query();
               $result = $query->update()->set([
                           'scope' => json_encode($this->request->data['scope']),
-                      ])->where(['created_by' => $id])->execute();
+                      ])->where(['created_by' => $id,'parent_id'=>$parent])->execute();
               $row_count = $result->rowCount();
               if($row_count > 0) {
                 $message = 'Your scope and sequence saved.';
@@ -4370,7 +4370,7 @@ class TeachersController extends AppController {
               $query = $scope->query();
               $result = $query->update()->set([
                           'scope' => json_encode($this->request->data['scope']),
-                      ])->where(['created_by' => $id])->execute();
+                      ])->where(['created_by' => $id,'parent_id'=>$parent])->execute();
               $row_count = $result->rowCount();
               if($row_count > 0) {
                 $message = 'Your scope and sequence saved.';
@@ -4390,7 +4390,7 @@ class TeachersController extends AppController {
               $query = $scope->query();
               $result = $query->update()->set([
                           'scope' => json_encode($this->request->data['scope']),
-                      ])->where(['created_by' => $id])->execute();
+                      ])->where(['created_by' => $id,'parent_id'=>$parent])->execute();
               $row_count = $result->rowCount();
               if($row_count > 0) {
                 $message = 'Your scope and sequence saved.';

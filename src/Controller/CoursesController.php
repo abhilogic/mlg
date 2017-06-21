@@ -1194,7 +1194,108 @@ class CoursesController extends AppController{
   ]);
 }
 /**
- * This api is used 
+ * This api is used for getting student skills.
  **/
-
+  public function getStudentSkills($user_id=null,$parent_id=null,$course=null) {
+    try{
+      $message='';
+      $status = FALSE;
+      $scopes = array();
+      $course_details = '';
+      $by = 'course';
+      $scope = TableRegistry::get('scope_and_sequence');
+      $group = TableRegistry::get('student_groups');
+      $course_detail = TableRegistry::get('course_details');
+      if($user_id == NULL) {
+        $message = 'Please login.';
+        throw new Exception('Please Login');
+      }else if($parent_id == NULL) {
+        $message = 'Please select a subject.';
+        throw new Exception('Please select a subject.');
+      }else{
+        $connection = ConnectionManager::get('default');
+        if($course == NULL ) {
+          $sql = " SELECT teacher_id from student_teachers where student_id = $user_id AND course_id = $parent_id "; 
+        }else if($course == '-1'){
+          $result = $course_detail->find('all',['fields'=>['parent_id']])->where(['course_id' => $parent_id])->toArray();
+          $sql = " SELECT teacher_id from student_teachers where student_id = $user_id AND course_id = ".$result[0]['parent_id'] ;
+        }else{
+          $sql = " SELECT teacher_id from student_teachers where student_id = $user_id AND course_id = $course ";
+        }
+        $tid = $connection->execute($sql)->fetchAll('assoc');
+        $scopes = $scope->find()->where(['created_for'=> $user_id,'parent_id' => $parent_id]);
+        $scopCount = $scopes->count();
+        if($scopCount == 1 ) {
+          $by = 'scope';
+          $status = TRUE;
+          $course_details[0] = $scopes;
+        }else{
+          $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
+            'type IN'=>['class','group']])->orderDESC('type','created');
+          $scopCount = $scopes->count();
+          if($scopCount > 0) {
+            $by = 'scope';
+            $count = 0;
+            foreach ($scopes  as $key => $value) {
+               if($count >= 1) {
+                    break;
+               }
+              if($value['type'] == 'group') {
+                $data = $group->find()->where(['id' => $value['created_for']]);
+                foreach($data as $ki=>$val) {
+                  $students = explode(',', $val['student_id']);
+                  if(in_array($user_id,$students)){
+                    $course_details[0] = $value;
+                    $count++;
+                    $status = TRUE;
+                    break;
+                  }
+                }
+              }else if($value['type'] == 'class') {
+                $course_details[0] = $value;
+                $status = TRUE;
+              }
+            }
+          }else{
+            $course_detail = TableRegistry::get('course_details');
+            $user_role = TableRegistry::get('user_roles');
+            $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+            foreach ($role as $key => $value) {
+              $rol[$key] = $value['user_id'];
+            }
+            $id = implode(',',$rol);
+            $id = $id.','.$tid[0]['teacher_id'];
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+//            $course_details = $connection->execute($sql)->fetchAll('assoc');
+            $skills = $connection->execute($sql)->fetchAll('assoc');
+            if(count($skills) > 0) {
+              foreach ($skills as $key => $value) {
+              $skill['course_id'] = $value['course_id'];
+              $skill['parent_id'] = $value['parent_id'];
+              $skill['name'] = $value['name'];
+              $skill['start_date'] = $value['start_date'];
+              $skill['end_date'] = $value['end_date'];
+              $skill['created_by'] = $value['created_by'];
+              $skill['status'] = $value['status'];
+              $skill['visibility'] = 1;
+              $course_details[] = $skill;
+              }
+              $status = TRUE; 
+            }
+          }
+        }
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserCreatedScope function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'response' => $course_details,
+        'message' => $message,
+        'status' => $status,
+        'by' => $by,
+        '_serialize' => ['response','message','status','by']
+    ]);
+  }
 }
