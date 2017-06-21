@@ -416,7 +416,7 @@ class UsersController extends AppController{
             throw new Exception('Pregmatch not matched for Username');
           }
           $user['status'] = 0;
-          $user['subscription_end_date'] = date('Y-m-d' ,(time() + 60 * 60 * 24 * $user['subscription_days']));
+          $user['trial_period_end_date'] = $user['subscription_end_date'] = date('Y-m-d' ,(time() + 60 * 60 * 24 * $user['subscription_days']));
           $user['created'] = $user['modfied'] = time();
           $userroles = TableRegistry::get('UserRoles');
           $userdetails = TableRegistry::get('UserDetails');
@@ -1569,7 +1569,7 @@ class UsersController extends AppController{
                       $parent_info = $this->getUserDetails($postdata['parent_id'], TRUE);
                       $parent_subscription = (array)$parent_info['user_all_details']['subscription_end_date'];
                       $parent_subscription_end_date = $parent_subscription['date'];
-                      $postdata['subscription_end_date'] = strtotime($parent_subscription_end_date);
+                      $postdata['trial_period_end_date'] = $postdata['subscription_end_date'] = strtotime($parent_subscription_end_date);
 
                       $new_user = $this->Users->newEntity($postdata);
                       if ($result=$this->Users->save($new_user)) { 
@@ -1906,6 +1906,7 @@ class UsersController extends AppController{
              'mobile' => $childRecord['mobile'],
              'created_date' => $childRecord['user']['created'],
              'subscription_end_date' => $childRecord['user']['subscription_end_date'],
+             'trial_period_end_date' => $childRecord['user']['trial_period_end_date'],
            );
 
          }
