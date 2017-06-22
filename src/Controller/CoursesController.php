@@ -1308,6 +1308,7 @@ class CoursesController extends AppController{
       $message = '';
       if ($this->request->is('post')) {
         if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+          $message = 'user id cannot be null';
           throw new Exception('user_id cannot be null');
         }
         $user_courses_table = TableRegistry::get('UserCourses');
@@ -1328,4 +1329,52 @@ class CoursesController extends AppController{
     ]);
   }
 
+  /*
+   * function setUserCourse().
+   */
+  public function setUserCourse() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+          $message = 'user id cannot be null';
+          throw new Exception('user_id cannot be null');
+        }
+        if (!isset($this->request->data['course_ids']) && empty($this->request->data['course_ids'])) {
+          $message = 'course id cannot be null';
+          throw new Exception('course id cannot be null');
+        }
+        $course_ids = $this->request->data['course_ids'];
+        if (!is_array($course_ids)) {
+          $message = 'course id must be an array';
+          throw new Exception($message);
+        }
+        $user_id = $this->request->data['user_id'];
+        $expiry_date = isset($this->request->data['expiry_date']) ? $this->request->data['expiry_date'] : date('Y-m-d');
+        $user_courses_table = TableRegistry::get ('UserCourses');
+        $data = array();
+        foreach ($course_ids as $course_id) {
+          $data[] = [
+            'user_id' => $user_id,
+            'course_id' => $course_id,
+            'expiry_date' => $expiry_date
+          ];
+        }
+        $entities = $user_courses_table->newEntities($data);
+        if ($user_courses_table->saveMany($entities)) {
+          $status = TRUE;
+        } else {
+          $message = 'unable to save data';
+        }
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status','message']
+    ]);
+  }
 }
