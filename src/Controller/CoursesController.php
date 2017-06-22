@@ -1230,10 +1230,11 @@ class CoursesController extends AppController{
           $status = TRUE;
           $course_details[0] = $scopes;
         }else{
-          $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
-            'type IN'=>['class','group']])->orderDESC('type','created');
-          $scopCount = $scopes->count();
-          if($scopCount > 0) {
+          if($tid == '') {
+            $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
+              'type IN'=>['class','group']])->orderDESC('type','created');
+            $scopCount = $scopes->count();
+            if($scopCount > 0) {
             $by = 'scope';
             $count = 0;
             foreach ($scopes  as $key => $value) {
@@ -1268,6 +1269,32 @@ class CoursesController extends AppController{
             $connection = ConnectionManager::get('default');
             $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
 //            $course_details = $connection->execute($sql)->fetchAll('assoc');
+            $skills = $connection->execute($sql)->fetchAll('assoc');
+            if(count($skills) > 0) {
+              foreach ($skills as $key => $value) {
+              $skill['course_id'] = $value['course_id'];
+              $skill['parent_id'] = $value['parent_id'];
+              $skill['name'] = $value['name'];
+              $skill['start_date'] = $value['start_date'];
+              $skill['end_date'] = $value['end_date'];
+              $skill['created_by'] = $value['created_by'];
+              $skill['status'] = $value['status'];
+              $skill['visibility'] = 1;
+              $course_details[] = $skill;
+              }
+              $status = TRUE; 
+            }
+          }
+          }else{
+            $course_detail = TableRegistry::get('course_details');
+            $user_role = TableRegistry::get('user_roles');
+            $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+            foreach ($role as $key => $value) {
+              $rol[$key] = $value['user_id'];
+            }
+            $id = implode(',',$rol);
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
             $skills = $connection->execute($sql)->fetchAll('assoc');
             if(count($skills) > 0) {
               foreach ($skills as $key => $value) {
