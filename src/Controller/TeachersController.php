@@ -1426,7 +1426,7 @@ class TeachersController extends AppController {
   public function getStudentsOfSubjectForTeacher($tid = null, $course_id = null) {
     
     $tid = isset($_GET['teacher_id']) ? $_GET['teacher_id'] : $tid;
-    $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id;
+    $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id; // course_id is subject
 
     if ((!empty($tid)) && (!empty($course_id))) {
       $connection = ConnectionManager::get('default');
@@ -4001,6 +4001,186 @@ class TeachersController extends AppController {
       '_serialize' => ['status', 'message']
     ]);
   }
+
+
+/* API to get Need Attention on teacher dashboard*/
+public function getNeedAttention($teacher_id=null, $subject_id=null){
+
+  $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id'] : $teacher_id;
+  $subject_id =isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
+  
+  if(!empty($teacher_id) && !empty($subject_id)){
+      $connection = ConnectionManager::get('default');
+
+       // get list of skill and subskill on selected subjects (course_id);
+             $str1= "SELECT courses.* FROM courses, course_details WHERE courses.id=course_details.course_id AND parent_id = $subject_id";
+             $srecords = $connection->execute($str1)->fetchAll('assoc');
+             $subskill_ids = $subject_id ;
+             if(count($srecords) > 0){
+                foreach ($srecords as $srecord) {    
+                  $skill_id = $srecord['id'] ;
+                  
+                  //list of subskill_id 
+                  $str2= "SELECT group_concat(course_id) as subskill_ids FROM courses, course_details WHERE courses.id=course_details.course_id AND parent_id = $skill_id GROUP BY courses.id ";
+                  $ssRecords = $connection->execute($str2)->fetchAll('assoc');
+                  
+                  if(count($ssRecords) > 0){  // No condition should occure when any of skill doesn't have subskill
+                      foreach ($ssRecords as $ssRecord) {
+                         $subskill_ids = $subskill_ids.','.$ssRecord['subskill_ids'];
+                      }
+                      $data['status']=True;                      
+                  }
+                }
+              
+             }else{
+                $data['status'] = False;
+                $data['message'] = "No skill are found on this subject.";
+
+             }
+
+             // After getting all subskill ids
+             if(!empty($subskill_ids)){
+                
+                // get students list for subject
+               $sql3 = "SELECT group_concat(student_id) as student_ids from student_teachers WHERE teacher_id = $teacher_id AND course_id=$subject_id GROUP BY teacher_id ORDER BY student_id ASC "; 
+               $stRecords = $connection->execute($sql3)->fetchAll('assoc');
+
+                if(count($stRecords) > 0){
+                  foreach ($stRecords as $stRecord) {
+                      $stud_ids = $stRecord['student_ids'];
+                  }
+
+                  // get students quiz result for subskills
+                  $sql4 = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name from user_quizes as uq, users as u, courses as cr, quiz_types as qt WHERE u.id=uq.user_id AND uq.course_id = cr.id AND qt.id=uq.quiz_type_id AND course_id IN ($subskill_ids) AND uq.user_id IN ($stud_ids) ORDER BY created DESC ";
+                  $stQuizRecords = $connection->execute($sql4)->fetchAll('assoc');
+
+                  if(count($stQuizRecords) > 0){
+                    foreach ($stQuizRecords as $stQuizRecord) {
+                      $data['attention_records'][] = $stQuizRecord;
+                    }        
+                  }else{
+                    $data['status'] =False;
+                    $data['message']="No Records For Your Attention.";
+                  }
+                }else{
+                  $data['status'] = "No students found.";
+                }
+             }
+    }else{
+      $data['status'] = False;
+      $data['message'] = "Teacher Id and subject id cannot null.Please set teacher id and subject id.";
+  }
+
+  $this->set([
+      'response' => $data, 
+      '_serialize' => ['response']
+    ]);
+
+
+}
+
+  // API to call Analyitic result of students in a subskill
+    public function getSubskillAnalytic($teacher_id=null,$subject_id=null,$subskill_id=null){
+        $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id'] : $teacher_id;
+        $subject_id = isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
+        $subskill_id = isset($_REQUEST['subskill_id']) ? $_REQUEST['subskill_id'] : $subskill_id;
+        $connection = ConnectionManager::get('default');
+
+        if(!empty($teacher_id) && !empty($subskill_id) && !empty($subject_id)){
+              $count_classStudents = 0;
+              $count_noattack =0;
+              $count_remedial =0;
+              $count_struggling = 0;
+              $count_ontarget =0;
+              $count_outstanding =0;
+              $count_gifted =0;
+              $count_escape =0;
+
+
+
+               // get students list for subskills
+                $sql = "SELECT st.student_id,u.username from student_teachers as st, users as u WHERE u.id=st.student_id AND teacher_id = $teacher_id AND course_id=$subject_id ORDER BY student_id ASC ";  
+                $stRecords = $connection->execute($sql)->fetchAll('assoc');
+
+                if(count($stRecords) > 0){
+                  foreach ($stRecords as $stRecord) {
+                      $count_classStudents++;
+                      $class_stud_id = $stRecord['student_id'];
+                        
+
+                      // get students quiz result for subskills
+                      $sql1 = "SELECT uq.*,qt.name as quiz_type_name, cr.course_name FROM user_quizes as uq
+                              INNER JOIN courses as cr ON  cr.id=uq.course_id
+                              INNER JOIN quiz_types as qt ON qt.id=uq.quiz_type_id
+                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id=2 ORDER BY created DESC "; 
+                      
+                      $stQuizRecords = $connection->execute($sql1)->fetchAll('assoc');
+
+                      if(count($stQuizRecords) > 0){
+                        foreach ($stQuizRecords as $stQuizRecord) {
+                            //$data['attention_records'][] = $stQuizRecord;
+                            $exam_marks = $stQuizRecord['exam_marks'];
+                            $student_score = $stQuizRecord['score'];
+                            
+                            if($exam_marks==0){ $student_score =0; }
+                            $student_result_precentage = ($student_score/$exam_marks)*100;
+
+                            if($student_result_precentage <= REMEDIAL){
+                                $count_remedial++;
+                            }
+                            elseif($student_result_precentage >REMEDIAL && $student_result_precentage <=STRUGGLING){
+                                $count_struggling++;
+                            }
+                            elseif($student_result_precentage >STRUGGLING && $student_result_precentage <=ON_TARGET){
+                                $count_ontarget++;
+                            }
+                            elseif($student_result_precentage >ON_TARGET && $student_result_precentage <=OUTSTANDING){
+                                $count_outstanding++;
+                            }
+
+                            elseif($student_result_precentage >OUTSTANDING && $student_result_precentage <=GIFTED){
+                                $count_gifted++;
+                            }else{
+                                $count_escape++;
+                            }
+                        }     // end of foreach
+
+                      }else{
+                         $count_noattack = $count_noattack+1  ;
+                      }              
+                  }
+
+                    //$row['percent_classStudents'] = 100;
+                    $row['percent_noattack'] = round( (($count_noattack*100)/$count_classStudents),2);
+                    $row['percent_remedial'] = round( (($count_remedial*100)/$count_classStudents),2);
+                    $row['percent_struggling']=round( (($count_struggling*100)/$count_classStudents),2);
+                    $row['percent_ontarget'] = round( (($count_ontarget*100)/$count_classStudents),2);
+                    $row['percent_outstanding'] =round( (($count_outstanding*100)/$count_classStudents),2);
+                    $row['percent_gifted'] = round( (($count_gifted*100)/$count_classStudents),2);
+                    $data['student_result']=$row;
+                    $data['status']=True;
+      
+
+              
+                }else{
+                  $data['status']=False;
+                  $data['message'] = "No students found.";
+                }
+
+        }else{
+            $data['status'] = False;
+            $data['message'] ="teacher_id, subject_id and subskill_id cannot null. please set the value.";
+        }
+
+        $this->set([
+          'response' => $data, 
+          '_serialize' => ['response']
+        ]);
+
+    }
+
+
+
 
   /**
    * setDefaultSettings().
