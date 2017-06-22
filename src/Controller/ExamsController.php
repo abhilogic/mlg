@@ -302,12 +302,12 @@ public function createQuizOnStudent($grade_id=null, $subskill_id=null,$user_id=n
   $dataToGetQuestions['quiz_name'] = $quiz_name;
   $dataToGetQuestions['difficulty'] = 'Moderate|Easy|Difficult'; // eg Easy|Difficult|mod
 
-  $json_questionslist = $this->curlPost($base_url . 'students/getQuestionsList/', $dataToGetQuestions);
+  $json_questionslist = $this->curlPost($base_url . 'students/getQuestionsList/', $dataToGetQuestions); 
 
     $array_qlist = (array) json_decode($json_questionslist);
-    
-    if( isset($array_qlist['response']) ){        
-        if ($array_qlist['response']->status == True) {
+   
+    if( isset($array_qlist['response']) ){
+        if ($array_qlist['response']->status == "True") {
             $data['status'] = True;
             $data['questions'] = $array_qlist['response']->questions;
         } else {
@@ -316,7 +316,7 @@ public function createQuizOnStudent($grade_id=null, $subskill_id=null,$user_id=n
             }
 
     }else{
-      $data ['status'] = False;
+      $data ['status'] = "False";
       $data ['message'] = "Opps... No question get.";
     }
 
@@ -529,7 +529,7 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
         $message = 'please select a answer';
       }
       if($message == '') {
-        $question = TableRegistry::get('question_master');
+       $question = TableRegistry::get('question_master');
       $answer = TableRegistry::get('answer_master');
       $user_quiz = TableRegistry::get('user_quiz_responses');
       $ques = $question->find('all')->where(['id' => $this->request->data['question_id']]);
@@ -620,6 +620,80 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
          'message' => $message,
         '_serialize' => ['user_id','message']
     ));
+  }
+
+
+//API to check Knight challenge is enabled/disabled
+  public function checkKnightQuizStatus($skill_id=null, $user_id=null){
+
+      $skill_id = isset($_REQUEST['skill_id'])? $_REQUEST['skill_id'] : $skill_id;
+      $user_id= isset($_REQUEST['user_id'])? $_REQUEST['user_id'] : $user_id;
+     
+      //Query - how can prevent to send a assignment by teacher/parent if student mastered.
+      if(!empty($skill_id) && !empty($user_id) ){
+       echo   $getsubskill_str = "SELECT cr.id as subskill_id, cr.course_name FROM courses as cr, course_details  as cd WHERE cr.id=cd.course_id AND parent_id=$skill_id ORDER BY cr.id ASC";
+
+          $connection = ConnectionManager::get('default');
+          $subskills_results = $connection->execute($getsubskill_str)->fetchAll('assoc');
+
+          if(count($subskills_results) > 0){
+              foreach ($subskills_results as $row) {
+                  $course_id = $row['subskill_id'];
+                  
+                  //check any quiz on this subskill
+                  $userquiz_results= TableRegistry::get('UserQuizes')->find('all')->where(['course_id'=>$row['subskill_id'], 'user_id'=> $user_id])->order(['id'=>'ASC']);
+
+                  if($userquiz_results->count()>0){                    
+                      foreach ($userquiz_results as $stquizrow) { 
+                      $data['test'][] = $stquizrow;                    
+                          if( $stquizrow['pass'] ==1 ){
+                            $stresult[$course_id] ='pass';    // will check pass in subskill quiz + any challenges                          
+                          }else{
+                            $stresult[$course_id] ='fail';
+                          }
+                              
+                         $student_result[]=$stresult;  // array of pass/fail at subskill.                           
+                      }
+
+                      $data['status'] =True;
+                      if(in_array('fail', $stresult)){
+                         $data['KnightQuiz_status'] ="disable";
+                      }else{
+                          $data['KnightQuiz_status'] ="enable";
+                      }
+                  }
+                  else{
+                    $data['status'] =False;
+                    $data['message'] = "No quiz is attend by student for subskill ".$row['course_name'];
+                  }
+
+
+
+                    
+              } 
+
+          }
+          else{
+            $data ['status'] =False;
+            $data['message'] = "No Subskill added on this skill.";
+          }
+          
+        
+
+
+
+
+
+      }else{
+        $data['status'] = False;
+        $data['message'] ="please set skill_id and user_id";
+      }
+
+       $this->set([
+          'response' => $data,
+          '_serialize' => ['response']
+      ]);
+
   }
 
 

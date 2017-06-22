@@ -6,6 +6,7 @@
 
 //Defined Roles and their Values.
 
+
 //Admin role
 define('ADMIN_ROLE_ID', 1);
 
@@ -48,4 +49,24 @@ define("PAYPAL_LIVE_CREDENTIAL", "Aft1-THtqfdBuIcmL3_rgunICfhYWpqO76okvPPrIgS66g
 
 // Paypal Currency
 define('PAYPAL_CURRENCY', 'USD');
+
+
+
+// Class Students classification
+define('NO_ATTACK', 0); //student not present in user_quiz
+define('REMEDIAL', 50); //student scored 0 to 50
+define('STRUGGLING', 79);  // student scored 51 to 79
+define('ON_TARGET', 85);  //student scored 80 to 85
+define('OUTSTANDING',95 ); // student scored 86 to 95
+define('GIFTED',100 );  // 96 to 100
+
+
+
+
+  	
+
+
+
+
+
 

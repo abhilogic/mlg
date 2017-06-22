@@ -416,7 +416,7 @@ class UsersController extends AppController{
             throw new Exception('Pregmatch not matched for Username');
           }
           $user['status'] = 0;
-          $user['subscription_end_date'] = date('Y-m-d' ,(time() + 60 * 60 * 24 * $user['subscription_days']));
+          $user['trial_period_end_date'] = $user['subscription_end_date'] = date('Y-m-d' ,(time() + 60 * 60 * 24 * $user['subscription_days']));
           $user['created'] = $user['modfied'] = time();
           $userroles = TableRegistry::get('UserRoles');
           $userdetails = TableRegistry::get('UserDetails');
@@ -487,6 +487,7 @@ class UsersController extends AppController{
             }
           } else {
             $message = 'Please enter the User Id';
+            throw new Exception('User id missing');
           }
         }
       } catch (Exceptio $e) {
@@ -1174,7 +1175,7 @@ class UsersController extends AppController{
        /**
         * function paymentbrief().
         */
-       public function getPaymentbrief($params = null) {
+       public function getPaymentbrief($child_id = null) {
          $status = FALSE;
          $message = '';
          $child_info = array();
@@ -1182,16 +1183,18 @@ class UsersController extends AppController{
          if ($this->request->is('post') || !empty($params)) {
           try {
             $parent_id = isset($this->request->data['user_id']) ? $this->request->data['user_id'] : '';
-            if (isset($params['user_id']) && !empty($params['user_id'])) {
-              $parent_id = $params['user_id'];
-            }
-            if (!empty($parent_id)) {
 
-              $user_details = TableRegistry::get('UserDetails');
-              $user_info = $user_details->find()->select('user_id')->where(['parent_id' => $parent_id]);
+            if (!empty($parent_id)) {
               $parent_children = array();
-              foreach ($user_info as $user) {
-                $parent_children[] = $user->user_id;
+              // for a single child
+              if (!empty($child_id) && is_numeric($child_id)) {
+                $parent_children = array($child_id);
+              } else {
+                $user_details = TableRegistry::get('UserDetails');
+                $user_info = $user_details->find()->select('user_id')->where(['parent_id' => $parent_id]);
+                foreach ($user_info as $user) {
+                  $parent_children[] = $user->user_id;
+                }
               }
 
               $connection = ConnectionManager::get('default');
@@ -1201,7 +1204,9 @@ class UsersController extends AppController{
                 . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
                 . " INNER JOIN packages ON user_purchase_items.package_id=packages.id"
                 . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
-                . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ") GROUP BY user_purchase_items.user_id";
+                . " WHERE user_purchase_items.user_id IN (" . implode(',', $parent_children) . ") "
+                . " AND user_purchase_items.item_paid_status != 1"
+                . " GROUP BY user_purchase_items.user_id";
               $results = $connection->execute($sql)->fetchAll('assoc');
               if (!empty($results)) {
                 $status = TRUE;
@@ -1333,8 +1338,7 @@ class UsersController extends AppController{
           ],
             
          ]);
-         $user = $this->Auth->identify();
-         $user_id = $user['id'];
+         $user_id = $this->request->data['user_id'];
          $user_login_sessions = TableRegistry::get('user_login_sessions');
          $user_login_sessions_row = $user_login_sessions->find()->where(['user_id' =>  $user_id, 'check_out IS NULL']);
          if ($user_login_sessions_row->count() > 0) {
@@ -1368,7 +1372,7 @@ class UsersController extends AppController{
      
 
       public function setCountOfChildrenOfParent($id,$child_count){
-          if(isset($id) && isset($child_count) ){            
+          if(isset($id) && isset($child_count) ){
               $user_details = TableRegistry::get('UserDetails');
               $query = $user_details->query();
               $result=  $query->update()
@@ -1560,10 +1564,15 @@ class UsersController extends AppController{
                           else{ $to=$postdata['email'];  }
 
                       //1. User Table
-                      $postdata['subscription_end_date'] = time() + 60 * 60 * 24 * $this->request->data['subscription_days'];
+
+                      // parent and child having same subscription_end_date;
+                      $parent_info = $this->getUserDetails($postdata['parent_id'], TRUE);
+                      $parent_subscription = (array)$parent_info['user_all_details']['subscription_end_date'];
+                      $parent_subscription_end_date = $parent_subscription['date'];
+                      $postdata['trial_period_end_date'] = $postdata['subscription_end_date'] = strtotime($parent_subscription_end_date);
+
                       $new_user = $this->Users->newEntity($postdata);
                       if ($result=$this->Users->save($new_user)) { 
-                          $this->sendEmail($to, $from, $subject,$email_message); 
                       $postdata['user_id']  = $result->id;
 
                       //2.  User Details Table
@@ -1606,6 +1615,7 @@ class UsersController extends AppController{
                                   $postdata['amount']= $postdata['amount']-($postdata['amount']*($pcode_discount*0.01));
                                   }
                                   $postdata['order_timestamp'] = $time;
+                                  $postdata['item_paid_status'] = 0;
                                 //5. User Purchase Item Table
                                 $new_user_purchase_items = $user_purchase_items->newEntity($postdata);
                                 if ($user_purchase_items->save($new_user_purchase_items)) {$data['status']="True";}
@@ -1652,7 +1662,9 @@ class UsersController extends AppController{
         catch (Exception $ex) {
            $this->log($ex->getMessage());
         }
-
+          if (strtoupper($data['status']) == 'TRUE') {
+            $this->sendEmail($to, $from, $subject,$email_message);
+          }
           $this->set([           
               'response' => $data,
                '_serialize' => ['response']
@@ -1723,13 +1735,13 @@ class UsersController extends AppController{
          $data = $name = array();
          $trial_period = TRUE;
          $payment_controller = new PaymentController();
-         $access_token = $payment_controller->paypalAccessToken();
          if ($this->request->is('post')) {
            try {
              if (empty($this->request->data['user_id'])) {
                $message = 'Please login to submit payment';
                throw new Exception($message);
              }
+             $access_token = $payment_controller->paypalAccessToken();
              $validation = $payment_controller->validatePaymentCardDetail($this->request->data, $access_token);
              $response = $validation['response'];
              $data = $validation['data'];
@@ -1742,9 +1754,13 @@ class UsersController extends AppController{
              if  (isset($response['state']) && $response['state'] == 'ok') {
                $data['card_response'] = $message;
                $data['card_token'] = $response['id'];
-               $data['external_cutomer_id'] = $response['external_customer_id'];
+               $data['external_customer_id'] = $response['external_customer_id'];
                $parent_id = $this->request->data['user_id'];
 
+               $user_ids = $this->request->data['children_ids'];
+               foreach ($user_ids as $child_id) {
+
+               //If Parent is on trial period, child will also be in trial period.
                $parent_info = $this->Users->get($parent_id)->toArray();
                $parent_subcription = (array)$parent_info['subscription_end_date'];
                $subcription_end_date = $parent_subcription['date'];
@@ -1752,9 +1768,28 @@ class UsersController extends AppController{
                  $trial_period = FALSE;
                }
 
-               $user_ids = $this->request->data['children_ids'];
-               foreach ($user_ids as $child_id) {
-               $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, $trial_period);
+                //deactivate previously selected billing
+                $param['url'] =  Router::url('/', true) . 'users/deactivateUserSubscription';
+                $param['return_transfer'] = TRUE;
+                $param['post_fields'] = array(
+                  'user_id' => $parent_id,
+                  'child_id' => $child_id
+                );
+                $param['json_post_fields'] = TRUE;
+                $param['curl_post'] = 1;
+                $curl_response = $payment_controller->sendCurl($param);
+                if (!empty($curl_response['curl_exec_result'])) {
+                  $curl_exec_result = json_decode($curl_response['curl_exec_result'], TRUE);
+                  if ($curl_exec_result['status'] == FALSE && $curl_exec_result['is_billing_id_present'] == TRUE) {
+                    $message = 'unable to deactivate previous billing';
+                    throw new Exception($message);
+                  }
+                } else {
+                  $message = 'unable to deactivate previous billing';
+                  throw new Exception('curl not completed successfully');
+                }
+
+                $billing_plan = $payment_controller->createBillingPlan($child_id, $access_token, $trial_period);
                 if (!empty($billing_plan['plan_id'])) {
                    $plan_id = $billing_plan['plan_id'];
 
@@ -1764,13 +1799,13 @@ class UsersController extends AppController{
                    if ($plan_status == 'ACTIVE') {
                      $user_id = $this->request->data['user_id'];
 
-                     //same order date and time will be saved on user orders tabl.
-                     $order_date = $data['order_date'] = $billing_plan['order_date'];
-                     $order_timestamp = $data['order_timestamp'] = $billing_plan['order_timestamp'];
+                     //same order date and time will be saved on user orders table.
+                     $data['order_date'] = date('Y-m-d', time());
+                     $order_timestamp = $data['purchase_item_order_timestamp'] = $billing_plan['order_timestamp'];
                      $data['trial_period'] = 1;
 
                      $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
-                     if (!$billing_response['error']) {
+                     if ($billing_response['status'] == TRUE) {
                        $payment_status = TRUE;
                        $status = TRUE;
 
@@ -1779,9 +1814,30 @@ class UsersController extends AppController{
                        $data['paypal_plan_status'] = $plan_status;
                        $data['billing_id'] = $billing_response['result']['id'];
                        $data['billing_state'] = $billing_response['result']['state'];
+                       $data['trial_period'] = $trial_period;
 
                        // update user orders table.
                        $this->setUserOrders($user_id, $child_id, $data);
+
+                       //setting user purchase items status as paid.
+                       $user_purchase_items_table = TableRegistry::get('user_purchase_items');
+                       $query = $user_purchase_items_table->query();
+                       $query->update()
+                        ->set(['item_paid_status' => 1])
+                        ->where(['order_timestamp' => $order_timestamp, 'user_id' => $child_id])
+                        ->execute();
+
+                       // update child subscription period
+                       $param['url'] =  Router::url('/', true) . 'users/updateUserSubscriptionPeriod';
+                       $param['return_transfer'] = TRUE;
+                       $param['post_fields'] = array(
+                        'user_id' => $parent_id,
+                        'child_id' => $child_id
+                       );
+                       $param['json_post_fields'] = TRUE;
+                       $param['curl_post'] = 1;
+                       $payment_controller->sendCurl($param);
+
                        $message = 'card added successfully';
                      } else {
                        $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2Bill";
@@ -1848,7 +1904,9 @@ class UsersController extends AppController{
              'username' => $childRecord['username'],
              'email' => $childRecord['email'],
              'mobile' => $childRecord['mobile'],
+             'created_date' => $childRecord['user']['created'],
              'subscription_end_date' => $childRecord['user']['subscription_end_date'],
+             'trial_period_end_date' => $childRecord['user']['trial_period_end_date'],
            );
 
          }
@@ -1953,9 +2011,9 @@ class UsersController extends AppController{
        $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
          . " user_purchase_items.amount as purchase_amount, user_purchase_items.level_id as level_id,"
          . " user_purchase_items.course_id, user_purchase_items.order_date as order_date,"
-         . " user_purchase_items.order_timestamp as order_timestamp,"
+         . " user_purchase_items.order_timestamp as order_timestamp, user_purchase_items.item_paid_status as paid_status,"
          . " packages.name as package_subjects, packages.id as package_id, "
-         . " plans.id as plan_id, plans.name as plan_duration,"
+         . " plans.id as plan_id, plans.name as plan_duration, plans.num_months as plan_num_months,"
          . " courses.course_name"
          . " FROM users"
          . " INNER JOIN user_purchase_items on user_purchase_items.user_id=users.id"
@@ -1963,7 +2021,7 @@ class UsersController extends AppController{
          . " INNER JOIN plans ON user_purchase_items.plan_id=plans.id"
          . " INNER JOIN courses ON user_purchase_items.course_id=courses.id"
          . " WHERE user_purchase_items.user_id IN (" . $uid . ")";
-       if ($recent_order = TRUE) {
+       if ($recent_order) {
          $subquery = "(SELECT MAX(order_timestamp) FROM user_purchase_items"
          . " WHERE user_id = $uid)";
          $sql.= " AND user_purchase_items.order_timestamp = $subquery";
@@ -1980,12 +2038,14 @@ class UsersController extends AppController{
            $purchase_details['package_subjects'] = $purchase_result['package_subjects'];
            $purchase_details['plan_id'] = $purchase_result['plan_id'];
            $purchase_details['plan_duration'] = $purchase_result['plan_duration'];
+           $purchase_details['plan_num_months'] = $purchase_result['plan_num_months'];
            $purchase_details['level_id'] = $purchase_result['level_id'];
            $purchase_details['order_date'] = @current(explode(' ', $purchase_result['order_date']));
            $purchase_details['db_order_date'] = $purchase_result['order_date'];
            $purchase_details['order_timestamp'] = $purchase_result['order_timestamp'];
            $total_amount = $total_amount + $purchase_result['purchase_amount'];
            $purchase_details['package_amount'] = $total_amount;
+           $purchase_details['paid_status'] = $purchase_result['paid_status'];
            $purchase_details['purchase_detail'][] = array(
               'purchase_amount' => $purchase_result['purchase_amount'],
               'course_id' => $purchase_result['course_id'],
@@ -2014,7 +2074,7 @@ class UsersController extends AppController{
     *
     */
    public function upgrade() {
-     $response = array('status' => FALSE, 'message' => '');
+     $response = array('status' => FALSE, 'message' => '', 'order_timestamp' => '');
      if ($this->request->is('post')) {
        try {
         $total_amount = 0;
@@ -2028,8 +2088,10 @@ class UsersController extends AppController{
 
           //backing up data
           $connection = ConnectionManager::get('default');
-          $col_names = 'user_id, course_id, plan_id, package_id, level_id, discount, amount, order_date';
-          $backup_sql = 'INSERT INTO user_purchase_history (' . $col_names . ') SELECT '. $col_names .  ' FROM user_purchase_items where user_id =' . $child_id;
+          $col_names = 'user_id, course_id, plan_id, package_id, level_id, discount,'
+            . ' promocode_id, course_price, amount, order_date, order_timestamp, item_paid_status';
+          $backup_sql = 'INSERT INTO user_purchase_history (' . $col_names . ') SELECT '. $col_names
+            .' FROM user_purchase_items where user_id =' . $child_id;
           if (!$connection->execute($backup_sql)) {
             $message = "unable to save data";
             throw new Exception('unable to backup');
@@ -2041,7 +2103,7 @@ class UsersController extends AppController{
             $message = "unable to delete previous record";
             throw new Exception($message);
           }
-
+          $time = time();
           //insert row
           foreach ($courses as $course) {
             $total_amount = $total_amount + ($course['price'] * $package['discount'] * 0.01);
@@ -2056,6 +2118,8 @@ class UsersController extends AppController{
                 'amount' => $course['price'],
                 'discount' => $package['discount'],
                 'order_date' => date('Y-m-d H:i:s'),
+                'order_timestamp' => $time,
+                'item_paid_status' => 0,
                 )
             );
             if (!$user_purchase_items->save($user_purchase_item)) {
@@ -2064,24 +2128,8 @@ class UsersController extends AppController{
             }
           }
 
-          //updating table on user_order
-          $user_orders = TableRegistry::get('User_orders');
-          $user_order = $user_orders->newEntity(
-            array(
-              'user_id' => $user_id,
-              'amount' => $total_amount,
-              'discount' => $package['discount'],
-              'order_date' => date('Y-m-d H:i:s'),
-              'status' => 'done',
-              'trial_period' => 0,
-              'card_response' => 'card deducted successfully',
-            )
-          );
-          if (!$user_orders->save($user_order)) {
-            $message = "unable to delete previous record";
-            throw new Exception($message);
-          }
           $response['status'] = TRUE;
+          $response['order_timestamp'] = $time;
         } else {
           $response['message'] = 'Please login to update';
         }
@@ -2152,6 +2200,54 @@ class UsersController extends AppController{
     }
 
     /**
+     * function getUserOrders.
+     *
+     * This function is used to store user order to table
+     *
+     * $user_id : Integer
+     *
+     * $child_id : Integer
+     *   if user type is teacher, then child id will be 0
+     *
+     * $order_details : Array
+     *    contains the order details
+     */
+    public function getUserOrders() {
+      try {
+        $status = FALSE;
+        $order_details = array();
+        $record_found = 0;
+        $message = '';
+        if ($this->request->is('post')) {
+          if (!isset($this->request->data['child_id']) && !empty($this->request->data['child_id'])) {
+            $message = 'child id missing';
+            throw new Exception($message);
+          }
+          $conditions['child_id'] = $this->request->data['child_id'];
+          if (!isset($this->request->data['parent_id']) && !empty($this->request->data['parent_id'])) {
+            $conditions['user_id'] = $this->request->data['parent_id'];
+          }
+          $user_orders = TableRegistry::get('UserOrders');
+          $order_details = $user_orders->find()->where($conditions);
+          if ($record_found = $order_details->count()) {
+            $status = TRUE;
+          } else {
+            $message = 'No record found';
+          }
+        }
+      } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      }
+      $this->set([
+        'status' => $status,
+        'message' => $message,
+        'data' => (isset($this->request->data['last_order'])) ? array($order_details->last()) : $order_details,
+        'record_found' => empty($record_found) ? 0 : $record_found,
+        '_serialize' => ['status', 'message', 'data', 'record_found']
+      ]);
+    }
+
+    /**
      * function setUserOrders.
      *
      * This function is used to store user order to table
@@ -2165,34 +2261,34 @@ class UsersController extends AppController{
      *    contains the order details
      */
     public function setUserOrders($user_id, $child_id = 0, $order_details = array()) {
-    try {
-      $status = FALSE;
-      $user_orders = TableRegistry::get('UserOrders');
-      $order = array(
-        'user_id' => $user_id,
-        'child_id' => !empty($child_id) ? $child_id : 0,
-        'amount' => isset($order_details['total_amount']) ? $order_details['total_amount'] : 0,
-        'discount' => isset($order_details['discount']) ? $order_details['discount'] : '',
-        'order_date' => isset($order_details['order_date']) ? $order_details['order_date'] : '',
-        'trial_period' => $order_details['trial_period'],
-        'card_response' => isset($order_details['card_response']) ? $order_details['card_response'] : '',
-        'card_token' => isset($order_details['card_token']) ? $order_details['card_token'] : '',
-        'external_cutomer_id' => isset($order_details['external_cutomer_id']) ? $order_details['external_cutomer_id'] : '',
-        'paypal_plan_id' => $order_details['paypal_plan_id'],
-        'paypal_plan_status' => $order_details['paypal_plan_status'],
-        'billing_id' => $order_details['billing_id'],
-        'billing_state' => $order_details['billing_state'],
-        'order_timestamp' => isset($order_details['order_timestamp']) ? $order_details['order_timestamp'] : time(),
+      try {
+        $status = FALSE;
+        $user_orders = TableRegistry::get('UserOrders');
+        $order = array(
+          'user_id' => $user_id,
+          'child_id' => !empty($child_id) ? $child_id : 0,
+          'amount' => isset($order_details['total_amount']) ? $order_details['total_amount'] : 0,
+          'discount' => isset($order_details['discount']) ? $order_details['discount'] : '',
+          'order_date' => isset($order_details['order_date']) ? $order_details['order_date'] : '',
+          'trial_period' => ($order_details['trial_period'] == TRUE) ? 1 : 0,
+          'card_response' => isset($order_details['card_response']) ? $order_details['card_response'] : '',
+          'card_token' => isset($order_details['card_token']) ? $order_details['card_token'] : '',
+          'external_customer_id' => isset($order_details['external_customer_id']) ? $order_details['external_customer_id'] : '',
+          'paypal_plan_id' => $order_details['paypal_plan_id'],
+          'paypal_plan_status' => $order_details['paypal_plan_status'],
+          'billing_id' => $order_details['billing_id'],
+          'billing_state' => strtoupper($order_details['billing_state']),
+          'purchase_item_order_timestamp' => isset($order_details['purchase_item_order_timestamp']) ? $order_details['purchase_item_order_timestamp'] : time(),
         );
         $user_order = $user_orders->newEntity($order);
         if ($user_orders->save($user_order)) {
           $status = TRUE;
         }
-    } catch (Exception $ex) {
-      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      } catch (Exception $ex) {
+        $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      }
+      return $status;
     }
-    return $status;
-  }
 
   /*
    * function getCouponByUserType()
@@ -2871,4 +2967,261 @@ class UsersController extends AppController{
     }
     return $response;
   }
+
+  /**
+   * function deactiveUserSubscription().
+   */
+  public function deactivateUserSubscription() {
+    try {
+      $status = FALSE;
+      $is_billing_id_present = $is_billing_state_active = FALSE;
+      $message = '';
+      if (!isset($this->request->data['user_id']) || empty($this->request->data['user_id'])) {
+        $message = 'User id is null';
+        throw new Exception('User id is null');
+      }
+      $child_id = 0;
+      if (isset($this->request->data['child_id'])) {
+        $child_id = $this->request->data['child_id'];
+      }
+      $user_id = $this->request->data['user_id'];
+      $user_orders_table = TableRegistry::get('UserOrders');
+      $user_orders = $user_orders_table->find()->where(
+        ['user_id' => $user_id,
+         'child_id' => $child_id
+        ]);
+      if ($user_orders->count()) {
+        $user_orders_details = $user_orders->last()->toArray();
+        if ($user_orders_details['billing_state'] == 'ACTIVE') {
+          $is_billing_state_active = TRUE;
+        } else {
+          $message = 'No active bill found';
+          throw new Exception($message);
+        }
+      } else {
+        $message = 'User order not found';
+        throw new Exception($message);
+      }
+      if ($is_billing_state_active) {
+        $billing_id = $user_orders_details['billing_id'];
+        if (empty($billing_id)) {
+          $is_billing_id_present = FALSE;
+          $message = 'No billing id found';
+          throw new Exception($message);
+        }
+        $payment_controller = new PaymentController();
+        $billiing_cancel_response = $payment_controller->cancelBillingAgreement($billing_id);
+        if (!empty($billiing_cancel_response)) {
+          $user_orders_details['order_date'] = $user_orders_details['purchase_item_order_timestamp'] = time();
+          $user_orders_details['billing_state'] = $billiing_cancel_response;
+          $user_orders_details['total_amount'] = $user_orders_details['amount'];
+          $order_entry = $this->setUserOrders($user_id, $child_id, $user_orders_details);
+          if ($order_entry === TRUE) {
+            $status = TRUE;
+          } else {
+            $message = 'unable to deactivate order';
+            throw new Exception($message);
+          }
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    if (isset($this->request->data['requested'])) {
+      return array('status' => $status, 'message' => $message, 'is_billing_id_present' => $billing_id_present);
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'is_billing_id_present' => $is_billing_id_present,
+      '_serialize' => ['status', 'message', 'is_billing_id_present']
+    ]);
+  }
+
+  /**
+   * function deactivateChildrenOnParentDeactivation()
+   */
+  public function deactivateChildrenOnParentDeactivation() {
+    try {
+      $status = FALSE;
+      $number_of_child = 0;
+      $deactivated_child_ids = array();
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['parent_id'])) {
+          $message = 'Parent id cannot be null';
+          throw new Exception('Parent id cannot be null');
+        }
+        $parent_id = $this->request->data['parent_id'];
+        $parent = $this->getUserDetails($parent_id, TRUE);
+        if ($parent['user_all_details']['status'] != 0) {
+          $message = 'Parent is not deactivated yet';
+          throw new Exception("Parent id: $parent_id is active");
+        }
+        $children = $this->getChildrenDetails($parent_id, null,TRUE);
+        if (empty($children)) {
+          $message = 'No child  Found';
+          throw new Exception($message);
+        }
+        $number_of_child = count($children);
+        foreach ($children as $child) {
+          $controller_url = Router::url('/', true) . 'users/';
+          $payment_controller = new PaymentController();
+          $param['url'] = $controller_url . 'setUserStatus';
+          $param['return_transfer'] = 1;
+          $param['post_fields'] = array('id' => $child['user_id'], 'status' => 0);
+          $param['json_post_fields'] = TRUE;
+          $param['curl_post'] = 1;
+          $curl_response = $payment_controller->sendCurl($param);
+          if (!empty($curl_response['curl_exec_result'])) {
+            $set_status_result = json_decode($curl_response['curl_exec_result'], TRUE);
+            if ($set_status_result['status'] == TRUE) {
+              $deactivated_child_ids[] = $child['user_id'];
+            }
+          }
+        }
+        if (count($deactivated_child_ids) === $number_of_child) {
+          $status = TRUE;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'number_of_child' => $number_of_child,
+      'deactivated_child_ids' => $deactivated_child_ids,
+      '_serialize' => ['status', 'message', 'number_of_child', 'deactivated_child_ids']
+    ]);
+  }
+
+  /**
+   * function updateUserSubscriptionPeriod().
+   *
+   * This function updates user's subscription period
+   * if user is not in TRIAL period.
+   */
+  public function updateUserSubscriptionPeriod() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $new_subscription_end_date = '';
+      $req_data = $this->request->data;
+
+      // usually user_id refers to parent_id or teacher_id.
+      if (!isset($req_data['user_id']) && empty($req_data['user_id'])) {
+        $message = 'User id missing';
+        throw new Exception($message);
+      }
+      $child_id = 0;
+      if (isset($req_data['child_id']) && !empty($req_data['child_id'])) {
+        $child_id = $req_data['child_id'];
+      }
+      $conditions['UserOrders.user_id'] = $req_data['user_id'];
+      $conditions['UserOrders.child_id'] = $child_id;
+
+      $user_orders_table = TableRegistry::get('UserOrders');
+      $user_order = $user_orders_table->find()->where($conditions);
+      $orders_join_purchase_table = $user_order->join([
+        'table' => 'user_purchase_items',
+        'type' => 'INNER',
+        'conditions' => [
+          'user_purchase_items.order_timestamp = UserOrders.purchase_item_order_timestamp',
+          'user_purchase_items.item_paid_status = 1',
+          "UserOrders.billing_state = 'ACTIVE'",
+        ]
+      ])->select([
+       'user_purchase_items.plan_id',
+       'user_purchase_items.order_timestamp',
+       'UserOrders.trial_period'
+      ]);
+      if ($orders_join_purchase_table->count()) {
+        $orders_join_purchase_result = $orders_join_purchase_table->last()->toArray();
+        $plan_id = $orders_join_purchase_result['user_purchase_items']['plan_id'];
+        $order_timestamp = $orders_join_purchase_result['user_purchase_items']['order_timestamp'];
+        $plans_table = TableRegistry::get('plans');
+        $plan = $plans_table->find()->select('num_months')->where(['id' => $plan_id])->first()->toArray();
+        $plan_month = $plan['num_months'];
+        if (!empty($child_id)) {
+          $add_trial_days_timestamp = 0;
+
+          // if parent on trial subscription. Trial period will be added to child subscription.
+          $parent_info = $this->getParentInfoByChildId($child_id);
+          if ($parent_info['parent_subscription_days_left'] > 0) {
+            $add_trial_days_timestamp = (60 * 60 * 24 * $parent_info['parent_subscription_days_left']);
+          }
+          $new_subscription_time = strtotime("+$plan_month months", $order_timestamp) + $add_trial_days_timestamp;
+          $new_subscription_end_date = date('Y-m-d', $new_subscription_time);
+          $user = $this->Users->find()->where(['id' => $child_id]);
+          foreach($user as $info) {
+            $info->subscription_end_date = $new_subscription_end_date;
+            break;
+          }
+          if ($this->Users->save($info)) {
+            $status = TRUE;
+          }
+        }
+      } else {
+        $message = 'No active record found';
+        throw new Exception($message);
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'new_subscription_end_date' => $new_subscription_end_date,
+      '_serialize' => ['status', 'message', 'new_subscription_end_date']
+    ]);
+  }
+
+  /**
+   * function getParentInfoByChildId().
+   */
+  public function getParentInfoByChildId($child_id = NULL) {
+    try {
+      $status = FALSE;
+      $message = '';
+      $parent_info = array();
+      $parent_subscription_days_left = 0;
+      $parent_subscription_timestamp = '';
+      if (empty($child_id)) {
+        $message = 'Child id could not be null';
+        throw new Exception($message);
+      }
+      $child_info = $this->getUserDetails($child_id, TRUE);
+      if (!empty($child_info['user_all_details'])) {
+        $child_details = $child_info['user_all_details'];
+        $parent_id = $child_details['user_detail']['parent_id'];
+        if ($parent_id == 0) {
+          $message = "Unable to find user's Parent";
+          throw new Exception("parent_id is 0");
+        }
+        $parent_info = $this->getUserDetails($parent_id, TRUE);
+        if (empty($parent_info['user_all_details']['subscription_end_date'])) {
+          $message = 'unable to get subscription info';
+          throw new Exception('Subscription period is null or undefiend');
+        }
+        $status = TRUE;
+        $parent_subscription_info = (array)$parent_info['user_all_details']['subscription_end_date'];
+        $parent_subscription_timestamp = strtotime($parent_subscription_info['date']);
+        $parent_subscription_days_left = floor(($parent_subscription_timestamp - time())/(60 * 60 * 24));
+      } else {
+        $message = 'No record found regarding child id';
+        throw new Exception($message);
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return [
+      'status' => $status,
+      'message' => $message,
+      'parent_info' => isset($parent_info['user_all_details']) ? $parent_info['user_all_details'] : array(),
+      'parent_subscription_days_left' => $parent_subscription_days_left,
+      'parent_subscription_timestamp' => $parent_subscription_timestamp
+    ];
+  }
+
 }

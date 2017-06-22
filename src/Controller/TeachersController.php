@@ -150,7 +150,7 @@ class TeachersController extends AppController {
       }
       if (empty($message)) {
         $connection = ConnectionManager::get('default');
-        $sql = " SELECT * from courses"
+        $sql = " SELECT *,courses.id as id from courses"
                 . " INNER JOIN user_courses ON courses.id = user_courses.course_id "
                 . " WHERE user_courses.user_id =" . $user_id . ' ORDER BY level_id';
         $result = $connection->execute($sql)->fetchAll('assoc');
@@ -429,6 +429,7 @@ class TeachersController extends AppController {
               $detail->title = $title;
               $detail->type = $this->request->data['type'];
               $detail->status = 'approved';
+              $detail->shared_mode = $this->request->data['shared_mode'];
               $detail->content = $content;
               if ($course_detail->save($detail)) {
                 $id = $detail->id;
@@ -539,7 +540,7 @@ class TeachersController extends AppController {
   }
 
   public function uploadfile() {
-    $file_name = time() . '_' . $_FILES['uploadfile']['name'];
+    $file_name = time() . '-' . $_FILES['uploadfile']['name'];
     move_uploaded_file($_FILES['uploadfile']['tmp_name'], WWW_ROOT . '/upload/' . $file_name);
     $this->set([
         'response' => $file_name,
@@ -800,8 +801,8 @@ class TeachersController extends AppController {
         $skills = implode(',',$this->request->data['subskills']);
         $sql = "Select * ,cs.id as id from course_contents as cs "
                 . "INNER JOIN course_details as cd ON cd.course_id = cs.course_detail_id"
-                . " where created_by = ".$this->request->data['uid']." AND course_detail_id IN ($skills)";
-        $content = $connection->execute($sql)->fetchAll('assoc');
+                . " where cs.created_by = ".$this->request->data['uid']." AND cs.course_detail_id IN ($skills)";
+        $content = $connection->execute($sql)->fetchAll('assoc');     
 //        $content = $course_content->find('all')->where(['created_by' => $this->request->data['uid'], 'course_detail_id IN' => $skills]);
         $status = TRUE;
       }
@@ -1425,7 +1426,7 @@ class TeachersController extends AppController {
   public function getStudentsOfSubjectForTeacher($tid = null, $course_id = null) {
     
     $tid = isset($_GET['teacher_id']) ? $_GET['teacher_id'] : $tid;
-    $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id;
+    $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id; // course_id is subject
 
     if ((!empty($tid)) && (!empty($course_id))) {
       $connection = ConnectionManager::get('default');
@@ -1833,8 +1834,9 @@ class TeachersController extends AppController {
 
 
         $json_questionslist = $this->curlPost($base_url . 'teachers/getQuestionsListForAssg/', $dataToGetQuestions);
+        
         $array_qlist = (array) json_decode($json_questionslist);
-
+        
         if ($array_qlist['response']->status == "True") {
           $data['status'] = "True";
           $data['questions'] = $array_qlist['response']->questions;
@@ -1897,7 +1899,7 @@ class TeachersController extends AppController {
               LEFT JOIN header_master AS hm ON hm.uniqueId = qm.docId and hm.headerId=qm.headerId
               LEFT JOIN mime_master AS mm ON mm.uniqueId = qm.uniqueId
               LEFT JOIN paragraph_master as pm on pm.question_id=qm.docId
-              LEFT JOIN  compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
+              LEFT JOIN compliance_master as cm on (cm.Subject=qm.subject OR cm.grade=qm.grade)
               where qm.course_id IN ' . $subjects . ' and qm.grade_id=' . $grade_id;
 
 
@@ -2564,7 +2566,7 @@ class TeachersController extends AppController {
 
               //same order date and time will be saved on user orders tabl.
               $order_date = $data['order_date'] = time();
-              $order_timestamp = $data['order_timestamp'] = time();
+              $order_timestamp = $data['purchase_item_order_timestamp'] = time();
               $data['trial_period'] = 1;
 
               $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
@@ -2820,8 +2822,14 @@ class TeachersController extends AppController {
         if (!empty($pnum)) {
           $current_page = $pnum;
         }
-        $question = TableRegistry::get('question_master');
-        $count = $question->find()->where(['created_by' => $user_id])->count();
+//        $question = TableRegistry::get('question_master');
+        $connection = ConnectionManager::get('default');
+        $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
+                . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                . " WHERE question_master.created_by = " . $user_id
+                . " ORDER BY question_master.id DESC ";
+        $count = $connection->execute($sql)->count();
+//         $count = $question->find()->where(['created_by' => $user_id])->count();
         $last_page = ceil($count / $range);
         if ($current_page < 1) {
           $current_page = 1;
@@ -2829,7 +2837,6 @@ class TeachersController extends AppController {
           $current_page = $last_page;
         }
         $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
-        $connection = ConnectionManager::get('default');
         $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
                 . " INNER JOIN user_points ON question_master.id = user_points.question_id "
                 . " WHERE question_master.created_by = " . $user_id
@@ -3301,6 +3308,8 @@ class TeachersController extends AppController {
   public function updateTeacherQuestion() {
     if ($this->request->is('post')) {
       $message = '';
+      $status = false;
+      $count = 0;
       $question_master = TableRegistry::get('question_master');
       if (isset($this->request->data['tid']) && empty($this->request->data['tid'])) {
         $message = 'login';
@@ -3313,7 +3322,7 @@ class TeachersController extends AppController {
       } else if (isset($this->request->data['skills']) && empty($this->request->data['skills'])) {
         $message = 'Please select skills. ';
       } else if (isset($this->request->data['sub_skill']) && empty($this->request->data['sub_skill'])) {
-        $message = 'Please select sub skill. ';
+        $message = 'Please select sub skill.';
       } else if (isset($this->request->data['ques_diff']) && empty($this->request->data['ques_diff'])) {
         $message = 'Please select question difficulty level. ';
       } else if (isset($this->request->data['ques_diff_name']) && empty($this->request->data['ques_diff_name'])) {
@@ -3334,6 +3343,7 @@ class TeachersController extends AppController {
         $subject = $this->request->data['course_name'];
         $option = explode(',', $this->request->data['answer']);
         $corect_answer = explode(',', $this->request->data['correctanswer']);
+        $type = $this->request->data['type'];
         $q_status = $question_master->find()->where(['created_by' => $created_by, 'id' => $question_id])->count();
         $unique_id = $question_master->find('all', ['fields' => ['uniqueId']])->where(['created_by' => $created_by, 'id' => $question_id])->toArray('assoc');
         if ($q_status <= 0) {
@@ -3354,10 +3364,14 @@ class TeachersController extends AppController {
                   ])->where(['id' => $question_id])->execute();
         }
         $row_count = $result->rowCount();
+        if($row_count > 0){
+          $status = TRUE;
+          $message = 'Question updated Successfully.';
+        }
         $option_master = TableRegistry::get('option_master');
         $opt_id = $option_master->find('all', ['fields' => ['id']])->where(['uniqueId' => $unique_id[0]['uniqueId']])->min('id')->toArray('assoc');
         $option_id = $opt_id['id'];
-        if ($row_count == 1) {
+        if ($this->request->data['type'] == 'text') {
           $answer_master = TableRegistry::get('answer_master');
           foreach ($corect_answer as $ki => $val) {
             foreach ($option as $key => $value) {
@@ -3365,22 +3379,77 @@ class TeachersController extends AppController {
                 $option_id = $option_id + 1;
               }
               $query = $option_master->query();
-              $result = $query->update()->set([
+              $result_opt = $query->update()->set([
                           'options' => $value
                       ])->where(['uniqueId' => $unique_id[0]['uniqueId'], 'id' => $option_id])->execute();
+              $row_count = $result_opt->rowCount();
+              if($row_count > 0){
+                $count++;
+              }
               if ($key + 1 == $val) {
                 $query = $answer_master->query();
-                $result = $query->update()->set([
+                $result_ans = $query->update()->set([
                             'answers' => $value
                         ])->where(['uniqueId' => $unique_id[0]['uniqueId']])->execute();
+                $row_count = $result_ans->rowCount();
+                if($row_count > 0){
+                  $count++;
+                }
               }
             }
+          }
+          if($count > 0) {
+            $message = 'Question updated successfully.';
+            $status = TRUE;
+          }
+        }else if ($this->request->data['type'] == 'image'){
+          $answer_list = explode(':', $this->request->data['answer']);
+          $edit_option = explode(',', $answer_list[0]);
+          $edit_count = count($edit_option);
+          $new_option = explode(',',$answer_list[1]);
+          if($edit_count <= $this->request->data['correctanswer'] ) {
+            foreach($edit_option as $key => $val) {
+              if ($key+1  == $this->request->data['correctanswer']) {
+                $answer_master = TableRegistry::get('answer_master');
+                $answer = $answer_master->newEntity();
+                $answer->uniqueId = $unique_id[0]['uniqueId'];
+                $answer->answers = $value;
+                if($answer_master->save($answer)){
+                  $status = TRUE;
+                  $message = 'Question updated Successfully.';
+                }
+              } 
+            }
+          }
+          foreach ($new_option as $key => $value) {
+            $option_master = TableRegistry::get('option_master');
+            $option = $option_master->newEntity();
+            $option->uniqueId = $unique_id[0]['uniqueId'];
+            $option->options = 'upload/' . $value;
+            if($option_master->save($option)) {
+              if($this->request->data['correctanswer_type'] == 'image' && $this->request->data['correctanswer'] > $edit_option) {
+                if ($key+$edit_count+1  == $this->request->data['correctanswer']) {
+                  $answer_master = TableRegistry::get('answer_master');
+                  $answer = $answer_master->newEntity();
+                  $answer->uniqueId = $unique_id[0]['uniqueId'];
+                  $answer->answers = $value;
+                  if($answer_master->save($answer)){
+                    $status = TRUE;
+                    $message = 'Question updated Successfully.';
+                 }
+                } 
+              }else{
+                $status = TRUE;
+                $message = 'Option updated Successfully.';
+              }
+            }   
           }
         }
       }
     }
     $this->set([
         'message' => $message,
+        'status' => $status,
         '_serialize' => ['status', 'message']
     ]);
   }
@@ -3404,7 +3473,14 @@ class TeachersController extends AppController {
           $current_page = $pnum;
         }
         $course_contents = TableRegistry::get('course_contents');
-        $count = $course_contents->find()->where(['created_by' => $user_id])->count();
+//        $count = $course_contents->find()->where(['created_by' => $user_id])->count();
+        $connection = ConnectionManager::get('default');
+        $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
+                . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
+                . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
+                . " WHERE course_contents.created_by = " . $user_id
+                . " ORDER BY course_contents.id DESC ";
+        $count = $connection->execute($sql)->count();
         $last_page = ceil($count / $range);
         if ($current_page < 1) {
           $current_page = 1;
@@ -3412,7 +3488,6 @@ class TeachersController extends AppController {
           $current_page = $last_page;
         }
         $limit = 'limit '.($current_page - 1) * $range . ',' . $range;
-        $connection = ConnectionManager::get('default');
         $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
                 . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
                 . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
@@ -3815,7 +3890,6 @@ class TeachersController extends AppController {
       '_serialize' => ['status', 'message', 'data']
     ]);
   }
-
   /*
    * function getTeacherSettings().
    */
@@ -3928,6 +4002,186 @@ class TeachersController extends AppController {
     ]);
   }
 
+
+/* API to get Need Attention on teacher dashboard*/
+public function getNeedAttention($teacher_id=null, $subject_id=null){
+
+  $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id'] : $teacher_id;
+  $subject_id =isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
+  
+  if(!empty($teacher_id) && !empty($subject_id)){
+      $connection = ConnectionManager::get('default');
+
+       // get list of skill and subskill on selected subjects (course_id);
+             $str1= "SELECT courses.* FROM courses, course_details WHERE courses.id=course_details.course_id AND parent_id = $subject_id";
+             $srecords = $connection->execute($str1)->fetchAll('assoc');
+             $subskill_ids = $subject_id ;
+             if(count($srecords) > 0){
+                foreach ($srecords as $srecord) {    
+                  $skill_id = $srecord['id'] ;
+                  
+                  //list of subskill_id 
+                  $str2= "SELECT group_concat(course_id) as subskill_ids FROM courses, course_details WHERE courses.id=course_details.course_id AND parent_id = $skill_id GROUP BY courses.id ";
+                  $ssRecords = $connection->execute($str2)->fetchAll('assoc');
+                  
+                  if(count($ssRecords) > 0){  // No condition should occure when any of skill doesn't have subskill
+                      foreach ($ssRecords as $ssRecord) {
+                         $subskill_ids = $subskill_ids.','.$ssRecord['subskill_ids'];
+                      }
+                      $data['status']=True;                      
+                  }
+                }
+              
+             }else{
+                $data['status'] = False;
+                $data['message'] = "No skill are found on this subject.";
+
+             }
+
+             // After getting all subskill ids
+             if(!empty($subskill_ids)){
+                
+                // get students list for subject
+               $sql3 = "SELECT group_concat(student_id) as student_ids from student_teachers WHERE teacher_id = $teacher_id AND course_id=$subject_id GROUP BY teacher_id ORDER BY student_id ASC "; 
+               $stRecords = $connection->execute($sql3)->fetchAll('assoc');
+
+                if(count($stRecords) > 0){
+                  foreach ($stRecords as $stRecord) {
+                      $stud_ids = $stRecord['student_ids'];
+                  }
+
+                  // get students quiz result for subskills
+                  $sql4 = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name from user_quizes as uq, users as u, courses as cr, quiz_types as qt WHERE u.id=uq.user_id AND uq.course_id = cr.id AND qt.id=uq.quiz_type_id AND course_id IN ($subskill_ids) AND uq.user_id IN ($stud_ids) ORDER BY created DESC ";
+                  $stQuizRecords = $connection->execute($sql4)->fetchAll('assoc');
+
+                  if(count($stQuizRecords) > 0){
+                    foreach ($stQuizRecords as $stQuizRecord) {
+                      $data['attention_records'][] = $stQuizRecord;
+                    }        
+                  }else{
+                    $data['status'] =False;
+                    $data['message']="No Records For Your Attention.";
+                  }
+                }else{
+                  $data['status'] = "No students found.";
+                }
+             }
+    }else{
+      $data['status'] = False;
+      $data['message'] = "Teacher Id and subject id cannot null.Please set teacher id and subject id.";
+  }
+
+  $this->set([
+      'response' => $data, 
+      '_serialize' => ['response']
+    ]);
+
+
+}
+
+  // API to call Analyitic result of students in a subskill
+    public function getSubskillAnalytic($teacher_id=null,$subject_id=null,$subskill_id=null){
+        $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id'] : $teacher_id;
+        $subject_id = isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
+        $subskill_id = isset($_REQUEST['subskill_id']) ? $_REQUEST['subskill_id'] : $subskill_id;
+        $connection = ConnectionManager::get('default');
+
+        if(!empty($teacher_id) && !empty($subskill_id) && !empty($subject_id)){
+              $count_classStudents = 0;
+              $count_noattack =0;
+              $count_remedial =0;
+              $count_struggling = 0;
+              $count_ontarget =0;
+              $count_outstanding =0;
+              $count_gifted =0;
+              $count_escape =0;
+
+
+
+               // get students list for subskills
+                $sql = "SELECT st.student_id,u.username from student_teachers as st, users as u WHERE u.id=st.student_id AND teacher_id = $teacher_id AND course_id=$subject_id ORDER BY student_id ASC ";  
+                $stRecords = $connection->execute($sql)->fetchAll('assoc');
+
+                if(count($stRecords) > 0){
+                  foreach ($stRecords as $stRecord) {
+                      $count_classStudents++;
+                      $class_stud_id = $stRecord['student_id'];
+                        
+
+                      // get students quiz result for subskills
+                      $sql1 = "SELECT uq.*,qt.name as quiz_type_name, cr.course_name FROM user_quizes as uq
+                              INNER JOIN courses as cr ON  cr.id=uq.course_id
+                              INNER JOIN quiz_types as qt ON qt.id=uq.quiz_type_id
+                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id=2 ORDER BY created DESC "; 
+                      
+                      $stQuizRecords = $connection->execute($sql1)->fetchAll('assoc');
+
+                      if(count($stQuizRecords) > 0){
+                        foreach ($stQuizRecords as $stQuizRecord) {
+                            //$data['attention_records'][] = $stQuizRecord;
+                            $exam_marks = $stQuizRecord['exam_marks'];
+                            $student_score = $stQuizRecord['score'];
+                            
+                            if($exam_marks==0){ $student_score =0; }
+                            $student_result_precentage = ($student_score/$exam_marks)*100;
+
+                            if($student_result_precentage <= REMEDIAL){
+                                $count_remedial++;
+                            }
+                            elseif($student_result_precentage >REMEDIAL && $student_result_precentage <=STRUGGLING){
+                                $count_struggling++;
+                            }
+                            elseif($student_result_precentage >STRUGGLING && $student_result_precentage <=ON_TARGET){
+                                $count_ontarget++;
+                            }
+                            elseif($student_result_precentage >ON_TARGET && $student_result_precentage <=OUTSTANDING){
+                                $count_outstanding++;
+                            }
+
+                            elseif($student_result_precentage >OUTSTANDING && $student_result_precentage <=GIFTED){
+                                $count_gifted++;
+                            }else{
+                                $count_escape++;
+                            }
+                        }     // end of foreach
+
+                      }else{
+                         $count_noattack = $count_noattack+1  ;
+                      }              
+                  }
+
+                    //$row['percent_classStudents'] = 100;
+                    $row['percent_noattack'] = round( (($count_noattack*100)/$count_classStudents),2);
+                    $row['percent_remedial'] = round( (($count_remedial*100)/$count_classStudents),2);
+                    $row['percent_struggling']=round( (($count_struggling*100)/$count_classStudents),2);
+                    $row['percent_ontarget'] = round( (($count_ontarget*100)/$count_classStudents),2);
+                    $row['percent_outstanding'] =round( (($count_outstanding*100)/$count_classStudents),2);
+                    $row['percent_gifted'] = round( (($count_gifted*100)/$count_classStudents),2);
+                    $data['student_result']=$row;
+                    $data['status']=True;
+      
+
+              
+                }else{
+                  $data['status']=False;
+                  $data['message'] = "No students found.";
+                }
+
+        }else{
+            $data['status'] = False;
+            $data['message'] ="teacher_id, subject_id and subskill_id cannot null. please set the value.";
+        }
+
+        $this->set([
+          'response' => $data, 
+          '_serialize' => ['response']
+        ]);
+
+    }
+
+
+
+
   /**
    * setDefaultSettings().
    */
@@ -3941,11 +4195,7 @@ class TeachersController extends AppController {
         'placement_test' => TRUE,
         'frequency_of_challenges_by' => 'all_class',
         'auto_progression' => TRUE,
-        'auto_progression_by' => 'all_class',
-        'fill_in_the_blanks_question' => TRUE,
-        'single_choice_question' => TRUE,
-        'multiple_choice_question' => TRUE,
-        'true_false_question' => TRUE,
+        'auto_progression_by' => 'all_class'
       );
       foreach ($user_settings as $settings_key => $settings_value) {
         if (array_key_exists($settings_key, $default_settings)) {
@@ -3959,5 +4209,433 @@ class TeachersController extends AppController {
     }
     return $default_settings;
   }
-
+  /**
+   * This function is used for delete the image.
+   * **/
+  public function deleteImages($uid,$id) {
+    try {
+      $message = '';
+      $image = '';
+      $status = FALSE;
+      $connection = ConnectionManager::get('default');
+      $sql = "Select * from option_master where id = $id ";
+      $result = $connection->execute($sql)->fetchAll('assoc');
+      foreach ($result as $key => $value) {
+        $image = $value['options'];
+      }
+      $del_sql = "Delete from option_master where id = $id";
+      if (!$connection->execute($del_sql)) {
+        $message = "unable to delete content";
+        throw new Exception($message);
+      } else {
+        unlink($image);
+        $message = "Content deleted successfully.";
+        $status = TRUE;
+      }
+    } catch (Exception $ex) {
+      $this->log('Error in getTeacherDetailsForContent function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'message' => $message,
+        'status' => $status,
+        '_serialize' => ['message', 'status']
+    ]);
+  }
+  /**
+   * This api is used for add new skill. 
+   **/
+  public function addNewScope() {
+    try{
+      $message = '';
+      $status = FALSE;
+      if($this->request->is('post')) {
+        if(isset($this->request->data['uid']) && empty($this->request->data['uid'])) {
+          $message = 'Please login.';
+          throw new Exception('Please login.');
+        }else if(isset($this->request->data['grade']) && empty($this->request->data['grade'])) {
+          $message = 'Choose a grade.';
+          throw new Exception('Choose a grade.');
+        }else if(isset($this->request->data['course_id']) && empty($this->request->data['course_id'])) {
+          $message = 'Choose a course.';
+          throw new Exception('Choose a course.');
+        }else if(isset($this->request->data['skill_name']) && empty($this->request->data['skill_name'])) {
+          $message = 'Template name can not be empty.';
+          throw new Exception('Template name can not be empty.');
+        }
+//        else if(isset($this->request->data['start_date']) && empty($this->request->data['start_date'])) {
+//          $message = '';
+//          throw new Exception();
+//        }else if(isset($this->request->data['end_date']) && empty($this->request->data['end_date'])) {
+//          $message = '';
+//          throw new Exception();
+//        }
+        else{
+          $scope = TableRegistry::get('scope_and_sequence');
+          $course = TableRegistry::get('courses');
+          $course_detail = TableRegistry::get('course_details');
+          $detail = $course->newEntity();
+          $detail->level_id = $this->request->data['grade'];
+          $detail->course_name = $this->request->data['skill_name'];
+          $detail->created_by = $this->request->data['uid'];
+          $detail->created = date('Y-m-d' ,time());
+    //      $detail->start_date = $this->request->data['start_date'];
+    //      $detail->end_date = $this->request->data['end_date'];
+          $id = $course->save($detail)->id; 
+          if(is_numeric($id)) {
+            $result = $scope->find()->where(['created_by' => $this->request->data['uid'],'parent_id' => $this->request->data['course_id']])->toArray();
+            foreach ($result as $key => $value) {
+              $temp_scope = json_decode($value['scope']);
+              $count = count($temp_scope);
+              $temp_scope[$count]['course_id'] = $id;
+              $temp_scope[$count]['name'] = $this->request->data['skill_name'];
+              $temp_scope[$count]['start_date'] = '000:000:000';
+              $temp_scope[$count]['end_date'] = '000:000:000';
+              $temp_scope[$count]['parent_id'] = $this->request->data['course_id'];
+              $temp_scope[$count]['visibility'] = '1';
+              $query = $scope->query();
+              $result = $query->update()->set([
+                          'scope' => json_encode($temp_scope),
+                      ])->where(['created_by' => $this->request->data['uid'],'parent_id' => $this->request->data['course_id'],'type' => $value['type']])->execute();
+              $row_count = $result->rowCount();
+            }
+            $cors_detail = $course_detail->newEntity();
+            $cors_detail->course_id = $id;
+            $cors_detail->parent_id = $this->request->data['course_id'];
+            $cors_detail->name = $this->request->data['skill_name'];
+            $cors_detail->created_by = $this->request->data['uid'];
+            $cors_detail->created = date('Y-m-d' ,time());
+      //      $cors_detail->start_date = $this->request->data['start_date'];
+      //      $cors_detail->end_date = $this->request->data['end_date'];
+            if($course_detail->save($cors_detail)) {
+             $status = TRUE;
+             $message = 'Data saved successfully.';
+            }else{
+              $message = 'Some error occurred.';
+            }
+          }else{
+              $message = 'Some error occurred.';
+          }
+        }
+      } 
+      
+    }catch(Exception $e) {
+      $this->log('Error in addNewScope function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'message' => $message,
+        'status' => $status,
+        '_serialize' => ['message','status']
+    ]);
+  }
+  /**
+   * This api is used for add new skill. 
+   **/
+  public function getUserCreatedScope($user_id,$parent_id,$type=null,$id=null) {
+    try{
+      $message='';
+      $status = FALSE;
+      $skills = '';
+      $scopes = array();
+      $by = 'course';
+      $scope = TableRegistry::get('scope_and_sequence');
+      if($user_id == NULL) {
+        $message = 'Please login.';
+        throw new Exception('Please Login');
+      }else if($parent_id == NULL) {
+        $message = 'Please select a subject.';
+        throw new Exception('Please select a subject.');
+      }else if($type == NULL) {
+        $message = 'Please choose for which you want to get scopes.';
+        throw new Exception('Please choose for which you want to get scopes.');
+      }else{
+        $scopCount = $scope->find()->where(['created_by'=> $user_id ,'parent_id' => $parent_id ,'type' => $type])->count();
+        if($scopCount > 0) {
+          $by = 'scope';
+          if($type == 'people') {
+            if($id == null) {
+              $message = 'Select a student.';
+              throw new Exception('Select a student.');
+            }else{
+              $scopes = $scope->find()->where(['created_by'=> $user_id , 
+                 'type' => 'people','created_for' => $id ,'parent_id' => $parent_id]);
+              $row_count = count($scopes);
+              if($row_count == 1) {
+               $status = TRUE; 
+              }
+            }
+          }elseif ($type == 'group') {
+            if($id == null) {
+              $message = 'Select a group.';
+              throw new Exception('Select a group.');
+            }else{
+              $scopes = $scope->find()->where(['created_by'=> $user_id , 
+                 'type' => 'group','created_for' => $id ,'parent_id' => $parent_id]);
+              $row_count = count($scopes);
+              if($row_count == 1) {
+               $status = TRUE; 
+              }
+            }  
+          }elseif ($type == 'class') {
+            $scopes = $scope->find()->where(['created_by'=> $user_id , 
+                 'type' => 'class' ,'parent_id' => $parent_id])->toArray();
+            $row_count = count($scopes);
+              if($row_count == 1) {
+               $status = TRUE; 
+              }
+          }
+        } else {
+          $course_detail = TableRegistry::get('course_details');
+          $user_role = TableRegistry::get('user_roles');
+          $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+          foreach ($role as $key => $value) {
+            $rol[$key] = $value['user_id'];
+          }
+          $id = implode(',',$rol);
+          $id = $id.','.$user_id;
+          $connection = ConnectionManager::get('default');
+          $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+          $skills = $connection->execute($sql)->fetchAll('assoc');
+          if(count($skills) > 0) {
+            foreach ($skills as $key => $value) {
+            $skill['course_id'] = $value['course_id'];
+            $skill['parent_id'] = $value['parent_id'];
+            $skill['name'] = $value['name'];
+            $skill['start_date'] = $value['start_date'];
+            $skill['end_date'] = $value['end_date'];
+            $skill['created_by'] = $value['created_by'];
+            $skill['status'] = $value['status'];
+            $skill['visibility'] = 1;
+            $scopes[] = $skill;
+            }
+            $status = TRUE; 
+          }
+        } 
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserCreatedScope function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'response' => $scopes,
+        'message' => $message,
+        'status' => $status,
+        'by' => $by,
+        '_serialize' => ['response','message','status','by']
+    ]);
+  }
+  /**
+   * this api is used for save template.
+   **/
+  public function saveScopesAsTemplate() {
+    try{
+      $message = '';
+      $status = FALSE;
+      $scope = TableRegistry::get('scope_and_sequence_template');
+      if($this->request->is('post')) {
+        if(isset($this->request->data['created_by'])&& empty($this->request->data['created_by'])){
+          $message = 'Please login';
+          throw new Exception('Please login.');
+        }else if(isset($this->request->data['name'])&& empty($this->request->data['name'])) {
+          $message = 'Please give template a name.';
+          throw new Exception('Please give template a name.');
+        }else if(isset($this->request->data['grade'])&& empty($this->request->data['grade'])) {
+          $message = 'Please choose grade.';
+          throw new Exception('Please choose grade.');
+        }else if(isset($this->request->data['parent_id'])&& empty($this->request->data['parent_id'])) {
+          $message = 'Please choose subject.';
+          throw new Exception('Please choose course/skill.');
+        }else if(isset($this->request->data['created_for'])&& empty($this->request->data['created_for'])) {
+          $message = 'Please Select for which you want to create the scope.';
+          throw new Exception('Please Select for which you want to create the scope.');
+        }else if(isset($this->request->data['type'])&& empty($this->request->data['type'])) {
+          $message = 'Some error occurred';
+          throw new Exception('Please defined type');
+        }else if(isset($this->request->data['id'])&& empty($this->request->data['id']) && $this->request->data['created_for'] != 'class') {
+          $message = 'Please select a student/group';
+          throw new Exception('Please select a student/group.');
+        }else{
+          $detail = $scope->newEntity();
+          $detail->grade_id = $this->request->data['grade'];
+          $detail->name = $this->request->data['name'];
+          $detail->category = $this->request->data['type'];
+          $detail->type = $this->request->data['created_for'];
+          $detail->created_for = $this->request->data['id'];
+          $detail->parent_id = $this->request->data['parent_id'];
+          $detail->created_by = $this->request->data['created_by'];
+          $detail->created = date('Y-m-d' ,time());
+          $detail-> template= json_encode($this->request->data['template']);
+          if($scope->save($detail)) {
+            $message = 'Tempalte Saved Successfully.';
+            $status = TRUE;
+          }  else {
+            $message = 'Some error occurred.';
+          } 
+        }
+      }
+    }catch(Exception $e) {
+      $this->log('Error in saveScopesAsTemplate function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'message' => $message,
+        'status' => $status,
+        '_serialize' => ['message','status']
+    ]);
+  }
+  
+  /**
+   * this api is used for save template.
+   **/
+  public function saveScopesAsSequence() {
+    try{
+      $message = '';
+      $status = FALSE;
+      $scope = TableRegistry::get('scope_and_sequence');
+      if($this->request->is('post')) {
+        if(isset($this->request->data['created_by'])&& empty($this->request->data['created_by'])){
+          $message = 'Please login';
+          throw new Exception('Please login');
+        }else if(isset($this->request->data['grade'])&& empty($this->request->data['grade'])) {
+          $message = 'Please choose grade.';
+          throw new Exception('Please choose grade.');
+        }else if(isset($this->request->data['parent_id'])&& empty($this->request->data['parent_id'])) {
+          $message = 'Please choose subject.';
+          throw new Exception('Please choose subject.');
+        }else if(isset($this->request->data['type'])&& empty($this->request->data['type'])) {
+          $message = 'Please Select for which you want to create the scope.';
+          throw new Exception('Please Select for which you want to create the scope.');
+        }else if(isset($this->request->data['people']) && $this->request->data['type']== 'people' 
+                && empty($this->request->data['people'])) {
+          $message = 'Please select a student.';
+          throw new Exception('Please select a student.');
+        }else if(isset($this->request->data['group'])&& $this->request->data['type']== 'group'
+                && empty($this->request->data['group'])) {
+          $message = 'Please select a group.';
+          throw new Exception('Please select a group.');
+        }else if(isset($this->request->data['scope'])&& empty($this->request->data['scope'])) {
+          $message = 'Some error occurred.';
+          throw new Exception('Content can not be empty.');
+        }else{
+          $id = $this->request->data['created_by'];
+          $grade = $this->request->data['grade'];
+          $parent = $this->request->data['parent_id'];
+          if($this->request->data['type'] == 'class') {
+            $count = $scope->find()->where(['created_by' => $id,'type' => 'class' ,'grade_id'=> $grade,'parent_id'=>$parent])->count();
+            if($count > 0) {
+              $query = $scope->query();
+              $result = $query->update()->set([
+                          'scope' => json_encode($this->request->data['scope']),
+                      ])->where(['created_by' => $id,'parent_id'=>$parent])->execute();
+              $row_count = $result->rowCount();
+              if($row_count > 0) {
+                $message = 'Your scope and sequence saved.';
+                $status = TRUE;
+              }else{
+                $message = 'Your scope and sequence not saved.';
+              }
+            }
+          }elseif($this->request->data['type'] == 'group') {
+            $count = $scope->find()->where(['created_by' => $id,
+                'type' => 'group',
+                'grade_id' => $grade,
+                'parent_id' => $parent,
+                'created_for' => $this->request->data['group']])->count();
+            if($count > 0) {
+              $query = $scope->query();
+              $result = $query->update()->set([
+                          'scope' => json_encode($this->request->data['scope']),
+                      ])->where(['created_by' => $id,'parent_id'=>$parent])->execute();
+              $row_count = $result->rowCount();
+              if($row_count > 0) {
+                $message = 'Your scope and sequence saved.';
+                $status = TRUE;
+              }else{
+                $message = 'Your scope and sequence not saved.';
+              }
+            } 
+          }else if($this->request->data['type'] == 'people') {
+            $count = $scope->find()->where(['created_by' => $id,
+                'type' => 'people' ,
+                'grade_id' => $grade,
+                'parent_id' => $parent,
+                'created_for' => $this->request->data['people'],
+                    ])->count();
+            if($count > 0) {
+              $query = $scope->query();
+              $result = $query->update()->set([
+                          'scope' => json_encode($this->request->data['scope']),
+                      ])->where(['created_by' => $id,'parent_id'=>$parent])->execute();
+              $row_count = $result->rowCount();
+              if($row_count > 0) {
+                $message = 'Your scope and sequence saved.';
+                $status = TRUE;
+              }else{
+                $message = 'Your scope and sequence not saved.';
+              }
+            }
+          }
+        }
+        if($message == '') {
+          $detail = $scope->newEntity();
+          $detail->grade_id = $grade;
+          $detail->parent_id = $parent;
+          $detail->created_by = $id;
+          $detail->type = $this->request->data['type'];
+          if($this->request->data['type'] == 'people') {
+            $detail->created_for = $this->request->data['people'];
+          }
+          if($this->request->data['type'] == 'group') {
+            $detail->created_for = $this->request->data['group'];
+          }
+          $detail->created = date('Y-m-d' ,time());
+          $detail->scope = json_encode($this->request->data['scope']);
+          if($scope->save($detail)) {
+            $message = 'Your scope and sequence saved.';
+            $status = TRUE;
+          }else{
+            $message = 'Some error occurred.';
+          }
+        }   
+      }
+    }catch(Exception $e) {
+      $this->log('Error in saveScopesAsSequence function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'message' => $message,
+        'status' => $status,
+        '_serialize' => ['response','message','status','by']
+    ]);
+  }
+  /**
+   * This api is used for geting template detail 
+   **/
+  public function getScopeTemplate($user_id=null,$type=null) {
+    try{
+     $message = '';
+     $status = FALSE;
+     $scope = TableRegistry::get('scope_and_sequence_template');
+     if($user_id == NULL) {
+       $message = 'Please login';
+       throw new Exception('Please login');
+     }else if($type == NULL) {
+       $message = 'Some Error Occurred.';
+       throw new Exception('Please defined type.');
+     }else{
+      $template = $scope->find()->where(['created_by'=> $user_id ,'category' => $type] ); 
+      $status = TRUE; 
+     }
+    } catch (Exception $e){
+      $this->log('Error in getScopeTemplate function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'response' => $template,
+        'message' => $message,
+        'status' => $status,
+        '_serialize' => ['response','message','status']
+    ]);
+  }
 }
