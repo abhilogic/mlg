@@ -71,7 +71,7 @@ public function getStudentAssignments($user_id = null){
 
             // To find user assignment
             $sql ="SELECT
-              adetails.id as assignment_id, grade_id, course_id, cr.course_name, group_id, student_id,assignment_for, schedule_time, adetails.comments,
+              adetails.id as assignment_id, adetails.grade_id, adetails.course_id, cr.course_name, group_id, student_id,assignment_for, schedule_time, adetails.comments,
 
               qz.id as quiz_id, qz.name as quiz_name, qz.quiz_type_id, max_marks, max_questions, qz.modified as created, qt.name as type, qt.id as type_id       
               
