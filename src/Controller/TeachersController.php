@@ -4015,11 +4015,7 @@ class TeachersController extends AppController {
         'placement_test' => TRUE,
         'frequency_of_challenges_by' => 'all_class',
         'auto_progression' => TRUE,
-        'auto_progression_by' => 'all_class',
-        'fill_in_the_blanks_question' => TRUE,
-        'single_choice_question' => TRUE,
-        'multiple_choice_question' => TRUE,
-        'true_false_question' => TRUE,
+        'auto_progression_by' => 'all_class'
       );
       foreach ($user_settings as $settings_key => $settings_value) {
         if (array_key_exists($settings_key, $default_settings)) {
