@@ -1298,4 +1298,34 @@ class CoursesController extends AppController{
         '_serialize' => ['response','message','status','by']
     ]);
   }
+
+  /*
+   * function DeleteUserCourses().
+   */
+  public function DeleteUserAllCourses() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+          throw new Exception('user_id cannot be null');
+        }
+        $user_courses_table = TableRegistry::get('UserCourses');
+        if ($user_courses_table->deleteAll(['user_id' => $this->request->data['user_id']])) {
+          $status = TRUE;
+        } else {
+          $message = 'unable to delete user courses entries';
+          throw new Exception($message);
+        }
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status','message']
+    ]);
+  }
+
 }
