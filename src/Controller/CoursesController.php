@@ -1230,10 +1230,11 @@ class CoursesController extends AppController{
           $status = TRUE;
           $course_details[0] = $scopes;
         }else{
-          $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
-            'type IN'=>['class','group']])->orderDESC('type','created');
-          $scopCount = $scopes->count();
-          if($scopCount > 0) {
+          if($tid == '') {
+            $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
+              'type IN'=>['class','group']])->orderDESC('type','created');
+            $scopCount = $scopes->count();
+            if($scopCount > 0) {
             $by = 'scope';
             $count = 0;
             foreach ($scopes  as $key => $value) {
@@ -1284,6 +1285,32 @@ class CoursesController extends AppController{
               $status = TRUE; 
             }
           }
+          }else{
+            $course_detail = TableRegistry::get('course_details');
+            $user_role = TableRegistry::get('user_roles');
+            $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+            foreach ($role as $key => $value) {
+              $rol[$key] = $value['user_id'];
+            }
+            $id = implode(',',$rol);
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+            $skills = $connection->execute($sql)->fetchAll('assoc');
+            if(count($skills) > 0) {
+              foreach ($skills as $key => $value) {
+              $skill['course_id'] = $value['course_id'];
+              $skill['parent_id'] = $value['parent_id'];
+              $skill['name'] = $value['name'];
+              $skill['start_date'] = $value['start_date'];
+              $skill['end_date'] = $value['end_date'];
+              $skill['created_by'] = $value['created_by'];
+              $skill['status'] = $value['status'];
+              $skill['visibility'] = 1;
+              $course_details[] = $skill;
+              }
+              $status = TRUE; 
+            }
+          }
         }
       }
     }catch(Exception $e) {
@@ -1296,6 +1323,92 @@ class CoursesController extends AppController{
         'status' => $status,
         'by' => $by,
         '_serialize' => ['response','message','status','by']
+    ]);
+  }
+
+  /*
+   * function deleteUserCourses().
+   */
+  public function deleteUserAllCourses() {
+    try {
+      $status = FALSE;
+      $record_found = '';
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+          $message = 'user id cannot be null';
+          throw new Exception('user_id cannot be null');
+        }
+        $user_courses_table = TableRegistry::get('UserCourses');
+        $record_found = $user_courses_table->find()->where(['user_id' => $this->request->data['user_id']])->count();
+        if (!$record_found) {
+          $message = 'No record to delete';
+          throw new Exception($message);
+        }
+        if ($user_courses_table->deleteAll(['user_id' => $this->request->data['user_id']])) {
+          $status = TRUE;
+        } else {
+          $message = 'unable to delete user courses entries';
+          throw new Exception($message);
+        }
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'record_found' => $record_found,
+      '_serialize' => ['status','message','record_found']
+    ]);
+  }
+
+  /*
+   * function setUserCourse().
+   */
+  public function setUserCourse() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+          $message = 'user id cannot be null';
+          throw new Exception('user_id cannot be null');
+        }
+        if (!isset($this->request->data['course_ids']) && empty($this->request->data['course_ids'])) {
+          $message = 'course id cannot be null';
+          throw new Exception('course id cannot be null');
+        }
+        $course_ids = $this->request->data['course_ids'];
+        if (!is_array($course_ids)) {
+          $message = 'course id must be an array';
+          throw new Exception($message);
+        }
+        $user_id = $this->request->data['user_id'];
+        $expiry_date = isset($this->request->data['expiry_date']) ? $this->request->data['expiry_date'] : date('Y-m-d');
+        $user_courses_table = TableRegistry::get ('UserCourses');
+        $data = array();
+        foreach ($course_ids as $course_id) {
+          $data[] = [
+            'user_id' => $user_id,
+            'course_id' => $course_id,
+            'expiry_date' => $expiry_date
+          ];
+        }
+        $entities = $user_courses_table->newEntities($data);
+        if ($user_courses_table->saveMany($entities)) {
+          $status = TRUE;
+        } else {
+          $message = 'unable to save data';
+        }
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status','message']
     ]);
   }
 }

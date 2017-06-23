@@ -1838,6 +1838,14 @@ class UsersController extends AppController{
                        $param['curl_post'] = 1;
                        $payment_controller->sendCurl($param);
 
+                       // update user courses
+                       $user_courses_update_curl['url'] = Router::url('/', true) . 'users/updateUserCourseDetailsByUserPurchaseItems';
+                       $user_courses_update_curl['return_transfer'] = TRUE;
+                       $user_courses_update_curl['post_fields'] = array('user_id' => $child_id);
+                       $user_courses_update_curl['json_post_fields'] = TRUE;
+                       $user_courses_update_curl['curl_post'] = 1;
+                       $payment_controller->sendCurl($user_courses_update_curl);
+
                        $message = 'card added successfully';
                      } else {
                        $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2Bill";
@@ -2008,7 +2016,7 @@ class UsersController extends AppController{
          throw new Exception('User Id is empty');
        }
        $connection = ConnectionManager::get('default');
-       $sql = "SELECT users.first_name as user_first_name, users.last_name as user_last_name,"
+       $sql = "SELECT users.id as user_id, users.first_name as user_first_name, users.last_name as user_last_name,"
          . " user_purchase_items.amount as purchase_amount, user_purchase_items.level_id as level_id,"
          . " user_purchase_items.course_id, user_purchase_items.order_date as order_date,"
          . " user_purchase_items.order_timestamp as order_timestamp, user_purchase_items.item_paid_status as paid_status,"
@@ -2032,6 +2040,7 @@ class UsersController extends AppController{
          $status = TRUE;
          $total_amount = 0;
          foreach ($purchase_details_result as $purchase_result) {
+           $purchase_details['user_id'] = $purchase_result['user_id'];
            $purchase_details['user_first_name'] = $purchase_result['user_first_name'];
            $purchase_details['user_last_name'] = $purchase_result['user_last_name'];
            $purchase_details['package_id'] = $purchase_result['package_id'];
@@ -3224,4 +3233,95 @@ class UsersController extends AppController{
     ];
   }
 
+  /*
+   * function updateUserCourseDetailsByUserPurchaseItems().
+   *
+   * $user_id : Is basically a child id.
+   */
+  public function updateUserCourseDetailsByUserPurchaseItems() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        $req_data = $this->request->data;
+        if (!isset($req_data['user_id'])) {
+          $message = 'user_id not found';
+          throw new Exception($message);
+        }
+        if (empty($req_data['user_id'])) {
+          $message = 'user id can not be empty';
+          throw new Exception($message);
+        }
+        $payment_controller = new PaymentController();
+        $purchase_detail_curl['url'] = Router::url('/', true) . 'users/getUserPurchaseDetails/' . $req_data['user_id'] . '/0/1';
+        $purchase_detail_curl['return_transfer'] = 1;
+        $purchase_detail_curl['post_fields'] = array();
+        $purchase_detail_curl_response = $payment_controller->sendCurl($purchase_detail_curl);
+        if ($purchase_detail_curl_response['status'] == TRUE && !empty($purchase_detail_curl_response['curl_exec_result'])) {
+          $purchase_details = json_decode($purchase_detail_curl_response['curl_exec_result'], TRUE);
+          if ($purchase_details['status'] == TRUE && !empty($purchase_details['response'])) {
+            $purchase_details_response = $purchase_details['response'];
+            if ($purchase_details_response['paid_status'] == 1) {
+              $data['user_id'] = $purchase_details_response['user_id'];
+              $data['course_ids'] = array();
+              foreach ($purchase_details_response['purchase_detail'] as $detail) {
+                $data['course_ids'][] = $detail['course_id'];
+              }
+              $delete_user_courses_curl['url'] = Router::url('/', true) . 'courses/deleteUserAllCourses';
+              $delete_user_courses_curl['return_transfer'] = 1;
+              $delete_user_courses_curl['post_fields'] = array('user_id' => $data['user_id']);
+              $delete_user_courses_curl['json_post_fields'] = TRUE;
+              $delete_user_courses_curl['curl_post'] = 1;
+              $delete_user_courses_curl_response = $payment_controller->sendCurl($delete_user_courses_curl);
+              if ($delete_user_courses_curl_response['status'] == TRUE && !empty($delete_user_courses_curl_response['curl_exec_result'])) {
+                $delete_user_courses = json_decode($delete_user_courses_curl_response['curl_exec_result'], TRUE);
+                if ($delete_user_courses['status'] == TRUE || $delete_user_courses['record_found'] == 0) {
+                  $set_user_courses_curl['url'] = Router::url('/', true) . 'courses/setUserCourse';
+                  $set_user_courses_curl['return_transfer'] = 1;
+                  $set_user_courses_curl['post_fields'] = $data;
+                  $set_user_courses_curl['json_post_fields'] = TRUE;
+                  $set_user_courses_curl['curl_post'] = 1;
+                  $set_user_courses_curl_response = $payment_controller->sendCurl($set_user_courses_curl);
+                  if ($set_user_courses_curl_response['status'] == TRUE && !empty($set_user_courses_curl_response['curl_exec_result'])) {
+                    $set_user_courses = json_decode($set_user_courses_curl_response['curl_exec_result'], TRUE);
+                    if ($set_user_courses['status'] == TRUE) {
+                      $status = TRUE;
+                    } else {
+                      $message = 'Unable to set user new courses';
+                      throw new Exception($message);
+                    }
+                  } else {
+                    $message = 'Unable to get curl response from set courses for users';
+                    throw new Exception($message);
+                  }
+                } else {
+                  $message = 'Unable to delete courses for users';
+                  throw new Exception($message);
+                }
+              } else {
+                $message = 'Unable to get curl response from delete courses for users';
+                throw new Exception($message);
+              }
+            } else {
+              $message = 'user has not purchased the courses yet';
+              throw new Exception($message);
+            }
+          } else {
+            $message = 'Unable to get info about purchase details';
+            throw new Exception($message);
+          }
+        } else {
+          $message = 'Unable to get curl response';
+          throw new Exception($message);
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
 }
