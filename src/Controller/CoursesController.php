@@ -1411,4 +1411,72 @@ class CoursesController extends AppController{
       '_serialize' => ['status','message']
     ]);
   }
+
+
+  /**   API will return skill and subskill of a subject
+        if find subskill of skill then child_level=1 and parent_id= skill_id
+        if find subskill of subject then child_level=2 and parent_id
+        return_type defind return type =1/2 of function as as json=1 or array=2
+   **/
+   public function getSkillListOfSubject($parent_id=null, $child_level=1, $return_type=1){ // child_level is hierarchical
+      if(!empty($parent_id)){  // parent_id can be subject_id or skill_id.
+            $connection = ConnectionManager::get('default');
+           
+            /* ************************************ */
+            if($child_level==1){
+
+                $sql = "SELECT c.*, l.name as grade_name FROM courses as c, course_details as cd, levels as l 
+                        WHERE  c.id=cd.course_id AND c.level_id=l.id AND cd.parent_id = $parent_id ";          
+                $records = $connection->execute($sql)->fetchAll('assoc');
+                if(count($records) > 0) {
+                    foreach ($records as $record) {
+                        $data['child_courses'][] = $record;
+                        $data['childcourse_ids'][] = $record['id'];
+                    }
+                    $data['status'] = True;
+                }
+                else{
+                      $data['status']=False;
+                      $data['message']="No child courses are found.";
+                } 
+                         
+            }   
+           
+            /* ************************************ */
+            if($child_level==2){
+
+                $sql = "SELECT c.*, l.name as grade_name FROM courses as c, course_details as cd, levels as l 
+                        WHERE  c.id=cd.course_id AND c.level_id=l.id AND cd.parent_id = $parent_id ";        
+                $records = $connection->execute($sql)->fetchAll('assoc');
+                if(count($records) > 0) {
+                    foreach ($records as $record) {
+                        $cid = $record['id'];
+                        $data[]= $this->getSkillListOfSubject($record['id'],1,2);                                              
+                    }                    
+                    $data['status'] = True;
+                }
+                else{
+                      $data['status']=False;
+                      $data['message']="No child courses are found.";
+                }                
+
+            }    
+       }else{
+            $data['status'] =False;
+            $data['message']="Parent_id cannot be null.";
+        }
+
+
+        // check return type value
+        if($return_type==1){
+              $this->set([ 'response' => $data, '_serialize' => ['response','message','status','by'] ]);
+        }
+        if($return_type==2){                     
+            return $data;
+        }
+
+        
+    
+    }// end function
+
 }

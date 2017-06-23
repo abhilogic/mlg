@@ -62,68 +62,102 @@ class StudentsController extends AppController {
 
 
 
-public function getStudentAssignments($user_id = null){
+
+public function getStudentAssignments($user_id = null, $subject_id=null){
       $user_id = isset($_GET['user_id']) ? $_GET['user_id'] : $user_id ;
       if(!empty($user_id)){
             $connection = ConnectionManager::get('default');
             $base_url = Router::url('/', true);
 
+            // find all subskill of subject on which assignments list need to findout
+            $crObj = new CoursesController();
+            $courses_info= $crObj->getSkillListOfSubject($subject_id,2,2);
+            
+            $subskill_ids = array();
+            foreach ($courses_info as $coursesinfo) {                     
+                if($coursesinfo['status']==1){
+                    $subskill_ids = array_merge($subskill_ids, $coursesinfo['childcourse_ids'] );
+                }
+            }
+           $subskillids = implode(',', $subskill_ids);
 
-            // To find user assignment
-            $sql ="SELECT
-              adetails.id as assignment_id, adetails.grade_id, adetails.course_id, cr.course_name, group_id, student_id,assignment_for, schedule_time, adetails.comments,
+          if(!empty($subskill_ids)){
+              // To find user assignment
+              $sql ="SELECT
+                adetails.id as assignment_id, adetails.grade_id, adetails.course_id, cr.course_name, group_id, student_id,assignment_for, schedule_time, adetails.comments,
 
-              qz.id as quiz_id, qz.name as quiz_name, qz.quiz_type_id, max_marks, max_questions, qz.modified as created, qt.name as type, qt.id as type_id       
-              
-              from assignment_details as  adetails "                
-                ." INNER JOIN quizes as qz ON qz.id = adetails.quiz_id " 
-                ." INNER JOIN courses as cr ON  cr.id = adetails.course_id "
-                ." INNER JOIN quiz_types as qt ON  qt.id = qz.quiz_type_id "          
-                . " WHERE FIND_IN_SET(".$user_id." , student_id)" ;                  
-          
-            $results = $connection->execute($sql)->fetchAll('assoc');
-            // print_r($result);
-            $count = count($results);
-            $data['counts'] = $count;
-            if($count > 0){
-                foreach ($results as $result) {
-                 // $assg['items'] = $result;
-                  $assg['assignment_id'] =$result['assignment_id'];                   
-                  $assg['quiz_id'] = $result['quiz_id']; 
-                  $assg['type']   = $result['type']; 
-                  $assg['type_id']   = $result['type_id']; 
-                  $assg['student_id'] = $result['student_id'];
-                  $assg['quiz_name'] = $result['quiz_name']; 
-                  $assg['max_marks'] = $result['max_marks']; 
-                  $assg['max_questions'] = $result['max_questions']; 
-                  $assg['created'] = $result['created']; 
-                  $assg['grade_id'] = $result['grade_id'];  
-                  $assg['course_id'] = $result['course_id'];
-                  $assg['course_name'] = $result['course_name'];
+                qz.id as quiz_id, qz.name as quiz_name, qz.quiz_type_id, max_marks, max_questions, qz.modified as created, qt.name as type, qt.id as type_id       
+                
+                from assignment_details as  adetails "                
+                  ." INNER JOIN quizes as qz ON qz.id = adetails.quiz_id " 
+                  ." INNER JOIN courses as cr ON  cr.id = adetails.course_id "
+                  ." INNER JOIN quiz_types as qt ON  qt.id = qz.quiz_type_id "          
+                  . " WHERE FIND_IN_SET(".$user_id." , student_id) AND adetails.course_id IN ($subskillids)" ;                  
+            
+              $results = $connection->execute($sql)->fetchAll('assoc');
+              // print_r($result);
+              $count = count($results);
+              $data['counts'] = $count;
+              if($count > 0){
+                  foreach ($results as $result) {
+                   // $assg['items'] = $result;
+                    $assg['assignment_id'] =$result['assignment_id'];                   
+                    $assg['quiz_id'] = $result['quiz_id']; 
+                    $assg['type']   = $result['type']; 
+                    $assg['type_id']   = $result['type_id']; 
+                    $assg['student_id'] = $result['student_id'];
+                    $assg['quiz_name'] = $result['quiz_name']; 
+                    $assg['max_marks'] = $result['max_marks']; 
+                    $assg['max_questions'] = $result['max_questions']; 
+                    $assg['created'] = $result['created']; 
+                    $assg['grade_id'] = $result['grade_id'];  
+                    $assg['course_id'] = $result['course_id'];
+                    $assg['course_name'] = $result['course_name'];
 
 
-                  // to get main course/subject of the class
-                  $json_courseinfo = $this->curlPost($base_url.'courses/getCourseInfo/'.$result['course_id'], array() ) ;                  
-                 $array_courseinfo = (array)json_decode($json_courseinfo);
-                 
+                    // to get subject/class , skill subskill name of a subject
+                    $json_courseinfo = $this->curlPost($base_url.'courses/getCourseInfo/'.$result['course_id'], array() );                  
+                   $array_courseinfo = (array)json_decode($json_courseinfo);
                    if(isset($array_courseinfo['response'])) {
-                      if(isset($array_courseinfo['response']->parent_info_of_skill)){
-                        $assg['subject_id'] = $array_courseinfo['response']->parent_info_of_skill->id;
-                        $assg['subject_name'] = $array_courseinfo['response']->parent_info_of_skill->course_name;
-                        $assg['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
-                      }
+                        if(isset($array_courseinfo['response']->parent_info_of_skill)){
+                          $assg['subject_id'] = $array_courseinfo['response']->parent_info_of_skill->id;
+                          $assg['subject_name'] = $array_courseinfo['response']->parent_info_of_skill->course_name;
+                          $assg['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
+                        }
+                    }else{
+                      $assg['subject_id'] = 'issue/not found';
+                    }
+
+
+                  // get score if user has given challenges
+                  $userchallenge_str = "SELECT * FROM user_quizes where user_id=$user_id AND exam_id=".$assg['quiz_id']." ORDER BY id DESC LIMIT 0,1 "; 
+                  $userchallenge_results = $connection->execute($userchallenge_str)->fetchAll('assoc');               
+                  if(count($userchallenge_results) > 0){
+                      foreach ($userchallenge_results as $ch_result) {
+                          if($ch_result['exam_marks']==0){
+                              $ch_result['score']=0 ; // to avoid infinite result exception
+                          }
+                          $st_res= ($ch_result['score'] / $ch_result['exam_marks'])*100;
+                          $assg['student_result_percent'] = round($st_res,2);
+                          $assg['has_attempted_challenge'] = 1;  //1=Yes
+                      }                      
                   }else{
-                    $assg['subject_id'] = 'issue/not found';
-                  }
+                          $assg['has_attempted_challenge'] = 0;  //0=No
+                          $assg['student_result_percent'] =0;
+                      } 
 
                 $data['assignment'][]= $assg;
-           } 
+              } 
                  $data['status'] =True;            
             }
             else{
                 $data['status'] =False;
                 $data['message'] ="No data found";
-            }            
+            }
+          }else{
+              $data['status'] =False;
+              $data['message'] ="No child courses are found.";
+          }            
         }else{
           $data['status'] =False;
           $data['message'] ="user_id cannot null.";
@@ -207,10 +241,10 @@ public function getAssignmentItems($assignment_id = null){
                       foreach ($answerRecords as $answerRow) {
                         $answerArray[]=array('value'=>$answerRow['answers'],'score'=>1);                        
                       } 
-                     $assign_ques['answer'] =  $answerArray;
+                     $assign_ques['answers'] =  $answerArray;
                                        
                    }else{
-                    $assign_ques['answer'] = [];
+                    $assign_ques['answers'] = [];
                     $assign_ques ['answer_message'] = "No correct answer available.";
                    }
 
