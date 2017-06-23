@@ -666,10 +666,7 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
                     $data['status'] =False;
                     $data['message'] = "No quiz is attend by student for subskill ".$row['course_name'];
                   }
-
-
-
-                    
+              
               } 
 
           }
@@ -677,13 +674,7 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
             $data ['status'] =False;
             $data['message'] = "No Subskill added on this skill.";
           }
-          
-        
-
-
-
-
-
+      
       }else{
         $data['status'] = False;
         $data['message'] ="please set skill_id and user_id";
