@@ -1838,6 +1838,14 @@ class UsersController extends AppController{
                        $param['curl_post'] = 1;
                        $payment_controller->sendCurl($param);
 
+                       // update user courses
+                       $user_courses_update_curl['url'] = Router::url('/', true) . 'users/updateUserCourseDetailsByUserPurchaseItems';
+                       $user_courses_update_curl['return_transfer'] = TRUE;
+                       $user_courses_update_curl['post_fields'] = array('user_id' => $child_id);
+                       $user_courses_update_curl['json_post_fields'] = TRUE;
+                       $user_courses_update_curl['curl_post'] = 1;
+                       $payment_controller->sendCurl($user_courses_update_curl);
+
                        $message = 'card added successfully';
                      } else {
                        $message = "Some Error occured, Kindly ask to administrator. ERRCODE: PY2Bill";
