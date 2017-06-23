@@ -60,13 +60,8 @@ define('ON_TARGET', 85);  //student scored 80 to 85
 define('OUTSTANDING',95 ); // student scored 86 to 95
 define('GIFTED',100 );  // 96 to 100
 
-
-
-
-  	
-
-
-
-
-
-
+// Notification Category Ids
+define('NOTIFICATION_CATEGORY_ANALYTICS', 1);
+define('NOTIFICATION_CATEGORY_OFFERS', 2);
+define('NOTIFICATION_CATEGORY_SUBSCRIPTIONS', 3);
+define('NOTIFICATION_CATEGORY_COUPON', 4);
