@@ -1327,11 +1327,12 @@ class CoursesController extends AppController{
   }
 
   /*
-   * function DeleteUserCourses().
+   * function deleteUserCourses().
    */
-  public function DeleteUserAllCourses() {
+  public function deleteUserAllCourses() {
     try {
       $status = FALSE;
+      $record_found = '';
       $message = '';
       if ($this->request->is('post')) {
         if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
@@ -1339,6 +1340,11 @@ class CoursesController extends AppController{
           throw new Exception('user_id cannot be null');
         }
         $user_courses_table = TableRegistry::get('UserCourses');
+        $record_found = $user_courses_table->find()->where(['user_id' => $this->request->data['user_id']])->count();
+        if (!$record_found) {
+          $message = 'No record to delete';
+          throw new Exception($message);
+        }
         if ($user_courses_table->deleteAll(['user_id' => $this->request->data['user_id']])) {
           $status = TRUE;
         } else {
@@ -1352,7 +1358,8 @@ class CoursesController extends AppController{
     $this->set([
       'status' => $status,
       'message' => $message,
-      '_serialize' => ['status','message']
+      'record_found' => $record_found,
+      '_serialize' => ['status','message','record_found']
     ]);
   }
 
