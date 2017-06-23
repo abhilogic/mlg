@@ -2534,9 +2534,26 @@ class UsersController extends AppController{
               throw new Exception('unable to save in coupon availble transactions');
             }
             $status = TRUE;
-          }
 
-       } else {
+            $role_id = $this->getRoleIdByUserId($param['user_id']);
+            //setting notification for coupon.
+            $payment_controller = new PaymentController();
+            $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+            $param['return_transfer'] = TRUE;
+            $param['post_fields'] = array(
+              'user_id' => $param['user_id'],
+              'role_id' => $role_id,
+              'bundle' => 'COUPON',
+              'category_id' => NOTIFICATION_CATEGORY_COUPON,
+              'sub_category_id' => $param['coupon_id'],
+              'title' => strtoupper($param['status']), //coupon in state of reedemed , approved , rejected or pending for approval by mlg
+              'description' => 'Coupon is ' . strtoupper($param['status'])
+            );
+            $param['json_post_fields'] = TRUE;
+            $param['curl_post'] = 1;
+            $payment_controller->sendCurl($param);
+          }
+        } else {
          $message = 'Coupon Id cannot be empty';
          throw new Exception('Coupon Id cannot be empty');
        }
@@ -2600,7 +2617,7 @@ class UsersController extends AppController{
             $data['status'] = "False";
             $data['message'] ="not updated;";
        }
-    
+
       $this->set([
       'response' => $data,      
       '_serialize' => ['response']
@@ -3314,6 +3331,41 @@ class UsersController extends AppController{
           $message = 'Unable to get curl response';
           throw new Exception($message);
         }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
+
+  /*
+   * function getRoleIdByUserId()
+   */
+  public function getRoleIdByUserId($user_id) {
+    //getting roll_id
+    $user_roles = TableRegistry::get('UserRoles');
+    $valid_user = $user_roles->find('all')->where(['user_id' => $user_id]);
+    $role_id = $valid_user->first()->role_id;
+    return $role_id;
+  }
+
+  /**
+   * function setUserNotifications().
+   */
+  public function setUserNotifications() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $notifications_table = TableRegistry::get('notifications');
+      $new_notification = $notifications_table->newEntity($this->request->data);
+      if ($notifications_table->save($new_notification)) {
+        $status = TRUE;
+      } else {
+        $message = 'Unable to save notification';
       }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
