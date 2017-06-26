@@ -4050,7 +4050,7 @@ public function getNeedAttention($teacher_id=null, $subject_id=null){
                   }
 
                   // get students quiz result for subskills
-                  $sql4 = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name from user_quizes as uq, users as u, courses as cr, quiz_types as qt WHERE u.id=uq.user_id AND uq.course_id = cr.id AND qt.id=uq.quiz_type_id AND course_id IN ($subskill_ids) AND uq.user_id IN ($stud_ids) ORDER BY created DESC ";
+                  $sql4 = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name from user_quizes as uq, users as u, courses as cr, quiz_types as qt WHERE u.id=uq.user_id AND uq.course_id = cr.id AND qt.id=uq.quiz_type_id AND course_id IN ($subskill_ids) AND uq.user_id IN ($stud_ids) AND uq.quiz_type_id IN (2,4,5,6) ORDER BY created DESC ";
                   $stQuizRecords = $connection->execute($sql4)->fetchAll('assoc');
 
                   if(count($stQuizRecords) > 0){
@@ -4091,7 +4091,7 @@ public function getNeedAttentionOFStudent($student_id=null){
       $connection = ConnectionManager::get('default');
 
      // get students quiz result for subskills
-     $sql = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name from user_quizes as uq, users as u, courses as cr, quiz_types as qt WHERE u.id=uq.user_id AND uq.course_id = cr.id AND qt.id=uq.quiz_type_id AND uq.user_id=$student_id ORDER BY created DESC ";
+     $sql = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name from user_quizes as uq, users as u, courses as cr, quiz_types as qt WHERE u.id=uq.user_id AND uq.course_id = cr.id AND qt.id=uq.quiz_type_id AND uq.user_id=$student_id AND uq.quiz_type_id IN (2,4,5) ORDER BY created DESC ";
     
       $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
       if(count($stQuizRecords) > 0){
@@ -4150,7 +4150,7 @@ public function getNeedAttentionOFStudent($student_id=null){
                       $sql1 = "SELECT uq.*,qt.name as quiz_type_name, cr.course_name FROM user_quizes as uq
                               INNER JOIN courses as cr ON  cr.id=uq.course_id
                               INNER JOIN quiz_types as qt ON qt.id=uq.quiz_type_id
-                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id=2 ORDER BY created DESC "; 
+                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id IN (2,4,5,6) ORDER BY created DESC "; 
                       
                       $stQuizRecords = $connection->execute($sql1)->fetchAll('assoc');
 

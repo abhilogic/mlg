@@ -417,7 +417,7 @@ public function setUserQuizResponse(){
                   }
 
                   //2. save data in user points
-                  if($points==1){
+                  if($pass==1){
                     $userPoints = TableRegistry::get('UserPoints');
                     $new_userPoints= $userPoints->newEntity(array('user_id'=>$uid, 'quiz_id'=>$eid ,'point_type_id'=>7 ,'points' =>$points, 'status'=>1,'created_date'=>time() ) );
                       if ($resultpoints=$userPoints->save($new_userPoints)) {

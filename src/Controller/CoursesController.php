@@ -1230,7 +1230,8 @@ class CoursesController extends AppController{
           $status = TRUE;
           $course_details[0] = $scopes;
         }else{
-          if($tid == '') {
+         // if($tid == '') {
+          if(!empty($tid)) {
             $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
               'type IN'=>['class','group']])->orderDESC('type','created');
             $scopCount = $scopes->count();
