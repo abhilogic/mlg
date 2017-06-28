@@ -3402,6 +3402,7 @@ class UsersController extends AppController{
     ]);
   }
 
+
   /*
    * function getNotificationForParent().
    *
@@ -3459,4 +3460,287 @@ class UsersController extends AppController{
       '_serialize' => ['message', 'notification_message']
     ]);
   }
+
+
+  /* Area of Notification on parent dashboard*/
+  public function getAreaOfFocusForParent($child_id=null){
+      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
+
+      if(!empty($child_id)){
+          $connection = ConnectionManager::get('default');
+
+          // get students quiz result for subskills
+           $sql = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name      FROM user_quizes as uq
+                     INNER JOIN users as u ON uq.user_id = u.id
+                     INNER JOIN courses as cr ON uq.course_id = cr.id 
+                     INNER JOIN quiz_types as qt ON uq.quiz_type_id = qt.id
+                     WHERE uq.user_id =$child_id AND uq.quiz_type_id IN (2,3,4,5,6) ORDER BY created DESC ";
+          $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
+
+          if(count($stQuizRecords) > 0){
+              foreach ($stQuizRecords as $stQuizRecord) {
+                  if($stQuizRecord['pass']==0){
+                      $data['attention_records'][] = $stQuizRecord;
+                  }
+              }
+              $data['status'] = True;        
+          }else{
+                    $data['status'] =False;
+                    $data['message']="No Records Found For Area oF Focus.";
+            }
+      }else{
+        $data['status'] = False;
+        $data['message']= "Please set child id.";
+      }
+
+      $this->set([
+      'response' => $data, 
+      '_serialize' => ['response']
+    ]);
+
+  }
+
+
+  /* To find award acheive of children for parent */
+  public function getAwardsofChild($child_id=null){
+      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
+
+      if(!empty($child_id)){
+          $connection = ConnectionManager::get('default');
+
+           // get students quiz result for subskills
+           $sql = "SELECT uq.*, max(score*100/exam_marks) as high_marks, u.username, u.first_name, u.last_name, qt.name as quiz_type_name, cr.course_name   
+                   FROM user_quizes as uq
+                   INNER JOIN users as u ON uq.user_id = u.id
+                   INNER JOIN courses as cr ON uq.course_id = cr.id 
+                   INNER JOIN quiz_types as qt ON uq.quiz_type_id = qt.id
+                   WHERE uq.user_id =$child_id AND uq.quiz_type_id IN (2,4,5,6) GROUP BY uq.course_id, uq.quiz_type_id ORDER BY high_marks DESC ";
+
+            //Note -  group by on two cols because subskill(eg 19) have multiple quiz_type (1,2,3) so to get max mark in each quiz type (either in subskill quiz, challenges)
+            $stQuizRecords = $connection->execute($sql)->fetchAll('assoc'); 
+
+            if(count($stQuizRecords) > 0){
+                foreach ($stQuizRecords as $stQuizRecord) {                   
+                      if($stQuizRecord['user_id']== $child_id){
+                          if($stQuizRecord['high_marks'] > QUIZ_PASS_SCORE){
+                              $data['awards_result'][] = $stQuizRecord;
+                              $data['status'] = True;
+                          }
+                      }                
+                   
+                  } // end foreach
+
+                  if(empty($data['awards_result'])){
+                    $data['status'] = False;
+                    $data['message'] = "No Record Found In Awards Area";
+                  }                         
+            }else{
+                    $data['status'] =False;
+                    $data['message']="No Records Found In Awards.";
+              }
+      
+      }else{
+        $data['status'] = False;
+        $data['message']= "Please set child id.";
+      }
+
+      $this->set([
+      'response' => $data, 
+      '_serialize' => ['response']
+    ]);
+
+
+  }
+
+// API to get the child marks and his pear group marks on subskill
+public function getChildSubskillResult($child_id=null, $subskill_id=null, $user_quiz_id=null){
+      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
+      $subskill_id = isset($_REQUEST['subskill_id']) ?$_REQUEST['subskill_id']:$subskill_id;
+      $user_quiz_id = isset($_REQUEST['user_quiz_id']) ?$_REQUEST['user_quiz_id']:$user_quiz_id;
+
+      if(!empty($child_id) && !empty($subskill_id) && !empty($user_quiz_id)){
+
+
+          $connection = ConnectionManager::get('default');
+          $sql = "SELECT uq.*, CONCAT(u.first_name, ' ', u.last_name) as child_name , c.course_name
+                  FROM user_quizes as uq
+                  INNER JOIN users as u ON uq.user_id=u.id
+                  INNER JOIN courses as c ON uq.course_id=c.id
+                  WHERE  uq.course_id= $subskill_id AND uq.quiz_type_id IN (2,4,5,6)";
+           
+           $peer_child_count = 0;
+           $peer_child_result=0;
+
+          $quiz_results = $connection->execute($sql)->fetchAll('assoc');
+          if(count($quiz_results)>0){
+              foreach ($quiz_results as $qresult) {
+                  
+                  // child result
+                  if($qresult['user_id']==$child_id &&  $qresult['id']==$user_quiz_id){ 
+                      $data['child_result'] =  $qresult;
+                  }
+
+                 //peer group result
+                 if($qresult['user_id']!=$child_id) {                  
+                      if($qresult['exam_marks']>0){
+                          $peer_child_result = $peer_child_result + (($qresult['score']*100)/$qresult['exam_marks']);
+                          $peer_child_count ++;
+                      }
+                  }              
+              }
+            $data['peer_children_result'] = round( ($peer_child_result/$peer_child_count),2) ;
+            $data['peer_num_of_children'] = $peer_child_count;
+            $data['status'] = True ;
+        }else{
+            $data['status'] = False;
+            $data['message'] = "No Result Found.";
+        }
+
+      }else{
+          $data['status'] = False;
+          $data['message'] = "Please select child_id and subskill_id and user_quiz_id.";
+      }
+
+      $this->set([
+        'response' => $data, 
+        '_serialize' => ['response']
+      ]);
+  }
+
+
+
+//API to send Assignment by parent
+/*  function to save the Custom Assignment Created by Teacher */      
+  public function setAutoAssignmentByParents($grade_id=null, $subskill_id=null,$parent_id=null,$user_id=null,$quiz_type_id=0,$questions_limit=10){
+
+  // Step-1 auto generate 15 questions
+  
+  $base_url = Router::url('/', true);
+  $grade_id = isset($this->request->data['grade_id'])? $this->request->data['grade_id'] : grade_id ;  
+  $subskill_id = isset($this->request->data['subskill_id']) ? $this->request->data['subskill_id']: $subskill_id;
+  $questions_limit = isset($this->request->data['questions_limit']) ? $this->request->data['questions_limit']: $questions_limit;
+  $quiz_type_id = isset($this->request->data['quiz_type_id']) ? $this->request->data['quiz_type_id']: $quiz_type_id;
+  $default_quiz_name ='mlg'.date("YmdHis");
+  $quiz_name = isset($this->request->data['quiz_name']) ? $this->request->data['quiz_name']: $default_quiz_name;
+
+  $difficulty_level = 'Easy|Moderate|Difficult';
+  $user_id = isset($this->request->data['user_id'] )? $this->request->data['user_id'] :$user_id ;
+  $parent_id = isset($this->request->data['parent_id'] )? $this->request->data['parent_id']:$parent_id ;   
+
+if(!empty($parent_id) && !empty($user_id) && !empty($subskill_id)){
+  $dataToGetQuestions['subjects'] = $subskill_id; // ids of course as eg 3,13,15
+  $dataToGetQuestions['user_id'] = $user_id;
+  $dataToGetQuestions['grade_id'] = $grade_id;
+  $dataToGetQuestions['limit'] = $questions_limit;
+  $dataToGetQuestions['quiz_type_id'] = $quiz_type_id;
+  $dataToGetQuestions['quiz_name'] = $quiz_name;
+  $dataToGetQuestions['difficulty'] = 'Moderate|Easy|Difficult'; // eg Easy|Difficult|mod
+
+  $json_questionslist = $this->curlPost($base_url . 'students/getQuestionsList/', $dataToGetQuestions); 
+  $array_qlist = (array) json_decode($json_questionslist);
+   
+    if( isset($array_qlist['response']) ){
+        if ($array_qlist['response']->status == "True") {
+                      
+
+            // insert data in assignments table
+            $assign['quiz_id'] = $array_qlist['response']->quiz_id;
+            $assign['assignment_for'] = 'child';
+            $assign['grade_id'] = $array_qlist['response']->quiz_id;
+            $assign['course_id'] = $subskill_id;
+            $assign['student_id'] = $user_id;
+            $assign['created_by'] = $parent_id;
+            $assign['created'] = time();
+            $AssignmentDetails = TableRegistry::get('AssignmentDetails');
+            $new_assignment_details = $AssignmentDetails->newEntity($assign);
+            if ($qresult = $AssignmentDetails->save($new_assignment_details)) {
+                $data['status'] = True;
+                $data['message'] ="quiz is created and data inserted in quize, quiz_items and assignment_details " ;              
+               //$data['questions'] = $array_qlist['response']->questions;
+            }else{
+              $data['status'] = False;
+              $data['message'] = "Quiz is created(record insert in quizes and quiz_items) but not inserted in assignment_details.";
+            }
+        } else {
+              $data['status'] = $array_qlist['response']->status;
+              $data['message'] = $array_qlist['response']->message;
+            }
+
+    }else{
+      $data ['status'] = False;
+      $data ['message'] = "Opps... No question get.";
+    }
+
+  }else{
+      $data ['status'] = False;
+      $data ['message'] = "parent_id, child_id/user_id and subskill_id cannot be null.";
+
+  }
+
+
+   $this->set(array(
+       'response' => $data,
+       '_serialize' => ['response']
+   ));
+}
+
+
+// API to get the result of correct and wrong answer of a quiz questions/items
+public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
+    $user_id = isset($_REQUEST['user_id'])?$_REQUEST['user_id']:$user_id;
+    $user_quiz_id = isset($_REQUEST['user_quiz_id'])?$_REQUEST['user_quiz_id']:$user_quiz_id;
+
+    if(!empty($user_id) && !empty($user_quiz_id)){
+
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT uqr.*, qm.questionName FROM user_quiz_responses as uqr
+                  INNER JOIN user_quizes as uq ON uq.id=uqr.user_quiz_id 
+                  INNER JOIN question_master as qm ON qm.id=uqr.item_id                
+                  WHERE  uq.id= $user_quiz_id AND uqr.user_id = $user_id ";
+    
+        $quiz_results = $connection->execute($sql)->fetchAll('assoc');
+        if(count($quiz_results) >0){
+          foreach ($quiz_results as $qresult) {
+            $data['status'] = True;
+             $data['user_quiz_response'][] = $qresult;
+          }              
+        }else{
+            $data['status'] = False;
+            $data['message'] = "No Record Found.";
+        }
+
+
+
+    }else{
+      $data['status'] = False;
+      $data['message'] = "user_id and user_quiz_id cannot null.";
+    }
+    $this->set(array(
+       'response' => $data,
+       '_serialize' => ['response']
+   ));
+
+}
+
+
+
+
+
+
+
+// API to call curl 
+  /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
+  public function curlPost($url, $data) {
+      $ch = curl_init($url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      $response = curl_exec($ch);
+      curl_close($ch);
+
+      return $response;
+  }
+
+
+
+
 }

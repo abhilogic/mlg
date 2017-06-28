@@ -28,8 +28,7 @@ define('PRINCIPAL_ROLE_ID', 6);
 //default image directory
 define('DEFAULT_IMAGE_DIRECTORY', 'upload/');
 
-//quiz_pass_score
-define('QUIZ_PASS_SCORE', 80);
+
 
 
 
@@ -50,6 +49,10 @@ define("PAYPAL_LIVE_CREDENTIAL", "Aft1-THtqfdBuIcmL3_rgunICfhYWpqO76okvPPrIgS66g
 // Paypal Currency
 define('PAYPAL_CURRENCY', 'USD');
 
+
+
+//quiz_pass_score
+define('QUIZ_PASS_SCORE', 80);
 
 
 // Class Students classification

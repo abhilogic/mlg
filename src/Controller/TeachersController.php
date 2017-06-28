@@ -2130,7 +2130,7 @@ class TeachersController extends AppController {
 
   /*  function to save the Custom Assignment Created by Teacher */
 
-  public function setCustomAssignmentByTeacher($teacher_id = null) {
+  public function setCustomAssignmentByTeacher($user_id = null) {
     $quiz_info['teacher_id'] = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : $user_id;
 
     $data['status'] = "";
@@ -2147,10 +2147,7 @@ class TeachersController extends AppController {
       $quiz_info['status'] = 1;
       $quiz_info['created_by'] = $quiz_info['teacher_id'];
       $quiz_info['created'] = time();
-      $quiz_info['modified'] = time();
-
-
-      $quiz_info['teacher_id'] = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : null;
+      $quiz_info['modified'] = time();     
 
 
       $quiz_info['subject_id'] = isset($this->request->data['main_course_id']) ? $this->request->data['main_course_id'] : null;
