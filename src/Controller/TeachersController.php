@@ -4263,8 +4263,7 @@ public function getNeedAttentionOFStudent($student_id=null){
                 $data['message'] = "No exam is exist in Dataware house.";
             }
 
-
-          if(!empty($st_courseid) && !empty($select_stud_result_precent) && !empty(exam_subskillid)){
+          if(!empty($st_courseid) && !empty($select_stud_result_precent) && !empty($exam_subskillid)){
 
             //3.  get students of class except selected student for subject
             $sql2 = "SELECT st.student_id,u.username from student_teachers as st, users as u WHERE u.id=st.student_id AND teacher_id = $teacher_id AND course_id=$st_courseid AND student_id!=$student_id  ORDER BY student_id ASC ";  
