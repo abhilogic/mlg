@@ -656,6 +656,31 @@ class UsersController extends AppController{
                         $warning = 1;
                         $child_info[] = $child;
                       }
+
+                      // if subcription is going to expire after the defiend alert days
+                      // the activity will be stored to notification.
+                      // "ALERT_BEFORE_SUBSCRIPTION_EXPIRE" contain the no of day after child
+                      //  subscription will expire.
+                      $date_1 = date_create();
+                      $date_2 = date_create($child['subscription_end_date']);
+                      $diff = date_diff($date_1,$date_2);
+                      if ($diff->d < ALERT_BEFORE_SUBSCRIPTION_EXPIRE) {
+                        $payment_controller = new PaymentController();
+                        $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+                        $param['return_transfer'] = TRUE;
+                        $param['post_fields'] = array(
+                          'user_id' => $child['user_id'],
+                          'role_id' => STUDENT_ROLE_ID,
+                          'bundle' => 'SUBSCRIPTIONS',
+                          'category_id' => NOTIFICATION_CATEGORY_SUBSCRIPTIONS,
+                          'sub_category_id' => $child['user_id'],
+                          'title' => 'SUBSCRIPTION EXPIRE',
+                          'description' => 'expire in ' . $diff->d . ' day(s)'
+                        );
+                        $param['json_post_fields'] = TRUE;
+                        $param['curl_post'] = 1;
+                        $payment_controller->sendCurl($param);
+                      }
                     }
                   }
                 }
@@ -2543,8 +2568,8 @@ class UsersController extends AppController{
             $param['post_fields'] = array(
               'user_id' => $param['user_id'],
               'role_id' => $role_id,
-              'bundle' => 'COUPON',
-              'category_id' => NOTIFICATION_CATEGORY_COUPON,
+              'bundle' => 'COUPONS',
+              'category_id' => NOTIFICATION_CATEGORY_COUPONS,
               'sub_category_id' => $param['coupon_id'],
               'title' => strtoupper($param['status']), //coupon in state of reedemed , approved , rejected or pending for approval by mlg
               'description' => 'Coupon is ' . strtoupper($param['status'])
@@ -3374,6 +3399,64 @@ class UsersController extends AppController{
       'status' => $status,
       'message' => $message,
       '_serialize' => ['status', 'message']
+    ]);
+  }
+
+  /*
+   * function getNotificationForParent().
+   *
+   * user_id will be used as child id as well as parent id. (situation based).
+   */
+  public function getNotificationForParent() {
+    $message = '';
+    $notification_message = array('offers' => '', 'subcriptions' => '', 'coupons' => '');
+    $req_data = $this->request->data;
+    if (isset($req_data['parent_id']) && empty($req_data['parent_id'])) {
+      $message = 'parent id cannot be blank';
+      throw new Exception($message);
+    }
+    if (isset($req_data['child_id']) && empty($req_data['child_id'])) {
+      $message = 'child id cannot be blank';
+      throw new Exception($message);
+    }
+    $notifications_table = TableRegistry::get('notifications');
+
+    // For offers
+    $offer_notification = $notifications_table->find()->where(['bundle' => 'OFFERS']);
+    $offer = $offer_notification->last()->toArray();
+    $coupons_table = TableRegistry::get('coupons');
+    $parent_offer = $coupons_table->get($offer['sub_category_id'])->toArray();
+    $notification_message['offers'] = $parent_offer['description'];
+
+    // For subscription
+    $subscription_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'SUBSCRIPTIONS']);
+    if ($subscription_notification->count()) {
+      $subscription = $subscription_notification->last()->toArray();
+      $child = $this->Users->get($subscription['user_id'])->toArray();
+      if (strtoupper($subscription['title']) == 'SUBSCRIPTION EXPIRE') {
+        $date1 = $child['subscription_end_date'];
+        $date2 = date_create();
+        $date = date_diff($date1, $date2);
+        $notification_message['subcriptions'] = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end ' . $date->days;
+      }
+    }
+
+    // For coupon.
+    $coupon_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'COUPONS']);
+    if ($coupon_notification->count()) {
+      $coupon = $coupon_notification->last()->toArray();
+      $child = $this->Users->get($coupon['user_id'])->toArray();
+      if (strtoupper($coupon['title']) == 'APPROVAL PENDING') {
+        $notification_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
+      }
+      if (strtoupper($coupon['title']) == 'ACQUIRED') {
+        $notification_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
+      }
+    }
+    $this->set([
+      'message' => $message,
+      'notification_message' => $notification_message,
+      '_serialize' => ['message', 'notification_message']
     ]);
   }
 }
