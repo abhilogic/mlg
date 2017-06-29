@@ -3531,7 +3531,7 @@ class UsersController extends AppController{
    */
   public function getNotificationForParent() {
     $message = '';
-    $notification_message = array('offers' => '', 'subcriptions' => '', 'coupons' => '');
+    $notification_message = array('analytics' => '' , 'offers' => '', 'subcriptions' => '', 'coupons' => '');
     $req_data = $this->request->data;
     if (isset($req_data['parent_id']) && empty($req_data['parent_id'])) {
       $message = 'parent id cannot be blank';
@@ -3542,6 +3542,49 @@ class UsersController extends AppController{
       throw new Exception($message);
     }
     $notifications_table = TableRegistry::get('notifications');
+
+    // for analytics
+    $analytics_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'ANALYTICS']);
+    if ($analytics_notification->count()) {
+      $analytic = $analytics_notification->last()->toArray();
+      $child = $this->Users->get($analytic['user_id'])->toArray();
+      $user_quizes_table = TableRegistry::get('UserQuizes');
+      $user_quizes = $user_quizes_table->find()->get($analytic['sub_category_id'])->last()->toArray();
+      $quiz_types_table = TableRegistry::get('quiz_types');
+      $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
+      if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the pretest '
+        . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+      if (strtoupper($quiz_type['variable']) == 'SUBSKILL_QUIZ') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the sub skill quiz'
+        . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+      if (strtoupper($quiz_type['variable']) == 'PRACTICES') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given practices'
+        . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+      if (strtoupper($quiz_type['variable']) == 'KNIGHT_CHALLENGE') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the knight challenge'
+          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+      if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the teacher custom assignment'
+        . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+      if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the teacher custom assignment'
+        . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+      if (strtoupper($quiz_type['variable']) == 'TEACHER_AUTO_ASSIGNMENT') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the teacher auto assignment'
+        . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+      if (strtoupper($quiz_type['variable']) == 'PARENT_AUTO_ASSIGNMENT') {
+        $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the parent auto assignment'
+        . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      }
+    }
 
     // For offers
     $offer_notification = $notifications_table->find()->where(['user_id' => 0, 'bundle' => 'OFFERS']);

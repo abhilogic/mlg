@@ -380,6 +380,23 @@ public function setUserQuizResponse(){
                 $data['message']="Successfull data is save.";
                 $data['status']="true";
 
+                  //set quiz for student in notification.
+                  $payment_controller = new PaymentController();
+                  $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+                  $param['return_transfer'] = TRUE;
+                  $param['post_fields'] = array(
+                    'user_id' => $uid,
+                    'role_id' => STUDENT_ROLE_ID,
+                    'bundle' => 'ANALYTICS',
+                    'category_id' => NOTIFICATION_CATEGORY_ANALYTICS,
+                    'sub_category_id' => $postdata['user_quiz_id'],
+                    'title' => 'QUIZ',
+                    'description' => 'sub category id defines quiz type'
+                  );
+                  $param['json_post_fields'] = TRUE;
+                  $param['curl_post'] = 1;
+                  $payment_controller->sendCurl($param);
+
                   //1. Add each question attamp response in user_quiz_response 
                   $userQuizResponses = TableRegistry::get('UserQuizResponses');                 
                   foreach ($attendQuizResponses as $attendQuizRes) {
