@@ -3005,7 +3005,9 @@ class TeachersController extends AppController {
       $skill = '';
       $subject = '';
       $tmp = '';
+      $temp_skill = '';
       $header_details = '';
+      $subskill = '';
       // $connection = ConnectionManager::get('default');
       $ques_type = 'text';
       if ($user_id == null) {
@@ -4391,15 +4393,13 @@ public function getNeedAttentionOFStudent($student_id=null){
         }else if(isset($this->request->data['skill_name']) && empty($this->request->data['skill_name'])) {
           $message = 'Template name can not be empty.';
           throw new Exception('Template name can not be empty.');
-        }
-//        else if(isset($this->request->data['start_date']) && empty($this->request->data['start_date'])) {
-//          $message = '';
-//          throw new Exception();
-//        }else if(isset($this->request->data['end_date']) && empty($this->request->data['end_date'])) {
-//          $message = '';
-//          throw new Exception();
-//        }
-        else{
+        }else if(isset($this->request->data['start_date']) && empty($this->request->data['start_date'])) {
+          $message = 'Choose start date.';
+          throw new Exception('Choose start date.');
+        }else if(isset($this->request->data['end_date']) && empty($this->request->data['end_date'])) {
+          $message = 'Choose end date.';
+          throw new Exception('Choose end date.');
+        }else{
           $scope = TableRegistry::get('scope_and_sequence');
           $course = TableRegistry::get('courses');
           $course_detail = TableRegistry::get('course_details');
@@ -4408,8 +4408,8 @@ public function getNeedAttentionOFStudent($student_id=null){
           $detail->course_name = $this->request->data['skill_name'];
           $detail->created_by = $this->request->data['uid'];
           $detail->created = date('Y-m-d' ,time());
-    //      $detail->start_date = $this->request->data['start_date'];
-    //      $detail->end_date = $this->request->data['end_date'];
+          $detail->start_date = $this->request->data['start_date'];
+          $detail->end_date = $this->request->data['end_date'];
           $id = $course->save($detail)->id; 
           if(is_numeric($id)) {
             $result = $scope->find()->where(['created_by' => $this->request->data['uid'],'parent_id' => $this->request->data['course_id']])->toArray();
@@ -4418,8 +4418,8 @@ public function getNeedAttentionOFStudent($student_id=null){
               $count = count($temp_scope);
               $temp_scope[$count]['course_id'] = $id;
               $temp_scope[$count]['name'] = $this->request->data['skill_name'];
-              $temp_scope[$count]['start_date'] = '000:000:000';
-              $temp_scope[$count]['end_date'] = '000:000:000';
+              $temp_scope[$count]['start_date'] = $this->request->data['start_date'];
+              $temp_scope[$count]['end_date'] = $this->request->data['end_date'];
               $temp_scope[$count]['parent_id'] = $this->request->data['course_id'];
               $temp_scope[$count]['visibility'] = '1';
               $query = $scope->query();
@@ -4434,8 +4434,8 @@ public function getNeedAttentionOFStudent($student_id=null){
             $cors_detail->name = $this->request->data['skill_name'];
             $cors_detail->created_by = $this->request->data['uid'];
             $cors_detail->created = date('Y-m-d' ,time());
-      //      $cors_detail->start_date = $this->request->data['start_date'];
-      //      $cors_detail->end_date = $this->request->data['end_date'];
+            $cors_detail->start_date = $this->request->data['start_date'];
+            $cors_detail->end_date = $this->request->data['end_date'];
             if($course_detail->save($cors_detail)) {
              $status = TRUE;
              $message = 'Data saved successfully.';

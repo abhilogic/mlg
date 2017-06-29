@@ -1202,6 +1202,7 @@ class CoursesController extends AppController{
       $status = FALSE;
       $scopes = array();
       $course_details = '';
+      $setting = FALSE;
       $by = 'course';
       $scope = TableRegistry::get('scope_and_sequence');
       $group = TableRegistry::get('student_groups');
@@ -1215,12 +1216,12 @@ class CoursesController extends AppController{
       }else{
         $connection = ConnectionManager::get('default');
         if($course == NULL ) {
-          $sql = " SELECT teacher_id from student_teachers where student_id = $user_id AND course_id = $parent_id "; 
+          $sql = " SELECT * from student_teachers where student_id = $user_id AND course_id = $parent_id "; 
         }else if($course == '-1'){
           $result = $course_detail->find('all',['fields'=>['parent_id']])->where(['course_id' => $parent_id])->toArray();
-          $sql = " SELECT teacher_id from student_teachers where student_id = $user_id AND course_id = ".$result[0]['parent_id'] ;
+          $sql = " SELECT * from student_teachers where student_id = $user_id AND course_id = ".$result[0]['parent_id'] ;
         }else{
-          $sql = " SELECT teacher_id from student_teachers where student_id = $user_id AND course_id = $course ";
+          $sql = " SELECT * from student_teachers where student_id = $user_id AND course_id = $course ";
         }
         $tid = $connection->execute($sql)->fetchAll('assoc');
         $scopes = $scope->find()->where(['created_for'=> $user_id,'parent_id' => $parent_id]);
@@ -1230,8 +1231,10 @@ class CoursesController extends AppController{
           $status = TRUE;
           $course_details[0] = $scopes;
         }else{
-         // if($tid == '') {
           if(!empty($tid)) {
+            $user_setting = TableRegistry::get('teacher_settings')
+              ->find()->where(['user_id' => $tid[0]['teacher_id'], 'course_id' => $tid[0]['course_id'], 
+                 'level_id' => $tid[0]['grade_id']]);
             $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
               'type IN'=>['class','group']])->orderDESC('type','created');
             $scopCount = $scopes->count();
@@ -1269,7 +1272,6 @@ class CoursesController extends AppController{
             $id = $id.','.$tid[0]['teacher_id'];
             $connection = ConnectionManager::get('default');
             $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
-//            $course_details = $connection->execute($sql)->fetchAll('assoc');
             $skills = $connection->execute($sql)->fetchAll('assoc');
             if(count($skills) > 0) {
               foreach ($skills as $key => $value) {
@@ -1285,6 +1287,31 @@ class CoursesController extends AppController{
               }
               $status = TRUE; 
             }
+          }
+          if(!empty($user_setting)) {
+            foreach ($user_setting as $key => $value) {
+             $temp_setting[$key] = json_decode($value['settings']);
+            }
+            foreach($temp_setting as $ki=>$val) {
+              if($val->auto_progression == TRUE) {
+                if($val->auto_progression_by == 'individual'
+                        && $val->auto_progression_for_individual == $user_id ) {
+                  $setting = TRUE;
+                }else if($val->auto_progression_by == 'group') {
+                  $data = $group->find()->where(['id' => $val->auto_progression_for_group]);
+                  foreach($data as $key=>$value) {
+                    $students = explode(',', $value['student_id']);
+                    if(in_array($val->$user_id,$students)){
+                      $setting = TRUE;
+                      break;
+                    }
+                  } 
+                }else if($val->auto_progression_by == 'all_class') {
+                  $setting = TRUE;
+                }
+              }
+            }
+   
           }
           }else{
             $course_detail = TableRegistry::get('course_details');
@@ -1320,10 +1347,11 @@ class CoursesController extends AppController{
     }
     $this->set([
         'response' => $course_details,
+        'setting' => $setting,
         'message' => $message,
         'status' => $status,
         'by' => $by,
-        '_serialize' => ['response','message','status','by']
+        '_serialize' => ['response','message','status','by','setting']
     ]);
   }
 
