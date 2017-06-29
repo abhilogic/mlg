@@ -2022,7 +2022,8 @@ class UsersController extends AppController{
        'status' => $status,
        'message' => $message,
        'result' => $offer_list,
-       '_serialize' => ['status', 'message', 'result']
+       'base_url' => Router::url('/', true),
+       '_serialize' => ['status', 'message', 'result', 'base_url']
      ]);
    }
 
@@ -2485,6 +2486,24 @@ class UsersController extends AppController{
             throw new Exception('Unable to save coupon conditions');
           }
           $status = TRUE;
+          if (strtoupper($data['applied_for']) == 'OFFERS') {
+            //set for parent offers
+            $payment_controller = new PaymentController();
+            $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+            $param['return_transfer'] = TRUE;
+            $param['post_fields'] = array(
+              'user_id' => 0,
+              'role_id' => PARENT_ROLE_ID,
+              'bundle' => 'OFFERS',
+              'category_id' => NOTIFICATION_CATEGORY_OFFERS,
+              'sub_category_id' => $new_coupon->id,
+              'title' => 'OFFERS',
+              'description' => 'Offer for parent'
+            );
+            $param['json_post_fields'] = TRUE;
+            $param['curl_post'] = 1;
+            $payment_controller->sendCurl($param);
+          }
         } else {
           $message = 'Some error occured';
           throw new Exception('Unable to save coupon');
@@ -3524,7 +3543,7 @@ class UsersController extends AppController{
     $notifications_table = TableRegistry::get('notifications');
 
     // For offers
-    $offer_notification = $notifications_table->find()->where(['bundle' => 'OFFERS']);
+    $offer_notification = $notifications_table->find()->where(['user_id' => 0, 'bundle' => 'OFFERS']);
     $offer = $offer_notification->last()->toArray();
     $coupons_table = TableRegistry::get('coupons');
     $parent_offer = $coupons_table->get($offer['sub_category_id'])->toArray();
