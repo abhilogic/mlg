@@ -2395,7 +2395,108 @@ class UsersController extends AppController{
       'message' => $message,
       'user_type' => $user_type,
       'result' => $coupon_results,
-      '_serialize' => ['status', 'message', 'user_type', 'result']
+      'base_url' => Router::url('/', true),
+      '_serialize' => ['status', 'message', 'user_type', 'result', 'base_url']
+    ]);
+  }
+
+  /*
+   * function setCoupon().
+   */
+  public function setCoupon() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $request = $this->request;
+      if ($request->is('post')) {
+        $data = $request->data;
+
+        // for coupon table
+        if (!isset($data['title']) || empty($data['title'])) {
+          $message = 'Title can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['description']) || empty($data['description'])) {
+          $message = 'Description can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['validity']) || empty($data['validity'])) {
+          $message = 'Validity can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['applied_for']) || empty($data['applied_for'])) {
+          $message = 'Category must be specified for coupon';
+          throw new Exception($message);
+        }
+        if (!isset($data['coupon_code'])) {
+          $message = 'Coupon code key must be included , either with code or empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['user_type']) || empty($data['user_type'])) {
+          $message = 'user type can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['external_coupon'])) {
+          $message = 'External coupon key must be included , either with code or empty';
+          throw new Exception($message);
+        }
+        if (isset($data['external_coupon']) && ($data['external_coupon'] == 0)
+          && empty($data['coupon_code'])) {
+          $message = 'Internal coupon must have coupon code';
+          throw new Exception($message);
+        }
+
+        //for coupon conditions
+        if (!isset($data['condition_key']) || empty($data['condition_key'])) {
+          $message = 'condition key can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['condition_value']) || empty($data['condition_value'])) {
+          $message = 'condition value can not be empty';
+          throw new Exception($message);
+        }
+        $image = array();
+        if (isset($data['image'])) {
+          $image = $this->_uploadFiles($data['image'], DEFAULT_IMAGE_DIRECTORY);
+        }
+        $coupons_table = TableRegistry::get('coupons');
+        $new_coupon = $coupons_table->newEntity(array(
+          'title' => $data['title'],
+          'description' => $data['description'],
+          'image' => !empty($image) ? $image['file_name'] : '',
+          'coupon_code' => isset($data['coupon_code']) ? $data['coupon_code'] : '',
+          'validity' => $data['validity'],
+          'max_users' => isset($data['max_users']) ? $data['max_users'] : 0,
+          'user_type' => $data['user_type'],
+          'applied_for' => $data['applied_for'],
+          'external_coupon' => $data['external_coupon'],
+        ));
+        if ($coupons_table->save($new_coupon)) {
+          $coupon_conditions_table = TableRegistry::get('coupon_conditions');
+          $new_conditions = $coupon_conditions_table->newEntity(array(
+            'coupon_id' => $new_coupon->id,
+            'condition_key' => $data['condition_key'],
+            'condition_value' => $data['condition_value'],
+            'created' => date('Y-m-d'),
+            'modified' => date('Y-m-d')
+          ));
+          if (!$coupon_conditions_table->save($new_conditions)) {
+            $message = 'Some error occured';
+            throw new Exception('Unable to save coupon conditions');
+          }
+          $status = TRUE;
+        } else {
+          $message = 'Some error occured';
+          throw new Exception('Unable to save coupon');
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
     ]);
   }
 
@@ -2437,7 +2538,8 @@ class UsersController extends AppController{
       'status' => $status,
       'message' => $message,
       'result' => $coupons_status_result,
-      '_serialize' => ['status', 'message', 'result']
+      'base_url' => Router::url('/', true),
+      '_serialize' => ['status', 'message', 'result', 'base_url']
     ]);
   }
 

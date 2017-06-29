@@ -4326,7 +4326,7 @@ public function getNeedAttentionOFStudent($student_id=null){
         'group_builder' => FALSE,
         'placement_test' => TRUE,
         'frequency_of_challenges_by' => 'all_class',
-        'auto_progression' => TRUE,
+        'auto_progression' => FALSE,
         'auto_progression_by' => 'all_class'
       );
       foreach ($user_settings as $settings_key => $settings_value) {
