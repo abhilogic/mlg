@@ -63,11 +63,27 @@ define('ON_TARGET', 85);  //student scored 80 to 85
 define('OUTSTANDING',95 ); // student scored 86 to 95
 define('GIFTED',100 );  // 96 to 100
 
+
+// Student conquered score
+define('CONQUERED', 80);
+
+
+//Awards criteria
+define('RED_BADGE', 85); //student have 80-85 score
+define('GREEN_BADGE',90); //student have 86-90 score
+define('STAR_BADGE', 95);  // student have 91-95 score
+define('CROWN_BADGE', 100);  //student have 96-100 score
+
+
+
 // Notification Category Ids
 define('NOTIFICATION_CATEGORY_ANALYTICS', 1);
 define('NOTIFICATION_CATEGORY_OFFERS', 2);
 define('NOTIFICATION_CATEGORY_SUBSCRIPTIONS', 3);
 define('NOTIFICATION_CATEGORY_COUPONS', 4);
+
+
+
 
 
 
