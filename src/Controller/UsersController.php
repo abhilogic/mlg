@@ -2817,6 +2817,7 @@ class UsersController extends AppController{
           fwrite($file, $imgData);
           fclose($file);
           $user = TableRegistry::get('user_details');
+          $stepCompleted = $user->find()->where(['user_id' => $id])->toArray();
           $query = $user->query();
           $result = $query->update()->set([
                 'profile_pic' => '/upload/Avtar/'.$image,
@@ -3395,7 +3396,102 @@ class UsersController extends AppController{
       'parent_subscription_timestamp' => $parent_subscription_timestamp
     ];
   }
+  /**
+  * This api is used for get parent child report
+  * **/
+public function getParentChildReport($user_id=null,$pgnum=1){
+    $range = 10;
+    $status = FALSE;
+    if(!empty($user_id)){
+      $current_page = 1;
+      if (!empty($pnum)) {
+        $current_page = $pnum;
+      }
+      $UserQuizes = TableRegistry::get('UserQuizes') ;
+      $count= $UserQuizes->find('all')->where(['user_id' => $user_id ,'course_id >'=>-1])->count();
+      $last_page = ceil($count / $range);
+      if ($current_page < 1) {
+        $current_page = 1;
+      } elseif ($current_page > $last_page && $last_page > 0) {
+        $current_page = $last_page;
+      }
+      $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+      $connection = ConnectionManager::get('default');
+      $sql = "SELECT uq.*, cr.id,cr.course_name,cr.level_id as grade_id,lev.name as grade_name FROM user_quizes as uq,
+        courses as cr ,levels as lev WHERE 
+        uq.course_id=cr.id 
+        ANd uq.grade_id=cr.level_id
+        ANd cr.level_id=lev.id
+       AND uq.user_id=$user_id $limit";
+      $results = $connection->execute($sql)->fetchAll('assoc');
+      if(count($results) > 0){
+        foreach ($results as $result) { 
+          $row['user_quiz_id'] = $result['id'];  
+          $row['grade_id']=$result['grade_id'];
+          $row['course_id']=$result['course_id'];
+          $row['quiz_type_id'] = $result['quiz_type_id'];  
+          $row['quiz_id'] = $result['exam_id'];                                      
+          $row['exam_marks']=$result['exam_marks'];
+          $row['student_score']=$result['score'];
+          $row['course_name']=$result['course_name'];
 
+          if($result['exam_marks']!=0){
+            $row['student_result_percent']=(int)( ($result['score']/$result['exam_marks'])*(100));
+          }else{ 
+              $row['student_result_percent'] = 0;
+              $row['message'] = "Either quiz is not started or quiz attempted incomplete.";
+          } 
+          // To check other students on same course_id and grade_id
+          $UserQuizes = TableRegistry::get('UserQuizes') ;
+          $userquiz_results= $UserQuizes->find('all')->where(['course_id'=>$row['course_id'], 'user_id !='=> $user_id,'quiz_type_id'=>$row['quiz_type_id'] ])->order(['id'=>'ASC']);
+          if($userquiz_results->count()>0){
+              $othersts_score_percent = 0;
+              $high_sts_score_percent = 0;
+              $st_count = 0;
+              $hist_count = 0;
+              foreach ($userquiz_results as $otherstrow) {
+                 $temp_percent = ($otherstrow['score']/$otherstrow['exam_marks'])*(100);
+                 if($row['student_result_percent']< $temp_percent) {
+                   $high_sts_score_percent = $highsts_score_percent+$temp_percent;
+                   $hist_count++;
+                 }
+                 $othersts_score_percent = $othersts_score_percent +$temp_percent;
+                 $st_count = $st_count +1;
+              }
+              if($st_count) {
+              $row['other_Student_average'] = round( ($othersts_score_percent/$st_count ),1); 
+              }
+              if($hist_count > 0) {
+               $row['best_Student_average'] = round( ($high_sts_score_percent/$hist_count),1); 
+              }else{
+               $row['best_Student_average'] = 0;
+              }
+          }else{
+            $row['other_Student_average'] ="";
+            $row['message'] = 'No students found for same course';
+          }
+          $data['details'][] = $row;
+          $row['other_Student_average'] ="";
+          $row['message'] ="";
+          $status = TRUE;
+        }               
+      }else{
+        $data['message'] = "No result found.";
+      }
+    }else{
+      $data['status'] = "";
+      $data['message'] ="please set user_id";
+    }
+     $this->set([
+        'response' => $data,
+        'status' => $status,
+        'lastPage' => $last_page,
+        'start' => (($current_page - 1) * $range) + 1,
+        'last' => (($current_page - 1) * $range) + $range,
+        'total' => $count,
+        '_serialize' => ['response','status','lastPage','start','last','total']
+    ]);
+}
   /*
    * function updateUserCourseDetailsByUserPurchaseItems().
    *
@@ -3522,8 +3618,6 @@ class UsersController extends AppController{
       '_serialize' => ['status', 'message']
     ]);
   }
-
-
   /*
    * function getNotificationForParent().
    *
@@ -3888,12 +3982,6 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
 
 }
 
-
-
-
-
-
-
 // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
   public function curlPost($url, $data) {
@@ -3906,7 +3994,364 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
       return $response;
   }
 
+}
 
+  /**
+  * This api is used for get parent child assignment
+  * **/
+  public function getParentChildAssignment($user_id=null,$parent_id=null,$pgnum=1){
+    try{
+      $range = 10;
+      if(!empty($user_id)){
+      $current_page = 1;
+      if (!empty($pnum)) {
+        $current_page = $pnum;
+      }
+      $UserQuizes = TableRegistry::get('UserQuizes') ;
+      $count= $UserQuizes->find('all')->where(['user_id' => $user_id ])->count();
+      $last_page = ceil($count / $range);
+      if ($current_page < 1) {
+        $current_page = 1;
+      } elseif ($current_page > $last_page && $last_page > 0) {
+        $current_page = $last_page;
+      }
+      $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+      }
+      $i = 0;
+      $j = 0;
+      $student_groups = array();
+      $final_result  = array();
+      $connection = ConnectionManager::get('default');
+      $sql = "select stt.id as student_teacher_id,stt.teacher_id as teacher_id,stg.id as group_id,"
+              . "stt.student_id as student_id,stg.student_id as group_detail"
+              . " from student_teachers as stt,student_groups as stg"
+               . " where stg.teacher_id = stt.teacher_id"
+               . " AND stt.student_id = $user_id ";
+      $results = $connection->execute($sql)->fetchAll('assoc');
+      if(!empty($results)) {
+        foreach ($results as $key => $value) {
+          $teacher_id = $value['teacher_id'];
+          $group = explode(',',$value['group_detail']);
+          foreach ($group as $key => $val) {
+            if($val == $user_id ) {
+              $student_groups[$i] = $value['group_id'];
+              $i++;   
+            }
+          }
+        }
+        $qsql = " SELECT * from user_quizes where user_id = $user_id  $limit ";
+        $att_quiz = $connection->execute($qsql)->fetchAll('assoc');
+        $grp = implode(',',$student_groups);
+        $fsql = "select * from assignment_details as ass "
+                . " INNER Join quizes as qu ON qu.id = ass.quiz_id "
+                . " where ass.created_by = $teacher_id $limit "; 
+        $group_result = $connection->execute($fsql)->fetchAll('assoc');
+        foreach($group_result as $key=>$value) {
+          if($value['assignment_for'] == 'students' && $value['student_id'] == $user_id ) {
+             $final_result[$j] = $value;
+             $j++;
+          }else if($value['assignment_for'] == 'groups' && !empty($student_groups)) {
+            if(in_array($value['group_id'],$student_groups)) {
+              $final_result[$j] = $value;
+              $j++;
+            } 
+          }else if($value['assignment_for'] == 'class') {
+            $class = explode(',',$value['student_id']);
+            foreach($class as $key=>$val) {
+              if($val == $user_id) {
+                $final_result[$j] = $value;
+                $j++;
+              }
+            }
+          } 
+        }
+      }
+      if($parent_id != NULL) {
+       $fisql = "select * from assignment_details "
+              . " where student_id = $user_id and created_by = $parent_id $limit";
+       $result = $connection->execute($fisql)->fetchAll('assoc');
+       foreach ($result as $key => $valu) {
+          $final_result[$j] = $valu;
+          $j++;
+       }
+      }
+      $i =0;
+      $j =0;
+      $assignmentdetails = '';
+      $attempted_assignment = '';
+      if(!empty($final_result)) {
+        foreach ($final_result as $key => $value) {
+          $temp = $i;
+          foreach ($att_quiz as $ki => $val) {
+            if($value['quiz_id'] == $val['exam_id']){
+              $attempted_assignment[$i] = $value;
+              $attempted_assignment[$i]['exam_marks'] = $val['exam_marks'];
+              $attempted_assignment[$i]['attempt_quiz'] = $val['created'];
+              $attempted_assignment[$i]['score'] = $val['score'];
+              $attempted_assignment[$i]['pass'] = $val['pass'];
+              $i++;
+              break;
+            } 
+          }
+          if($temp == $i) {
+            $assignmentdetails[$j] = $value;
+            $j++;
+          }
+        }
+      }
+   }catch(Exception $e) {
+     $this->log('Error in getParentChildAssignment function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+   }
+   $this->set([
+        'attempted_assignment' => $attempted_assignment,
+        'assignment_list' =>  $assignmentdetails,
+        '_serialize' => ['attempted_assignment','assignment_list']
+    ]);
+ }
+ /**
+  * This api is used for get parent child reward
+  * **/
+ public function getParentChildReward($user_id=null,$pgnum=1){
+    try{
+      $range = 10;
+      if(!empty($user_id)){
+      $current_page = 1;
+      if (!empty($pnum)) {
+        $current_page = $pnum;
+      }
+      $UserQuizes = TableRegistry::get('UserQuizes') ;
+      $count= $UserQuizes->find('all')->where(['user_id' => $user_id ,'pass'=> '1'])->count();
+      $last_page = ceil($count / $range);
+      if ($current_page < 1) {
+        $current_page = 1;
+      } elseif ($current_page > $last_page && $last_page > 0) {
+        $current_page = $last_page;
+      }
+      $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+      }
+      $connection = ConnectionManager::get('default');
+      $sql = "SELECT q.name as name, uq.created as date, uq.score as score,"
+              . " uq.exam_marks as total_marks from user_quizes as uq , quizes "
+              . "as q where uq.user_id = $user_id AND uq.pass = '1' "
+              . "AND uq.course_id != '-1' AND q.id = uq.exam_id $limit";
+      $results = $connection->execute($sql)->fetchAll('assoc');
+   }catch(Exception $e) {
+     $this->log('Error in getParentChildAssignment function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+   }
+   $this->set([
+        'response' => $results ,
+        '_serialize' => ['response']
+    ]);
+ }
+ /**
+  * This api is used for get parent child subject
+  * **/
+  public function getParentChildrenSubjects($user_id=null) {
+    try{
+      if($user_id != NULL) {
+        $temp = '';
+        $i=0;
+        $j=0;
+        $k=-1;
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT cs.id as subject_id,cs.course_name as subject_name,cd.course_id as skill_id ,cd.name as skill_name from user_courses as us"
+                . " INNER JOIN courses as cs on cs.id = us.course_id"
+                . " INNER JOIN course_details as cd on cd.parent_id = us.course_id"
+                . " where us.user_id = $user_id";
+        $result = $connection->execute($sql)->fetchAll('assoc');
+        foreach($result as $key => $value) {
+          if($value['subject_id'] != $temp){
+            $j=0;
+            $k++;
+            $temp = $value['subject_id'];
+            $subject[$i]['id'] = $value['subject_id'];
+            $subject[$i]['name'] = $value['subject_name'];
+            $skill[$temp][$j]['id'] = $value['skill_id'];
+            $skill[$temp][$j]['name'] = $value['skill_name'];
+            $skill[$temp][$j]['parent_id'] = $value['subject_id'];
+            $skils[$k] = $value['skill_id'];
+            $j++;
+            $i++;
+          }else if($value['subject_id'] == $temp) {
+            $skill[$temp][$j]['id'] = $value['skill_id'];
+            $skill[$temp][$j]['name'] = $value['skill_name'];
+            $skill[$temp][$j]['parent_id'] = $value['subject_id'];
+            $skils[$k] = $skils[$k].','.$value['skill_id'];
+            $j++;
+          } 
+        }
+        $stemp = '';
+        $i = 0;
+        $j = 0;
+        $subskill = array();
+        foreach ($skils as $key => $value) {
+          $sql = "SELECT * from course_details where parent_id IN ($value)";
+          $subskils = $connection->execute($sql)->fetchAll('assoc');
+          foreach ($subskils as $key => $val) {
+            if($val['parent_id'] != $stemp) {
+              $i=0;
+              $stemp = $val['parent_id'];
+              $subskill[$stemp][$i]['id'] = $val['course_id'];
+              $subskill[$stemp][$i]['name'] = $val['name'];
+              $i++;
+            }else if($val['parent_id'] == $stemp) {
+              $subskill[$stemp][$i]['id'] = $val['course_id'];
+              $subskill[$stemp][$i]['name'] = $val['name'];
+              $i++;
+            }
+          }
+        }
+      } 
+    }catch(Exception $e) {
+      $this->log('Error in getParentChildrenSubjects function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'subject' => $subject,
+      'skill' => $skill,
+      'subSkill' => $subskill,
+      '_serialize' => ['subject', 'skill','subSkill']
+    ]);
+  }
+  /**
+   * This api is used for filtered  
+   **/
+  public function filterParentChildReport($user_id,$days=null,$subject=null,$skill=null,$subSkill=null) {
+    try{
+      if(!empty($user_id)){
+        $day_query = '';
+        $subSkill_query = '';
+        $skil = array();
+        $i=0;
+        if($days != NULL && $days != 0){
+         $day_query = " AND dateDiff(CURRENT_DATE(),uq.created) <= $days";
+        }
+        if($subject != NULL && $skill == null && $subSkill == NULL) {
+         $course_detail = TableRegistry::get('course_details'); 
+         $skills = $course_detail->find()->where(['parent_id'=>$subject])->toArray();
+         foreach($skills as $ki=>$val){
+           $skil[$i] = $val['course_id'];
+           $i++;
+         }
+         $i=0;
+         $sub_skill = $course_detail->find()->where(['parent_id IN '=>$skil])->toArray();
+         foreach($sub_skill as $ki=>$val){
+           $sub_skil[$i] = $val['course_id'];
+           $i++;
+         }
+         $suSkil = implode(',',$sub_skil);
+         $subSkill_query = " AND course_id IN ($suSkil)";
+        }
+        if($subject != NULL && $skill != null && $subSkill == NULL) {
+         $course_detail = TableRegistry::get('course_details'); 
+         $sub_skill = $course_detail->find()->where(['parent_id '=>$skill])->toArray();
+         foreach($sub_skill as $ki=>$val){
+           $sub_skil[$i] = $val['course_id'];
+           $i++;
+         }
+         $suSkil = implode(',',$sub_skil);
+         $subSkill_query = " AND course_id IN ($suSkil)";
+        }
+        if($subject != NULL && $skill != null && $subSkill != NULL) {
+         $subSkill_query = " AND uq.course_id = $subSkill";
+        }
+        $range = 10;
+      $status = FALSE;
+      if(!empty($user_id)){
+        $current_page = 1;
+        if (!empty($pnum)) {
+          $current_page = $pnum;
+        }
+        $UserQuizes = TableRegistry::get('UserQuizes') ;
+        $count= $UserQuizes->find('all')->where(['user_id' => $user_id ,'course_id >'=>-1])->count();
+        $last_page = ceil($count / $range);
+        if ($current_page < 1) {
+          $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+          $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT uq.*, cr.id,cr.course_name,cr.level_id as grade_id,lev.name as grade_name FROM user_quizes as uq,
+          courses as cr ,levels as lev WHERE 
+          uq.course_id=cr.id 
+          ANd uq.grade_id=cr.level_id
+          ANd cr.level_id=lev.id
+         AND uq.user_id=$user_id $day_query $subSkill_query  $limit";
+        $results = $connection->execute($sql)->fetchAll('assoc');
+        if(count($results) > 0){
+          foreach ($results as $result) { 
+            $row['user_quiz_id'] = $result['id'];  
+            $row['grade_id']=$result['grade_id'];
+            $row['course_id']=$result['course_id'];
+            $row['quiz_type_id'] = $result['quiz_type_id'];  
+            $row['quiz_id'] = $result['exam_id'];                                      
+            $row['exam_marks']=$result['exam_marks'];
+            $row['student_score']=$result['score'];
+            $row['course_name']=$result['course_name'];
 
-
+            if($result['exam_marks']!=0){
+              $row['student_result_percent']=(int)( ($result['score']/$result['exam_marks'])*(100));
+            }else{ 
+                $row['student_result_percent'] = 0;
+                $row['message'] = "Either quiz is not started or quiz attempted incomplete.";
+            } 
+            // To check other students on same course_id and grade_id
+            $UserQuizes = TableRegistry::get('UserQuizes') ;
+            $userquiz_results= $UserQuizes->find('all')->where(['course_id'=>$row['course_id'], 'user_id !='=> $user_id,'quiz_type_id'=>$row['quiz_type_id'] ])->order(['id'=>'ASC']);
+            if($userquiz_results->count()>0){
+                $othersts_score_percent = 0;
+                $high_sts_score_percent = 0;
+                $st_count = 0;
+                $hist_count = 0;
+                foreach ($userquiz_results as $otherstrow) {
+                   $temp_percent = ($otherstrow['score']/$otherstrow['exam_marks'])*(100);
+                   if($row['student_result_percent']< $temp_percent) {
+                     $high_sts_score_percent = $highsts_score_percent+$temp_percent;
+                     $hist_count++;
+                   }
+                   $othersts_score_percent = $othersts_score_percent +$temp_percent;
+                   $st_count = $st_count +1;
+                }
+                if($st_count) {
+                $row['other_Student_average'] = round( ($othersts_score_percent/$st_count ),1); 
+                }
+                if($hist_count > 0) {
+                 $row['best_Student_average'] = round( ($high_sts_score_percent/$hist_count),1); 
+                }else{
+                 $row['best_Student_average'] = 0;
+                }
+            }else{
+              $row['other_Student_average'] ="";
+              $row['message'] = 'No students found for same course';
+            }
+            $data['details'][] = $row;
+            $row['other_Student_average'] ="";
+            $row['message'] ="";
+            $status = TRUE;
+          }               
+        }else{
+          $data['message'] = "No result found.";
+        }
+      }else{
+        $data['status'] = "";
+        $data['message'] ="please set user_id";
+      }
+    }
+   }catch(Exception $e) {
+     $this->log('Error in getParentChildAssignment function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+   }
+    $this->set([
+        'response' => $data,
+        'status' => $status,
+        'lastPage' => $last_page,
+        'start' => (($current_page - 1) * $range) + 1,
+        'last' => (($current_page - 1) * $range) + $range,
+        'total' => $count,
+        '_serialize' => ['response','status','lastPage','start','last','total']
+    ]);
+  }
 }
