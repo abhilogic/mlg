@@ -441,8 +441,8 @@ public function getAssignmentItems($assignment_id = null){
 
               foreach ($questions as $ques) {
               $questions_detail['quiz_id'] = $quiz_id;
+              $data['quiz_id'] = $quiz_id;
               $quesList[] = array_merge($questions_detail, $ques);
-
             }
             $data['questions'] = $quesList;
 
