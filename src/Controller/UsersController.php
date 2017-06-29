@@ -3632,17 +3632,24 @@ public function getParentChildReport($user_id=null,$pgnum=1){
         $message = 'parent id can not be blank';
         throw new Exception($message);
       }
-      if (isset($req_data['child_id']) && empty($req_data['child_id'])) {
+      if (isset($req_data['child_ids']) && empty($req_data['child_ids'])) {
         $message = 'child id cannot be blank';
         throw new Exception($message);
       }
-      if (!isset($req_data['child_id'])) {
-        $req_data['child_id'] = 0;
+      if (!isset($req_data['child_ids'])) {
+        $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
+        if (!empty($children)) {
+          foreach ($children as $student) {
+            $req_data['child_ids'][] = $student['user_id'];
+          }
+        } else {
+          $req_data['child_ids'][] = 0;
+        }
       }
       $notifications_table = TableRegistry::get('notifications');
 
       // for analytics
-      $analytics_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'ANALYTICS']);
+      $analytics_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'ANALYTICS']);
       if ($analytics_notification->count()) {
         $analytic = $analytics_notification->last()->toArray();
         $child = $this->Users->get($analytic['user_id'])->toArray();
@@ -3694,7 +3701,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
       }
 
       // For subscription
-      $subscription_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'SUBSCRIPTIONS']);
+      $subscription_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'SUBSCRIPTIONS']);
       if ($subscription_notification->count()) {
         $subscription = $subscription_notification->last()->toArray();
         $child = $this->Users->get($subscription['user_id'])->toArray();
@@ -3702,12 +3709,12 @@ public function getParentChildReport($user_id=null,$pgnum=1){
           $date1 = $child['subscription_end_date'];
           $date2 = date_create();
           $date = date_diff($date1, $date2);
-          $notification_message['subcriptions'] = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end ' . $date->days;
+          $notification_message['subcriptions'] = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end after ' . $date->days . ' days';
         }
       }
 
       // For coupon.
-      $coupon_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'COUPONS']);
+      $coupon_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'COUPONS']);
       if ($coupon_notification->count()) {
         $coupon = $coupon_notification->last()->toArray();
         $child = $this->Users->get($coupon['user_id'])->toArray();
