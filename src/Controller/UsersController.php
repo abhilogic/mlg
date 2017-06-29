@@ -3948,9 +3948,6 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
 
       return $response;
   }
-
-}
-
   /**
   * This api is used for get parent child assignment
   * **/
