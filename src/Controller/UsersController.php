@@ -3588,10 +3588,12 @@ class UsersController extends AppController{
 
     // For offers
     $offer_notification = $notifications_table->find()->where(['user_id' => 0, 'bundle' => 'OFFERS']);
-    $offer = $offer_notification->last()->toArray();
-    $coupons_table = TableRegistry::get('coupons');
-    $parent_offer = $coupons_table->get($offer['sub_category_id'])->toArray();
-    $notification_message['offers'] = $parent_offer['description'];
+    if ($offer_notification->count()) {
+      $offer = $offer_notification->last()->toArray();
+      $coupons_table = TableRegistry::get('coupons');
+      $parent_offer = $coupons_table->get($offer['sub_category_id'])->toArray();
+      $notification_message['offers'] = $parent_offer['description'];
+    }
 
     // For subscription
     $subscription_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'SUBSCRIPTIONS']);
