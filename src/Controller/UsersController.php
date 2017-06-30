@@ -3455,7 +3455,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
               foreach ($userquiz_results as $otherstrow) {
                  $temp_percent = ($otherstrow['score']/$otherstrow['exam_marks'])*(100);
                  if($row['student_result_percent']< $temp_percent) {
-                   $high_sts_score_percent = $highsts_score_percent+$temp_percent;
+                   $high_sts_score_percent = $high_sts_score_percent+$temp_percent;
                    $hist_count++;
                  }
                  $othersts_score_percent = $othersts_score_percent +$temp_percent;
