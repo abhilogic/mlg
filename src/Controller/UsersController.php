@@ -4334,4 +4334,48 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
         '_serialize' => ['response','status','lastPage','start','last','total']
     ]);
   }
+
+  /*
+   * function cancelChildrenSubscriptions().
+   */
+  public function cancelChildrenSubscriptions() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $req_data = $this->request->data;
+      if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
+        $message = 'parent_id can not be blank';
+        throw new Exception($message);
+      }
+      $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
+      if (!empty($children)) {
+        $payment_controller = new PaymentController();
+        $user_orders_table = TableRegistry::get('UserOrders');
+        foreach ($children as $child) {
+          $active_billing = $user_orders_table->find()->where(['child_id' => $child['user_id'], 'billing_state' => 'ACTIVE']);
+          foreach ($active_billing as $billing) {
+            $billing_id = $billing['billing_id'];
+            $status = $payment_controller->cancelBillingAgreement($billing_id);
+            $billing['billing_state'] = $status;
+            if (!$user_orders_table->save($billing)) {
+              $status = FALSE;
+              $message = 'unable to save order';
+              throw new Exception($message);
+            }
+            $status = TRUE;
+          }
+        }
+      } else {
+        $status = FALSE;
+        $message = 'There is no child';
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
 }
