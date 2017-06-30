@@ -3660,7 +3660,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
 
             //quiz information
             $user_quizes_table = TableRegistry::get('UserQuizes');
-            $user_quizes = $user_quizes_table->get($notification['sub_category_id'])->last()->toArray();
+            $user_quizes = $user_quizes_table->get($notification['sub_category_id'])->toArray();
 
             //quiz type information
             $quiz_types_table = TableRegistry::get('quiz_types');
