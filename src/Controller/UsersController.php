@@ -4386,4 +4386,65 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
       '_serialize' => ['status', 'message']
     ]);
   }
+
+  /**
+   * timeSpentOnPlatform().
+   */
+  public function childTimeSpentOnPlatform() {
+    try {
+      $request = $this->request;
+      $request_data = $request->data;
+      $total_duration_in_secs = $total_duration_in_hrs = 0;
+      $status = FALSE;
+      $message = '';
+      if ($request->is('post')) {
+        if (!isset($request_data['user_ids'])) {
+          $message = 'user id required';
+          throw new Exception('user id required');
+        }
+        if (empty($request_data['user_ids'])) {
+          $message = 'user id can not be empty';
+          throw new Exception('user id can not be empty');
+        }
+        $conditions[] = 'user_id IN (' . implode(',', $request_data['user_ids']) . ')';
+        $conditions[] = 'time_spent IS NOT NULL';
+        $date = '';
+        if (isset($request_data['week'])) {
+          $date = date("Y-m-d", strtotime($request_data['week'] . " week"));
+          $conditions['check_in >='] = $date;
+        }
+        if (isset($request_data['month'])) {
+          $date = date("Y-m-d", strtotime($request_data['month'] . " month"));
+          $conditions['check_in >='] = $date;
+        }
+        $user_login_sessions = TableRegistry::get('user_login_sessions');
+        $query = $user_login_sessions->find();
+        $query_result = $query->select(['sum' => $query->func()->sum('user_login_sessions.time_spent')])
+          ->where($conditions);
+        if (!empty($query_result)) {
+          foreach ($query_result as $query_response) {
+            $status = TRUE;
+            $total_duration_in_secs = !empty($query_response->sum) ? $query_response->sum : 0;
+            $total_duration_in_hrs = round($total_duration_in_secs / (60 * 60), 2);
+          }
+        } else {
+          $message = 'No record found';
+        }
+      } else {
+        $message = 'Some error occured';
+        throw new Exception('Request is not POST');
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'total_duration_in_secs' => $total_duration_in_secs,
+      'total_duration_in_hrs' => $total_duration_in_hrs,
+      'date' => $date,
+      'user_ids' => $request->data['user_ids'],
+      '_serialize' => ['status', 'message', 'total_duration_in_secs', 'total_duration_in_hrs', 'user_ids', 'date']
+    ]);
+  }
 }
