@@ -4003,7 +4003,7 @@ class TeachersController extends AppController {
 
 
 /* API to get Need Attention on teacher dashboard*/
-public function getNeedAttention($teacher_id=null, $subject_id=null){
+public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
 
   $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id'] : $teacher_id;
   $subject_id =isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
@@ -4080,41 +4080,7 @@ public function getNeedAttention($teacher_id=null, $subject_id=null){
 }
 
 
-// API need attention of a student
-/* API to get Need Attention on teacher dashboard*/
-public function getNeedAttentionOFStudent($student_id=null){
-  
-  $student_id = isset($_REQUEST['student_id']) ? $_REQUEST['student_id'] : $student_id;
-  
-  if(!empty($student_id)){
-      $connection = ConnectionManager::get('default');
 
-     // get students quiz result for subskills
-     $sql = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name from user_quizes as uq, users as u, courses as cr, quiz_types as qt WHERE u.id=uq.user_id AND uq.course_id = cr.id AND qt.id=uq.quiz_type_id AND uq.user_id=$student_id AND uq.quiz_type_id IN (2,4,5) ORDER BY created DESC ";
-    
-      $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
-      if(count($stQuizRecords) > 0){
-          foreach ($stQuizRecords as $stQuizRecord) {
-             // $data['attention_records'][] = $stQuizRecord;
-              if($stQuizRecord['pass']==0){
-                $data['attention_records'][] = $stQuizRecord;
-              }
-          } 
-          $data['status'] =True;       
-      }else{
-              $data['status'] =False;
-              $data['message']="No Records For Your Attention.";                            
-       } 
-      }else{
-              $data['status'] = False;
-              $data['message'] = "Student Id cannot null.";
-          }
-
-      $this->set([
-          'response' => $data, 
-          '_serialize' => ['response']
-        ]);
-}
 
   // API to call Analyitic result of students in a subskill
     public function getSubskillAnalytic($teacher_id=null,$subject_id=null,$subskill_id=null){
@@ -4146,22 +4112,18 @@ public function getNeedAttentionOFStudent($student_id=null){
                         
 
                       // get students quiz result for subskills
-                      $sql1 = "SELECT uq.*,qt.name as quiz_type_name, cr.course_name FROM user_quizes as uq
-                              INNER JOIN courses as cr ON  cr.id=uq.course_id
-                              INNER JOIN quiz_types as qt ON qt.id=uq.quiz_type_id
-                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id IN (2,4,5,6) ORDER BY created DESC "; 
+                      $sql1 = "SELECT max( (score*100)/exam_marks) as student_result FROM user_quizes as uq
+                                    WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id IN (2,4,5,6) GROUP BY course_id ";
                       
                       $stQuizRecords = $connection->execute($sql1)->fetchAll('assoc');
 
                       if(count($stQuizRecords) > 0){
                         foreach ($stQuizRecords as $stQuizRecord) {
                             //$data['attention_records'][] = $stQuizRecord;
-                            $exam_marks = $stQuizRecord['exam_marks'];
-                            $student_score = $stQuizRecord['score'];
+                            /*$exam_marks = $stQuizRecord['exam_marks'];
+                            $student_score = $stQuizRecord['score'];*/                          
                             
-                            if($exam_marks==0){ $student_score =0; }
-                            $student_result_precentage = ($student_score/$exam_marks)*100;
-
+                            $student_result_precentage = $stQuizRecord['student_result'];
                             if($student_result_precentage <= REMEDIAL){
                                 $count_remedial++;
                             }
@@ -4187,16 +4149,18 @@ public function getNeedAttentionOFStudent($student_id=null){
                       }              
                   }
 
-                    //$row['percent_classStudents'] = 100;
+                    //$row['percent_classStudents'] = 100;                
                     $row['percent_noattack'] = round( (($count_noattack*100)/$count_classStudents),2);
                     $row['percent_remedial'] = round( (($count_remedial*100)/$count_classStudents),2);
                     $row['percent_struggling']=round( (($count_struggling*100)/$count_classStudents),2);
                     $row['percent_ontarget'] = round( (($count_ontarget*100)/$count_classStudents),2);
                     $row['percent_outstanding'] =round( (($count_outstanding*100)/$count_classStudents),2);
                     $row['percent_gifted'] = round( (($count_gifted*100)/$count_classStudents),2);
+                    
+
                     $data['student_result']=$row;
                     $data['status']=True;
-      
+                  
 
               
                 }else{
@@ -4215,101 +4179,6 @@ public function getNeedAttentionOFStudent($student_id=null){
         ]);
 
     }
-
-
-
-    /***
-       API subskil Analytic of a student for profile 
-      to check how many student on above/below of this student 
-    ***/
-    public function getSubskillAnalyticOfStudent($teacher_id=null,$student_id=null,$exam_id=null){
-
-      $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id'] : $teacher_id;
-      $student_id = isset($_REQUEST['student_id']) ? $_REQUEST['student_id'] : $student_id;
-      $exam_id = isset($_REQUEST['exam_id']) ? $_REQUEST['exam_id'] : $exam_id;
-
-      $connection = ConnectionManager::get('default');
-
-      if(!empty($teacher_id) && !empty($exam_id) && !empty($student_id)){
-          $count_classStudents = 0;
-          $count_abovestudents =0;
-          $count_belowstudent =0;
-             
-          //1.  course_id /subject_id of a student
-          $sql = "SELECT course_id from student_teachers WHERE teacher_id = $teacher_id AND student_id = $student_id ";  
-          $stcourse_records = $connection->execute($sql)->fetchAll('assoc');
-          if(count($stcourse_records) > 0){
-              foreach ($stcourse_records as $srecord) {                    
-                  $st_courseid=$srecord['course_id'];                      
-              }
-          }else{
-                $data['status'] = False;
-                $data['message'] = "This student is for this teacher.";
-            }
-
-
-
-            //2.  get selected student result
-            $sql1 = "SELECT * FROM user_quizes WHERE exam_id=$exam_id ";  
-            $stexam_records = $connection->execute($sql1)->fetchAll('assoc');
-          if(count($stexam_records) > 0){
-              foreach ($stexam_records as $sexamrecord) {                               
-                  $exam_subskillid=$sexamrecord['course_id']; 
-                  $select_stud_result_precent = ($sexamrecord['score']/$sexamrecord['exam_marks'])*100;
-              }
-          }else{
-                $data['status'] = False;
-                $data['message'] = "No exam is exist in Dataware house.";
-            }
-
-          if(!empty($st_courseid) && !empty($select_stud_result_precent) && !empty($exam_subskillid)){
-
-            //3.  get students of class except selected student for subject
-            $sql2 = "SELECT st.student_id,u.username from student_teachers as st, users as u WHERE u.id=st.student_id AND teacher_id = $teacher_id AND course_id=$st_courseid AND student_id!=$student_id  ORDER BY student_id ASC ";  
-            $stRecords = $connection->execute($sql2)->fetchAll('assoc');
-            if(count($stRecords) > 0){
-                   
-                foreach ($stRecords as $stRecord) {
-                    $class_stud_id = $stRecord['student_id'];
-
-                    // check the user_quiz result for each student of class
-                    $sql3 = "SELECT uq.*,qt.name as quiz_type_name, cr.course_name FROM user_quizes as uq
-                              INNER JOIN courses as cr ON  cr.id=uq.course_id
-                              INNER JOIN quiz_types as qt ON qt.id=uq.quiz_type_id
-                              WHERE course_id=$subskill_id AND uq.user_id=$class_stud_id AND quiz_type_id=2
-                              ORDER BY created DESC "; 
-                      
-                    $stQuizRecords = $connection->execute($sql3)->fetchAll('assoc');
-                    if(count($stQuizRecords) > 0){
-                        foreach ($stQuizRecords as $stQuizRecord) {
-
-                          
-                        }                          
-
-                    }else{
-                            $count_belowstudent++;
-                          }
-
-                  }
-            }else{
-                  $data['status']=False;
-                  $data['message'] = "No Other student except this student found in database.";
-                }
-          }   // end if to check $st_courseid, $select_stud_result_precent           
-
-        }else{
-            $data['status'] = False;
-            $data['message'] ="teacher_id, student_id and exam_id cannot null. please set the value.";
-        }
-
-        $this->set([
-          'response' => $data, 
-          '_serialize' => ['response']
-        ]);
-
-
-    }
-
 
 
 
