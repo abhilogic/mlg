@@ -675,8 +675,9 @@ class UsersController extends AppController{
                           'category_id' => NOTIFICATION_CATEGORY_SUBSCRIPTIONS,
                           'sub_category_id' => $child['user_id'],
                           'title' => 'SUBSCRIPTION EXPIRE',
-                          'description' => 'expire in ' . $diff->d . ' day(s)'
-                        );
+                          'description' => 'expire in ' . $diff->d . ' day(s)',
+                          'created_date' =>  date('Y-m-d H:i:s')
+                          );
                         $param['json_post_fields'] = TRUE;
                         $param['curl_post'] = 1;
                         $payment_controller->sendCurl($param);
@@ -2498,7 +2499,8 @@ class UsersController extends AppController{
               'category_id' => NOTIFICATION_CATEGORY_OFFERS,
               'sub_category_id' => $new_coupon->id,
               'title' => 'OFFERS',
-              'description' => 'Offer for parent'
+              'description' => 'Offer for parent',
+              'created_date' =>  date('Y-m-d H:i:s')
             );
             $param['json_post_fields'] = TRUE;
             $param['curl_post'] = 1;
@@ -2693,7 +2695,8 @@ class UsersController extends AppController{
               'category_id' => NOTIFICATION_CATEGORY_COUPONS,
               'sub_category_id' => $param['coupon_id'],
               'title' => strtoupper($param['status']), //coupon in state of reedemed , approved , rejected or pending for approval by mlg
-              'description' => 'Coupon is ' . strtoupper($param['status'])
+              'description' => 'Coupon is ' . strtoupper($param['status']),
+              'created_date' =>  date('Y-m-d H:i:s')
             );
             $param['json_post_fields'] = TRUE;
             $param['curl_post'] = 1;
@@ -3626,7 +3629,12 @@ public function getParentChildReport($user_id=null,$pgnum=1){
   public function getNotificationForParent() {
     try{
       $message = '';
-      $notification_message = array('analytics' => '' , 'offers' => '', 'subcriptions' => '', 'coupons' => '');
+      $notification_message = array(
+        'analytics' => '' , 'analytics_time' => '',
+        'offers' => '', 'offers_time' => '',
+        'subcriptions' => '', 'subcriptions_time' => '',
+        'coupons' => '', 'coupons_time' => '',
+      );
       $req_data = $this->request->data;
       if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
         $message = 'parent id can not be blank';
@@ -3657,6 +3665,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
         $user_quizes = $user_quizes_table->find()->get($analytic['sub_category_id'])->last()->toArray();
         $quiz_types_table = TableRegistry::get('quiz_types');
         $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
+        $notification_message['analytics_time'] = (array)date_diff(date_create(),$analytic['creadted_date']);
         if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
           $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the pretest '
           . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
@@ -3695,6 +3704,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
       $offer_notification = $notifications_table->find()->where(['user_id' => 0, 'bundle' => 'OFFERS']);
       if ($offer_notification->count()) {
         $offer = $offer_notification->last()->toArray();
+        $notification_message['offers_time'] = (array)date_diff(date_create(),$offer['creadted_date']);
         $coupons_table = TableRegistry::get('coupons');
         $parent_offer = $coupons_table->get($offer['sub_category_id'])->toArray();
         $notification_message['offers'] = $parent_offer['description'];
@@ -3704,6 +3714,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
       $subscription_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'SUBSCRIPTIONS']);
       if ($subscription_notification->count()) {
         $subscription = $subscription_notification->last()->toArray();
+        $notification_message['subscriptions_time'] = (array)date_diff(date_create(),$subscription['creadted_date']);
         $child = $this->Users->get($subscription['user_id'])->toArray();
         if (strtoupper($subscription['title']) == 'SUBSCRIPTION EXPIRE') {
           $date1 = $child['subscription_end_date'];
@@ -3717,6 +3728,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
       $coupon_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'COUPONS']);
       if ($coupon_notification->count()) {
         $coupon = $coupon_notification->last()->toArray();
+        $notification_message['coupons_time'] = (array)date_diff(date_create(),$coupon['creadted_date']);
         $child = $this->Users->get($coupon['user_id'])->toArray();
         if (strtoupper($coupon['title']) == 'APPROVAL PENDING') {
           $notification_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';

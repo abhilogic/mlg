@@ -391,7 +391,8 @@ public function setUserQuizResponse(){
                     'category_id' => NOTIFICATION_CATEGORY_ANALYTICS,
                     'sub_category_id' => $postdata['user_quiz_id'],
                     'title' => 'QUIZ',
-                    'description' => 'sub category id defines quiz type'
+                    'description' => 'sub category id defines quiz type',
+                    'created_date' =>  date('Y-m-d H:i:s')
                   );
                   $param['json_post_fields'] = TRUE;
                   $param['curl_post'] = 1;
