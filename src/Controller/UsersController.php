@@ -4337,6 +4337,8 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
 
   /*
    * function cancelChildrenSubscriptions().
+   *
+   * To cancel billing Agreement of Parent's child.
    */
   public function cancelChildrenSubscriptions() {
     try {
