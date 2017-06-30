@@ -3621,7 +3621,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
       '_serialize' => ['status', 'message']
     ]);
   }
-  /*
+ /*
    * function getNotificationForParent().
    *
    * user_id will be used as child id as well as parent id. (situation based).
@@ -3750,7 +3750,6 @@ public function getParentChildReport($user_id=null,$pgnum=1){
       '_serialize' => ['error_message', 'notifications']
     ]);
   }
-
 
   /* Area of Notification on parent dashboard*/
   public function getAreaOfFocusForParent($child_id=null){
@@ -3975,7 +3974,6 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
 
       return $response;
   }
-
   /**
   * This api is used for get parent child assignment
   * **/
@@ -4388,7 +4386,7 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
   }
 
   /**
-   * timeSpentOnPlatform().
+   * function childTimeSpentOnPlatform().
    */
   public function childTimeSpentOnPlatform() {
     try {

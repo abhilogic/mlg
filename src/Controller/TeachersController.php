@@ -4636,4 +4636,116 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
         '_serialize' => ['response','message','status']
     ]);
   }
+  /**
+   * This api is used for get student report of teacher
+   */
+  public function getTeacherStudentReport($user_id=null,$grade=null,$course=null,$pgnum=1) {
+    try{
+      $range = 10;
+      $status = FALSE;
+      $message = '';
+      $student = array();
+      $i = 0;
+      $total_sub_skill =1;
+      $sub_skill_array = array();
+      if($user_id == null) {
+        $message = 'Kindly Login';
+        throw new Exception('Kindly Login');
+      }else if($grade == null) {
+        $message = 'Some error occurred.';
+        throw new Exception('Please define Grade');
+      }else if($course == null) {
+        $message = 'Some error occurred.';
+        throw new Exception('Please define Course.');
+      }else{
+        $current_page = 1;
+        $common_query = " SELECT student_id from student_teachers where "
+                . "teacher_id = $user_id AND grade_id = $grade AND course_id = $course";
+        $subskill_query = " Select course_id from course_details where parent_id "
+                . "IN(Select course_id from course_details where parent_id = $course)";
+        if (!empty($pnum)) {
+          $current_page = $pnum;
+        }
+//        $question = TableRegistry::get('question_master');
+        $connection = ConnectionManager::get('default');
+        $sql = "select * from users where id IN ($common_query) ORDER BY id DESC ";
+        $count = $connection->execute($sql)->count();
+//         $count = $question->find()->where(['created_by' => $user_id])->count();
+        $last_page = ceil($count / $range);
+        if ($current_page < 1) {
+          $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+          $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+        
+        $connection = ConnectionManager::get('default');
+        $sql = "select * from users where id IN ($common_query) ORDER BY id DESC $limit";
+        $studentList = $connection->execute($sql)->fetchAll('assoc');
+        $subskill =  $connection->execute($subskill_query)->fetchAll('assoc');
+        foreach($subskill as $key=>$value) {
+          $sub_skill_array[$i] = $value['course_id'];
+          $i++;
+        }
+        $total_sub_skill = $i;
+        foreach ($studentList as $key => $value) {
+          $mastered = 0;
+          $notStarted = 0;
+          $started = 0;
+          $temp = array();
+          $j= 0 ;
+          $lsql = "select * from user_quizes where user_id = ".$value['id']." AND grade_id = $grade"
+                  . " AND course_id IN ($subskill_query) AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
+          $quizAttempt = $connection->execute($lsql)->fetchAll('assoc');
+          if(!empty($quizAttempt)) {
+            foreach($quizAttempt as $ki => $val) {
+              if(in_array($val['course_id'], $sub_skill_array)) {
+                if(!in_array($val['course_id'], $temp)){
+                  $temp[$j] = $val['course_id'];
+                }
+                $marks = ($val['score']/$val['exam_marks'])*100;
+                if($marks > 70) {
+                  $mastered++;
+                }
+                $started++;
+              }
+            }
+            $student[$value['id']]['name'] = $value['id'];
+            $student[$value['id']]['name'] = $value['first_name'].' '.$value['last_name'];
+            $student[$value['id']]['mastered'] = ($mastered*100)/$total_sub_skill;
+            $student[$value['id']]['started'] = (count($temp)*100)/$total_sub_skill;
+            $student[$value['id']]['notstarted'] = (($total_sub_skill-(count($temp)))*100)/$total_sub_skill;
+            $student[$value['id']]['gap'] = $total_sub_skill - $mastered ;
+            $mastered = 0;
+            $notStarted = 0;
+            $started = 0;
+            $temp = array();
+            $j= 0 ;
+            $status = true;
+          }else{
+            $student[$value['id']]['name'] = $value['id'];
+            $student[$value['id']]['name'] = $value['first_name'].' '.$value['last_name'];
+            $student[$value['id']]['mastered'] = 0;
+            $student[$value['id']]['started'] = 0;
+            $student[$value['id']]['notstarted'] = 0;
+            $student[$value['id']]['gap'] = $total_sub_skill - $mastered ;
+            $status = true;
+          }
+        }        
+      }
+    }catch(Exception $e) {
+       $this->log('Error in getTeacherStudentReport function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'response' => $student,
+        'message' => $message,
+        'status' => $status,
+        'lastPage' => $last_page,
+        'start' => (($current_page - 1) * $range) + 1,
+        'last' => (($current_page - 1) * $range) + $range,
+        'total' => $count,
+        '_serialize' => ['response','message','status','lastPage', 'start', 'last', 'total']
+    ]);
+  }
 }
