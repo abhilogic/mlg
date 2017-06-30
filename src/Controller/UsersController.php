@@ -3787,56 +3787,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
   }
 
 
-  /* To find award acheive of children for parent */
-  public function getAwardsofChild($child_id=null){
-      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
-
-      if(!empty($child_id)){
-          $connection = ConnectionManager::get('default');
-
-           // get students quiz result for subskills
-           $sql = "SELECT uq.*, max(score*100/exam_marks) as high_marks, u.username, u.first_name, u.last_name, qt.name as quiz_type_name, cr.course_name   
-                   FROM user_quizes as uq
-                   INNER JOIN users as u ON uq.user_id = u.id
-                   INNER JOIN courses as cr ON uq.course_id = cr.id 
-                   INNER JOIN quiz_types as qt ON uq.quiz_type_id = qt.id
-                   WHERE uq.user_id =$child_id AND uq.quiz_type_id IN (2,4,5,6) GROUP BY uq.course_id, uq.quiz_type_id ORDER BY high_marks DESC ";
-
-            //Note -  group by on two cols because subskill(eg 19) have multiple quiz_type (1,2,3) so to get max mark in each quiz type (either in subskill quiz, challenges)
-            $stQuizRecords = $connection->execute($sql)->fetchAll('assoc'); 
-
-            if(count($stQuizRecords) > 0){
-                foreach ($stQuizRecords as $stQuizRecord) {                   
-                      if($stQuizRecord['user_id']== $child_id){
-                          if($stQuizRecord['high_marks'] > QUIZ_PASS_SCORE){
-                              $data['awards_result'][] = $stQuizRecord;
-                              $data['status'] = True;
-                          }
-                      }                
-                   
-                  } // end foreach
-
-                  if(empty($data['awards_result'])){
-                    $data['status'] = False;
-                    $data['message'] = "No Record Found In Awards Area";
-                  }                         
-            }else{
-                    $data['status'] =False;
-                    $data['message']="No Records Found In Awards.";
-              }
-      
-      }else{
-        $data['status'] = False;
-        $data['message']= "Please set child id.";
-      }
-
-      $this->set([
-      'response' => $data, 
-      '_serialize' => ['response']
-    ]);
-
-
-  }
+  
 
 // API to get the child marks and his pear group marks on subskill
 public function getChildSubskillResult($child_id=null, $subskill_id=null, $user_quiz_id=null){
@@ -3874,7 +3825,11 @@ public function getChildSubskillResult($child_id=null, $subskill_id=null, $user_
                       }
                   }              
               }
-            $data['peer_children_result'] = round( ($peer_child_result/$peer_child_count),2) ;
+              if($peer_child_count > 0){
+                $data['peer_children_result'] = round( ($peer_child_result/$peer_child_count),2) ;
+              }else{
+                $data['peer_children_result'] =0;
+              }
             $data['peer_num_of_children'] = $peer_child_count;
             $data['status'] = True ;
         }else{
@@ -3960,9 +3915,7 @@ if(!empty($parent_id) && !empty($user_id) && !empty($subskill_id)){
   }else{
       $data ['status'] = False;
       $data ['message'] = "parent_id, child_id/user_id and subskill_id cannot be null.";
-
   }
-
 
    $this->set(array(
        'response' => $data,
@@ -3995,8 +3948,6 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
             $data['message'] = "No Record Found.";
         }
 
-
-
     }else{
       $data['status'] = False;
       $data['message'] = "user_id and user_quiz_id cannot null.";
@@ -4007,6 +3958,7 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
    ));
 
 }
+
 
 // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */

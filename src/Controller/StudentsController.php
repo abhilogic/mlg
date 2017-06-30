@@ -591,9 +591,8 @@ public function getStudentReport($user_id=null){
                 $data['status'] = False;
                 $data['message'] = "No result found.";
             }
-
     }else{
-      $data['status'] = "";
+      $data['status'] = False;
       $data['message'] ="please set user_id";
     }
 
@@ -601,10 +600,179 @@ public function getStudentReport($user_id=null){
         'response' => $data,
         '_serialize' => ['response']
     ]);
+}
 
+
+// API for student Analytic ($user_id will be student_id and child_id)
+public function getStudentProgress($user_id=null){
+    $user_id = isset($_REQUEST['user_id']) ? $_REQUEST['user_id']:$user_id;
+
+    if(!empty($user_id)){
+          $connection = ConnectionManager::get('default');
+
+          // step-1, get student courses (english/hindi for grade -6/7/8)
+          $base_url = Router::url('/', true);
+          $subskill_ids = array();
+          $json_subjectsinfo = $this->curlPost($base_url.'students/getStudentCourses/'.$user_id, array() );
+          $array_subjectsinfo = (array)json_decode($json_subjectsinfo);
+          
+          if(isset($array_subjectsinfo['response'])) {              
+              if(isset($array_subjectsinfo['response']->student_courses)){
+                  foreach ($array_subjectsinfo['response']->student_courses as $sub) {
+
+                      //step-2 get subskill list of a subject through which student is linked
+                      $json_subskillidsinfo = $this->curlPost($base_url.'courses/getSkillListOfSubject/'.$sub->id.'/2/1', array() );                      
+                      $array_subskillidsinfo = (array)json_decode($json_subskillidsinfo);                      
+                      if(isset($array_subskillidsinfo['response'])) {                        
+                        if($array_subskillidsinfo['response']->status ==1){                          
+                            foreach ($array_subskillidsinfo['response'] as $resultsubskill) {
+                                if(isset($resultsubskill->childcourse_ids)){
+                                    //subskill_id will contains all subskills of subject maths,english,science,ss
+                                  $subskill_ids =array_merge($subskill_ids,$resultsubskill->childcourse_ids) ;
+                                }                                                             
+                            }
+                        }
+                      }
+                      else{
+                          $data['status'] = False;
+                          $data['message'] = "No Subskill added for this subject.";
+                      }                    
+                  }
+              }
+            }else{
+                  $data['status'] = False;
+                  $data['message'] = "No subject is related to this user.";
+              }
+
+
+        //check above subskill variable is empty or has value
+        if(!empty($subskill_ids)){
+
+            //step-3 get result of a student on each subskill quiz,challenge
+            $total_subskill = count($subskill_ids) ;
+            $practice_count = 0;
+            $conquered_count = 0;
+            $fail_count =0;
+            
+            $subskillids= implode(',', $subskill_ids) ; 
+            //foreach ($subskill_ids as $subskill_id) {
+             $str ="SELECT max((score*100)/exam_marks) as score_percentage FROM user_quizes WHERE user_id=$user_id AND course_id IN ($subskillids)  AND quiz_type_id IN (2,5,6,7) GROUP BY course_id";
+                $results = $connection->execute($str)->fetchAll('assoc');          
+                if(count($results) > 0){ 
+
+                  foreach ($results as $result) {
+                      $practice_count++;
+                      if($result['score_percentage'] >= CONQUERED){
+                          $conquered_count++;
+                      }else{
+                          $fail_count++;
+                      }
+
+                  }
+                  $data['status'] = True;
+                  $data['total_subskill'] =$total_subskill;
+                  $data['conquered_count'] =$conquered_count;
+                  $data['practice_count'] =$practice_count;
+                  $data['fail_count'] =$fail_count;
+                }else{
+                  $data['status'] = False;
+                  $data['message'] ="No Record Found.";
+                }
+             
+           // }                 
+        }else{
+              $data['status'] = False;
+              $data['message'] = "No Subskill added for this subject.";
+        }       
+
+
+    }else{
+        $data['status'] = False;
+        $data['message'] ="please set user_id";
+    }
+
+     $this->set([
+        'response' => $data,
+        '_serialize' => ['response']
+    ]);
 
 }
 
+/* To find award acheive of children for parent */
+  public function getAwardsofChild($child_id=null){
+      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
+
+      if(!empty($child_id)){
+          $connection = ConnectionManager::get('default');
+
+           // get students quiz result for subskills
+           $sql = "SELECT uq.*, score*100/exam_marks as student_result, qt.name ,  c.course_name
+                   FROM user_quizes as uq
+                   INNER JOIN quiz_types as qt ON qt.id=uq.quiz_type_id 
+                   INNER JOIN courses as c ON c.id = uq.course_id                   
+                   WHERE uq.user_id =$child_id AND uq.quiz_type_id IN (2,4,5,6) ";
+
+            //Note -  group by on two cols because subskill(eg 19) have multiple quiz_type (1,2,3) so to get max mark in each quiz type (either in subskill quiz, challenges)
+            $stQuizRecords = $connection->execute($sql)->fetchAll('assoc'); 
+
+            if(count($stQuizRecords) > 0){
+                foreach ($stQuizRecords as $stQuizRecord) { 
+
+                    $student_marks=$stQuizRecord['student_result']; 
+                    $st_result = array();                  
+                  
+                    if( (QUIZ_PASS_SCORE < $student_marks) AND ($student_marks >= RED_BADGE)){
+                        $st_result['badge_type'] = 'red_badge';
+                        $st_result['quiz_type'] = $stQuizRecord['name'] ;
+                        $st_result['course_name'] = $stQuizRecord['course_name'] ;
+                        $st_result['marks_percentage'] = $student_marks ;
+                    }
+
+                    if( (RED_BADGE < $student_marks) AND ($student_marks >= GREEN_BADGE)){
+                        $st_result['badge_type'] = 'green_badge';
+                        $st_result['quiz_type'] = $stQuizRecord['name'] ;
+                        $st_result['course_name'] = $stQuizRecord['course_name'] ;
+                        $st_result['marks_percentage'] = $student_marks ;
+                    }
+
+                    if( (GREEN_BADGE < $student_marks) AND ($student_marks >= STAR_BADGE)){
+                        $st_result['badge_type'] = 'star_badge';
+                        $st_result['quiz_type'] = $stQuizRecord['name'] ;
+                        $st_result['course_name'] = $stQuizRecord['course_name'] ;
+                        $st_result['marks_percentage'] = $student_marks;
+                    }
+
+                    if( (STAR_BADGE < $student_marks) AND ($student_marks >= CROWN_BADGE)){
+                        $st_result['badge_type'] = 'crown_badge';
+                        $st_result['quiz_type'] = $stQuizRecord['name'] ;
+                        $st_result['course_name'] = $stQuizRecord['course_name'] ;
+                        $st_result['marks_percentage'] = $student_marks ;
+                    }
+
+                    if(!empty($st_result)){
+                      $data['status'] = True;
+                      $data['student_awards_results'][] = $st_result;
+                    }                                      
+                } // end foreach
+
+                if(empty($data['student_awards_results'])){
+                    $data['status'] = False;
+                    $data['message'] = "No Awards Achieved yet.";
+                }                         
+            }else{
+                  $data['status'] =False;
+                  $data['message']="No Records Found In Awards.";
+              }      
+      }else{
+        $data['status'] = False;
+        $data['message']= "Please set child id.";
+      }
+
+      $this->set([
+      'response' => $data, 
+      '_serialize' => ['response']
+    ]);
+  }
 
 // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
