@@ -3693,7 +3693,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
               'kind' => 'ANALYTICS',
               'message' => $child['first_name'] . ' ' . $child['last_name'] .
                   ' has recently given the ' . $exam_type . ' and scored '
-                  . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %',
+                  . round((($user_quizes['score'] / $user_quizes['exam_marks']) * 100), 2) . ' %',
               'time_before' => (array)date_diff(date_create(),$notification['created_date']),
             );
             break;
