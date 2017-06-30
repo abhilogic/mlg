@@ -4353,18 +4353,22 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
         $user_orders_table = TableRegistry::get('UserOrders');
         foreach ($children as $child) {
           $active_billing = $user_orders_table->find()->where(['child_id' => $child['user_id'], 'billing_state' => 'ACTIVE']);
-          foreach ($active_billing as $billing) {
-            $billing_id = $billing['billing_id'];
-            $response = $payment_controller->cancelBillingAgreement($billing_id);
-            if (!empty($response)) {
-              $billing['billing_state'] = $response;
-              if (!$user_orders_table->save($billing)) {
-                $status = FALSE;
-                $message = 'unable to save order';
-                throw new Exception($message);
+          if ($active_billing->count()) {
+            foreach ($active_billing as $billing) {
+              $billing_id = $billing['billing_id'];
+              $response = $payment_controller->cancelBillingAgreement($billing_id);
+              if (!empty($response)) {
+                $billing['billing_state'] = $response;
+                if (!$user_orders_table->save($billing)) {
+                  $status = FALSE;
+                  $message = 'unable to save order';
+                  throw new Exception($message);
+                }
+                $status = TRUE;
               }
-              $status = TRUE;
             }
+          } else {
+            $message = 'No child found with active billing state';
           }
         }
       } else {
