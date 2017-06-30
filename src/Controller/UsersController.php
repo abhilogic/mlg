@@ -4355,14 +4355,16 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
           $active_billing = $user_orders_table->find()->where(['child_id' => $child['user_id'], 'billing_state' => 'ACTIVE']);
           foreach ($active_billing as $billing) {
             $billing_id = $billing['billing_id'];
-            $status = $payment_controller->cancelBillingAgreement($billing_id);
-            $billing['billing_state'] = $status;
-            if (!$user_orders_table->save($billing)) {
-              $status = FALSE;
-              $message = 'unable to save order';
-              throw new Exception($message);
+            $response = $payment_controller->cancelBillingAgreement($billing_id);
+            if (!empty($response)) {
+              $billing['billing_state'] = $response;
+              if (!$user_orders_table->save($billing)) {
+                $status = FALSE;
+                $message = 'unable to save order';
+                throw new Exception($message);
+              }
+              $status = TRUE;
             }
-            $status = TRUE;
           }
         }
       } else {
