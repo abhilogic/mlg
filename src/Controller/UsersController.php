@@ -3629,12 +3629,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
   public function getNotificationForParent() {
     try{
       $message = '';
-      $notification_message = array(
-        'analytics' => '' , 'analytics_time' => '',
-        'offers' => '', 'offers_time' => '',
-        'subcriptions' => '', 'subcriptions_time' => '',
-        'coupons' => '', 'coupons_time' => '',
-      );
+      $notification_info = array();
       $req_data = $this->request->data;
       if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
         $message = 'parent id can not be blank';
@@ -3648,102 +3643,111 @@ public function getParentChildReport($user_id=null,$pgnum=1){
         $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
         if (!empty($children)) {
           foreach ($children as $student) {
-            $req_data['child_ids'][] = $student['user_id'];
+            $req_data['ids'][] = $student['user_id'];
           }
-        } else {
-          $req_data['child_ids'][] = 0;
         }
+        $req_data['ids'][] = 0;
       }
+      $req_data['ids'][] = $req_data['parent_id'];
       $notifications_table = TableRegistry::get('notifications');
+      $notifications = $notifications_table->find()->where(['user_id IN' => $req_data['ids']])->limit(NOTIFICATION_LIMIT)->orderDesc('id');
 
-      // for analytics
-      $analytics_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'ANALYTICS']);
-      if ($analytics_notification->count()) {
-        $analytic = $analytics_notification->last()->toArray();
-        $child = $this->Users->get($analytic['user_id'])->toArray();
-        $user_quizes_table = TableRegistry::get('UserQuizes');
-        $user_quizes = $user_quizes_table->find()->get($analytic['sub_category_id'])->last()->toArray();
-        $quiz_types_table = TableRegistry::get('quiz_types');
-        $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
-        $notification_message['analytics_time'] = (array)date_diff(date_create(),$analytic['created_date']);
-        if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the pretest '
-          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
-        }
-        if (strtoupper($quiz_type['variable']) == 'SUBSKILL_QUIZ') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the sub skill quiz'
-          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
-        }
-        if (strtoupper($quiz_type['variable']) == 'PRACTICES') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given practices'
-          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
-        }
-        if (strtoupper($quiz_type['variable']) == 'KNIGHT_CHALLENGE') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the knight challenge'
-            . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
-        }
-        if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the teacher custom assignment'
-          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
-        }
-        if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the teacher custom assignment'
-          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
-        }
-        if (strtoupper($quiz_type['variable']) == 'TEACHER_AUTO_ASSIGNMENT') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the teacher auto assignment'
-          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
-        }
-        if (strtoupper($quiz_type['variable']) == 'PARENT_AUTO_ASSIGNMENT') {
-          $notification_message['analytics'] = $child['first_name'] . ' ' . $child['last_name'] . ' has recently given the parent auto assignment'
-          . 'and scored ' . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %';
+      foreach ($notifications as $notification) {
+        switch($notification['bundle']) {
+          case 'ANALYTICS':
+            //child information
+            $child = $this->Users->get($notification['user_id'])->toArray();
+
+            //quiz information
+            $user_quizes_table = TableRegistry::get('UserQuizes');
+            $user_quizes = $user_quizes_table->find()->get($notification['sub_category_id'])->last()->toArray();
+
+            //quiz type information
+            $quiz_types_table = TableRegistry::get('quiz_types');
+            $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
+
+            $exam_type = '';
+            if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
+              $exam_type = 'Pre Test';
+            }
+            if (strtoupper($quiz_type['variable']) == 'SUBSKILL_QUIZ') {
+              $exam_type = 'Sub skill quiz';
+            }
+            if (strtoupper($quiz_type['variable']) == 'PRACTICES') {
+              $exam_type = 'Practices';
+            }
+            if (strtoupper($quiz_type['variable']) == 'KNIGHT_CHALLENGE') {
+              $exam_type = 'Knight challenge';
+            }
+            if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
+              $exam_type = 'Teacher custom assignment';
+            }
+            if (strtoupper($quiz_type['variable']) == 'TEACHER_AUTO_ASSIGNMENT') {
+              $exam_type = 'Teacher auto assignment';
+            }
+            if (strtoupper($quiz_type['variable']) == 'PARENT_AUTO_ASSIGNMENT') {
+              $exam_type = 'Parent auto assignment';
+            }
+
+            $notification_info[] = array(
+              'kind' => 'ANALYTICS',
+              'message' => $child['first_name'] . ' ' . $child['last_name'] .
+                  ' has recently given the ' . $exam_type . ' and scored '
+                  . (($user_quizes['score'] / $user_quizes['exam_marks']) * 100) . ' %',
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'OFFERS':
+            $coupons_table = TableRegistry::get('coupons');
+            $parent_offer = $coupons_table->get($notification['sub_category_id'])->toArray();
+            $notification_info[] = array(
+              'kind' => 'OFFERS',
+              'message' => $parent_offer['description'],
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'SUBSCRIPTIONS':
+            $subscription_message = '';
+            $child = $this->Users->get($notification['user_id'])->toArray();
+            if (strtoupper($notification['title']) == 'SUBSCRIPTION EXPIRE') {
+              $date1 = $child['subscription_end_date'];
+              $date2 = date_create();
+              $date = date_diff($date1, $date2);
+              $subscription_message = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end after ' . $date->days . ' days';
+            }
+            $notification_info[] = array(
+              'kind' => 'SUBCRIPTIONS',
+              'message' => $subscription_message,
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'COUPONS':
+            $coupon_message = '';
+            $child = $this->Users->get($notification['user_id'])->toArray();
+            if (strtoupper($notification['title']) == 'APPROVAL PENDING') {
+              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
+            }
+            if (strtoupper($notification['title']) == 'ACQUIRED') {
+              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
+            }
+            $notification_info[] = array(
+              'kind' => 'COUPONS',
+              'message' => $coupon_message,
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
         }
       }
-
-      // For offers
-      $offer_notification = $notifications_table->find()->where(['user_id' => 0, 'bundle' => 'OFFERS']);
-      if ($offer_notification->count()) {
-        $offer = $offer_notification->last()->toArray();
-        $notification_message['offers_time'] = (array)date_diff(date_create(),$offer['created_date']);
-        $coupons_table = TableRegistry::get('coupons');
-        $parent_offer = $coupons_table->get($offer['sub_category_id'])->toArray();
-        $notification_message['offers'] = $parent_offer['description'];
-      }
-
-      // For subscription
-      $subscription_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'SUBSCRIPTIONS']);
-      if ($subscription_notification->count()) {
-        $subscription = $subscription_notification->last()->toArray();
-        $notification_message['subscriptions_time'] = (array)date_diff(date_create(),$subscription['created_date']);
-        $child = $this->Users->get($subscription['user_id'])->toArray();
-        if (strtoupper($subscription['title']) == 'SUBSCRIPTION EXPIRE') {
-          $date1 = $child['subscription_end_date'];
-          $date2 = date_create();
-          $date = date_diff($date1, $date2);
-          $notification_message['subcriptions'] = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end after ' . $date->days . ' days';
-        }
-      }
-
-      // For coupon.
-      $coupon_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_ids'], 'bundle' => 'COUPONS']);
-      if ($coupon_notification->count()) {
-        $coupon = $coupon_notification->last()->toArray();
-        $notification_message['coupons_time'] = (array)date_diff(date_create(),$coupon['created_date']);
-        $child = $this->Users->get($coupon['user_id'])->toArray();
-        if (strtoupper($coupon['title']) == 'APPROVAL PENDING') {
-          $notification_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
-        }
-        if (strtoupper($coupon['title']) == 'ACQUIRED') {
-          $notification_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
-        }
-      } 
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
     $this->set([
-      'message' => $message,
-      'notification_message' => $notification_message,
-      '_serialize' => ['message', 'notification_message']
+      'error_message' => $message,
+      'notifications' => $notification_info,
+      '_serialize' => ['error_message', 'notifications']
     ]);
   }
 
