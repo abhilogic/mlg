@@ -675,8 +675,9 @@ class UsersController extends AppController{
                           'category_id' => NOTIFICATION_CATEGORY_SUBSCRIPTIONS,
                           'sub_category_id' => $child['user_id'],
                           'title' => 'SUBSCRIPTION EXPIRE',
-                          'description' => 'expire in ' . $diff->d . ' day(s)'
-                        );
+                          'description' => 'expire in ' . $diff->d . ' day(s)',
+                          'created_date' =>  date('Y-m-d H:i:s')
+                          );
                         $param['json_post_fields'] = TRUE;
                         $param['curl_post'] = 1;
                         $payment_controller->sendCurl($param);
@@ -2486,7 +2487,7 @@ class UsersController extends AppController{
             throw new Exception('Unable to save coupon conditions');
           }
           $status = TRUE;
-          if (strtoupper($data['applied_for']) == 'OFFERS') {
+          if (strtoupper($data['applied_for']) == 'OFFER') {
             //set for parent offers
             $payment_controller = new PaymentController();
             $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
@@ -2498,7 +2499,8 @@ class UsersController extends AppController{
               'category_id' => NOTIFICATION_CATEGORY_OFFERS,
               'sub_category_id' => $new_coupon->id,
               'title' => 'OFFERS',
-              'description' => 'Offer for parent'
+              'description' => 'Offer for parent',
+              'created_date' =>  date('Y-m-d H:i:s')
             );
             $param['json_post_fields'] = TRUE;
             $param['curl_post'] = 1;
@@ -2693,7 +2695,8 @@ class UsersController extends AppController{
               'category_id' => NOTIFICATION_CATEGORY_COUPONS,
               'sub_category_id' => $param['coupon_id'],
               'title' => strtoupper($param['status']), //coupon in state of reedemed , approved , rejected or pending for approval by mlg
-              'description' => 'Coupon is ' . strtoupper($param['status'])
+              'description' => 'Coupon is ' . strtoupper($param['status']),
+              'created_date' =>  date('Y-m-d H:i:s')
             );
             $param['json_post_fields'] = TRUE;
             $param['curl_post'] = 1;
@@ -3618,64 +3621,135 @@ public function getParentChildReport($user_id=null,$pgnum=1){
       '_serialize' => ['status', 'message']
     ]);
   }
-  /*
+ /*
    * function getNotificationForParent().
    *
    * user_id will be used as child id as well as parent id. (situation based).
    */
   public function getNotificationForParent() {
-    $message = '';
-    $notification_message = array('offers' => '', 'subcriptions' => '', 'coupons' => '');
-    $req_data = $this->request->data;
-    if (isset($req_data['parent_id']) && empty($req_data['parent_id'])) {
-      $message = 'parent id cannot be blank';
-      throw new Exception($message);
-    }
-    if (isset($req_data['child_id']) && empty($req_data['child_id'])) {
-      $message = 'child id cannot be blank';
-      throw new Exception($message);
-    }
-    $notifications_table = TableRegistry::get('notifications');
-
-    // For offers
-    $offer_notification = $notifications_table->find()->where(['user_id' => 0, 'bundle' => 'OFFERS']);
-    $offer = $offer_notification->last()->toArray();
-    $coupons_table = TableRegistry::get('coupons');
-    $parent_offer = $coupons_table->get($offer['sub_category_id'])->toArray();
-    $notification_message['offers'] = $parent_offer['description'];
-
-    // For subscription
-    $subscription_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'SUBSCRIPTIONS']);
-    if ($subscription_notification->count()) {
-      $subscription = $subscription_notification->last()->toArray();
-      $child = $this->Users->get($subscription['user_id'])->toArray();
-      if (strtoupper($subscription['title']) == 'SUBSCRIPTION EXPIRE') {
-        $date1 = $child['subscription_end_date'];
-        $date2 = date_create();
-        $date = date_diff($date1, $date2);
-        $notification_message['subcriptions'] = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end ' . $date->days;
+    try{
+      $message = '';
+      $notification_info = array();
+      $req_data = $this->request->data;
+      if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
+        $message = 'parent id can not be blank';
+        throw new Exception($message);
       }
-    }
+      if (isset($req_data['child_ids']) && empty($req_data['child_ids'])) {
+        $message = 'child id cannot be blank';
+        throw new Exception($message);
+      }
+      if (!isset($req_data['child_ids'])) {
+        $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
+        if (!empty($children)) {
+          foreach ($children as $student) {
+            $req_data['ids'][] = $student['user_id'];
+          }
+        }
+        $req_data['ids'][] = 0;
+      }
+      $req_data['ids'][] = $req_data['parent_id'];
+      $notifications_table = TableRegistry::get('notifications');
+      $notifications = $notifications_table->find()->where(['user_id IN' => $req_data['ids']])->limit(NOTIFICATION_LIMIT)->orderDesc('id');
 
-    // For coupon.
-    $coupon_notification = $notifications_table->find()->where(['user_id IN' => $req_data['child_id'], 'bundle' => 'COUPONS']);
-    if ($coupon_notification->count()) {
-      $coupon = $coupon_notification->last()->toArray();
-      $child = $this->Users->get($coupon['user_id'])->toArray();
-      if (strtoupper($coupon['title']) == 'APPROVAL PENDING') {
-        $notification_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
+      foreach ($notifications as $notification) {
+        switch($notification['bundle']) {
+          case 'ANALYTICS':
+            //child information
+            $child = $this->Users->get($notification['user_id'])->toArray();
+
+            //quiz information
+            $user_quizes_table = TableRegistry::get('UserQuizes');
+            $user_quizes = $user_quizes_table->get($notification['sub_category_id'])->toArray();
+
+            //quiz type information
+            $quiz_types_table = TableRegistry::get('quiz_types');
+            $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
+
+            $exam_type = '';
+            if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
+              $exam_type = 'Pre Test';
+            }
+            if (strtoupper($quiz_type['variable']) == 'SUBSKILL_QUIZ') {
+              $exam_type = 'Sub skill quiz';
+            }
+            if (strtoupper($quiz_type['variable']) == 'PRACTICES') {
+              $exam_type = 'Practices';
+            }
+            if (strtoupper($quiz_type['variable']) == 'KNIGHT_CHALLENGE') {
+              $exam_type = 'Knight challenge';
+            }
+            if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
+              $exam_type = 'Teacher custom assignment';
+            }
+            if (strtoupper($quiz_type['variable']) == 'TEACHER_AUTO_ASSIGNMENT') {
+              $exam_type = 'Teacher auto assignment';
+            }
+            if (strtoupper($quiz_type['variable']) == 'PARENT_AUTO_ASSIGNMENT') {
+              $exam_type = 'Parent auto assignment';
+            }
+
+            $notification_info[] = array(
+              'kind' => 'ANALYTICS',
+              'message' => $child['first_name'] . ' ' . $child['last_name'] .
+                  ' has recently given the ' . $exam_type . ' and scored '
+                  . round((($user_quizes['score'] / $user_quizes['exam_marks']) * 100), 2) . ' %',
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'OFFERS':
+            $coupons_table = TableRegistry::get('coupons');
+            $parent_offer = $coupons_table->get($notification['sub_category_id'])->toArray();
+            $notification_info[] = array(
+              'kind' => 'OFFERS',
+              'message' => $parent_offer['description'],
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'SUBSCRIPTIONS':
+            $subscription_message = '';
+            $child = $this->Users->get($notification['user_id'])->toArray();
+            if (strtoupper($notification['title']) == 'SUBSCRIPTION EXPIRE') {
+              $date1 = $child['subscription_end_date'];
+              $date2 = date_create();
+              $date = date_diff($date1, $date2);
+              $subscription_message = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end after ' . $date->days . ' days';
+            }
+            $notification_info[] = array(
+              'kind' => 'SUBCRIPTIONS',
+              'message' => $subscription_message,
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'COUPONS':
+            $coupon_message = '';
+            $child = $this->Users->get($notification['user_id'])->toArray();
+            if (strtoupper($notification['title']) == 'APPROVAL PENDING') {
+              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
+            }
+            if (strtoupper($notification['title']) == 'ACQUIRED') {
+              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
+            }
+            $notification_info[] = array(
+              'kind' => 'COUPONS',
+              'message' => $coupon_message,
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+        }
       }
-      if (strtoupper($coupon['title']) == 'ACQUIRED') {
-        $notification_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
-      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
     $this->set([
-      'message' => $message,
-      'notification_message' => $notification_message,
-      '_serialize' => ['message', 'notification_message']
+      'error_message' => $message,
+      'notifications' => $notification_info,
+      '_serialize' => ['error_message', 'notifications']
     ]);
   }
-
 
   /* Area of Notification on parent dashboard*/
   public function getAreaOfFocusForParent($child_id=null){
@@ -3716,56 +3790,7 @@ public function getParentChildReport($user_id=null,$pgnum=1){
   }
 
 
-  /* To find award acheive of children for parent */
-  public function getAwardsofChild($child_id=null){
-      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
-
-      if(!empty($child_id)){
-          $connection = ConnectionManager::get('default');
-
-           // get students quiz result for subskills
-           $sql = "SELECT uq.*, max(score*100/exam_marks) as high_marks, u.username, u.first_name, u.last_name, qt.name as quiz_type_name, cr.course_name   
-                   FROM user_quizes as uq
-                   INNER JOIN users as u ON uq.user_id = u.id
-                   INNER JOIN courses as cr ON uq.course_id = cr.id 
-                   INNER JOIN quiz_types as qt ON uq.quiz_type_id = qt.id
-                   WHERE uq.user_id =$child_id AND uq.quiz_type_id IN (2,4,5,6) GROUP BY uq.course_id, uq.quiz_type_id ORDER BY high_marks DESC ";
-
-            //Note -  group by on two cols because subskill(eg 19) have multiple quiz_type (1,2,3) so to get max mark in each quiz type (either in subskill quiz, challenges)
-            $stQuizRecords = $connection->execute($sql)->fetchAll('assoc'); 
-
-            if(count($stQuizRecords) > 0){
-                foreach ($stQuizRecords as $stQuizRecord) {                   
-                      if($stQuizRecord['user_id']== $child_id){
-                          if($stQuizRecord['high_marks'] > QUIZ_PASS_SCORE){
-                              $data['awards_result'][] = $stQuizRecord;
-                              $data['status'] = True;
-                          }
-                      }                
-                   
-                  } // end foreach
-
-                  if(empty($data['awards_result'])){
-                    $data['status'] = False;
-                    $data['message'] = "No Record Found In Awards Area";
-                  }                         
-            }else{
-                    $data['status'] =False;
-                    $data['message']="No Records Found In Awards.";
-              }
-      
-      }else{
-        $data['status'] = False;
-        $data['message']= "Please set child id.";
-      }
-
-      $this->set([
-      'response' => $data, 
-      '_serialize' => ['response']
-    ]);
-
-
-  }
+  
 
 // API to get the child marks and his pear group marks on subskill
 public function getChildSubskillResult($child_id=null, $subskill_id=null, $user_quiz_id=null){
@@ -3803,7 +3828,11 @@ public function getChildSubskillResult($child_id=null, $subskill_id=null, $user_
                       }
                   }              
               }
-            $data['peer_children_result'] = round( ($peer_child_result/$peer_child_count),2) ;
+              if($peer_child_count > 0){
+                $data['peer_children_result'] = round( ($peer_child_result/$peer_child_count),2) ;
+              }else{
+                $data['peer_children_result'] =0;
+              }
             $data['peer_num_of_children'] = $peer_child_count;
             $data['status'] = True ;
         }else{
@@ -3889,9 +3918,7 @@ if(!empty($parent_id) && !empty($user_id) && !empty($subskill_id)){
   }else{
       $data ['status'] = False;
       $data ['message'] = "parent_id, child_id/user_id and subskill_id cannot be null.";
-
   }
-
 
    $this->set(array(
        'response' => $data,
@@ -3924,8 +3951,6 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
             $data['message'] = "No Record Found.";
         }
 
-
-
     }else{
       $data['status'] = False;
       $data['message'] = "user_id and user_quiz_id cannot null.";
@@ -3936,6 +3961,7 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
    ));
 
 }
+
 
 // API to call curl 
   /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
@@ -4304,6 +4330,58 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
         'last' => (($current_page - 1) * $range) + $range,
         'total' => $count,
         '_serialize' => ['response','status','lastPage','start','last','total']
+    ]);
+  }
+
+  /*
+   * function cancelChildrenSubscriptions().
+   *
+   * To cancel billing Agreement of Parent's child.
+   */
+  public function cancelChildrenSubscriptions() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $req_data = $this->request->data;
+      if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
+        $message = 'parent_id can not be blank';
+        throw new Exception($message);
+      }
+      $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
+      if (!empty($children)) {
+        $payment_controller = new PaymentController();
+        $user_orders_table = TableRegistry::get('UserOrders');
+        foreach ($children as $child) {
+          $active_billing = $user_orders_table->find()->where(['child_id' => $child['user_id'], 'billing_state' => 'ACTIVE']);
+          if ($active_billing->count()) {
+            foreach ($active_billing as $billing) {
+              $billing_id = $billing['billing_id'];
+              $response = $payment_controller->cancelBillingAgreement($billing_id);
+              if (!empty($response)) {
+                $billing['billing_state'] = $response;
+                if (!$user_orders_table->save($billing)) {
+                  $status = FALSE;
+                  $message = 'unable to save order';
+                  throw new Exception($message);
+                }
+                $status = TRUE;
+              }
+            }
+          } else {
+            $message = 'No child found with active billing state';
+          }
+        }
+      } else {
+        $status = FALSE;
+        $message = 'There is no child';
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+      '_serialize' => ['status', 'message']
     ]);
   }
 }

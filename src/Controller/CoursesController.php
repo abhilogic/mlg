@@ -1017,7 +1017,7 @@ class CoursesController extends AppController{
    }
 
 
-/* get course/skill/subskill information */
+/* important API get course/skill/subskill information */
   public function getCourseInfo($course_id=null){
       $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id ;
 
@@ -1442,7 +1442,7 @@ class CoursesController extends AppController{
   }
 
 
-  /**   API will return skill and subskill of a subject
+  /** important  API will return skill and subskill of a subject
         if find subskill of skill then child_level=1 and parent_id= skill_id
         if find subskill of subject then child_level=2 and parent_id
         return_type defind return type =1/2 of function as as json=1 or array=2
