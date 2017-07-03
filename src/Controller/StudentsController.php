@@ -1043,7 +1043,7 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
 
 
       //get students
-      $connection = ConnectionManager::get('default');
+      $connection = ConnectionManager::get('default');        
       $sql ="SELECT u.*, ud.profile_pic FROM student_teachers as st INNER JOIN users as u ON u.id=st.student_id INNER JOIN user_details as ud ON ud.user_id=st.student_id INNER JOIN user_courses as uc ON uc.user_id=st.student_id INNER JOIN courses as c ON c.id=uc.course_id  WHERE st.teacher_id=$teacher_id AND uc.course_id = $subject_id ";
      
 
@@ -1069,12 +1069,15 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
             if(!empty($subject_id) && empty($skill_id)){ //subject filter
                 
                 $courses_info= $course_obj->getChildCoursesOfSubject($subject_id,2,2);
+                $subskill_ids = [$subject_id];
                 $subject_subskill_ids = array();
-                foreach ($courses_info as $coursesinfo) {                     
-                    if($coursesinfo['status']==1){
+                if(count($courses_info)>0){
+                foreach ($courses_info as $coursesinfo) {                                    
+                    if(isset($coursesinfo['status']) && ($coursesinfo['status']==1)){
                       $subskill_ids = array_merge($subskill_ids, $coursesinfo['childcourse_ids'] );
                     }
                 }
+              }
                 
                 if(!empty($subskill_ids) ){
                   $subskill_counts = count($subskill_ids);
@@ -1087,12 +1090,12 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
                
                 //get all subskill_ids            
                 $base_url = Router::url('/', true);                                                             
-                $array_subskillidsinfo =$course_obj->getChildCoursesOfSubject($skill_id,1,2);        
+                $array_subskillidsinfo =$course_obj->getChildCoursesOfSubject($skill_id,1,2);
+                $subskill_ids = [$skill_id];        
                 if(!empty($array_subskillidsinfo)){              
                     if(isset($array_subskillidsinfo['childcourse_ids'])){
-                        $subskill_ids =$array_subskillidsinfo['childcourse_ids'] ;
-                    }
-                      
+                        $subskill_ids =array_merge($subskill_ids,$array_subskillidsinfo['childcourse_ids']) ;
+                    }                      
                 }
                 if(!empty($subskill_ids) ){ 
                   $subskill_counts = count($subskill_ids); 
@@ -1103,16 +1106,13 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
 
             elseif(!empty($subskill_id)){ //subskill filter
               $where .= " AND uq.course_id=$subskill_id ";
-
-            }elseif(!empty($student_classification)){
-
             }else{
                 //$where = "uq.user_id=".$studentrow['id'];
             }
 
 
 
-          $str= "SELECT max(score*100/exam_marks) as student_percentage FROM user_quizes as uq where $where GROUP BY course_id";
+        $str= "SELECT max(score*100/exam_marks) as student_percentage FROM user_quizes as uq where $where GROUP BY course_id"; 
           $stquizrecords = $connection->execute($str)->fetchAll('assoc');
           $student_subskill_marks= 0;
           $stRecord['student_marks'] =0;
@@ -1123,7 +1123,7 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
             foreach ($stquizrecords as $strow) {
               $student_subskill_marks= $student_subskill_marks+ $strow['student_percentage'];
             }
-            $student_subskill_marks_avg = $student_subskill_marks/$subskill_counts ;
+            $student_subskill_marks_avg = $student_subskill_marks/$subskill_counts ;           
             $stRecord['student_marks'] = $student_subskill_marks_avg;
           }
 
@@ -1148,21 +1148,24 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
 
           //if API has skill_id and subskill_id filter
           if(!empty($skill_id) || !empty($subskill_id) ){
-            if($userquiz_count>0){                           
+            
+            if($userquiz_count>0){                                          
               $data['students'][] = $stRecord;
               $data['status'] = True; 
-            }              
+            }
           }
           else{  
+
               $data['students'][] = $stRecord;
               $data['status'] = True;  
           }
-           
-        
-
-
-
+  
+    } // end foreach of students of a teacher
+        if(!isset($data['students'])){  //if no student list found
+            $data['status'] =False;
+            $data['message'] = "No student found for this seaching.";
         }
+
       }
       else{
         $data['status'] = False;
