@@ -1128,22 +1128,29 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
           }
 
           if($student_subskill_marks_avg <= REMEDIAL){            
-            $stRecord['student_marks_status'] = "REMEDIAL";            
+            $stRecord['student_marks_status'] = "REMEDIAL";
+            $stRecord['style_class'] = "remedial";            
           }
           elseif($student_subskill_marks_avg >REMEDIAL && $student_subskill_marks_avg <= STRUGGLING ){
             $stRecord['student_marks_status'] = "STRUGGLING";
+            $stRecord['style_class'] = "struggling";
           }
           elseif($student_subskill_marks_avg >STRUGGLING && $student_subskill_marks_avg <= ON_TARGET ){
               $stRecord['student_marks_status'] = "ON_TARGET";
+              $stRecord['style_class'] = "ontarget";
           }
           elseif($student_subskill_marks_avg >ON_TARGET && $student_subskill_marks_avg <= OUTSTANDING ){
             $stRecord['student_marks_status'] = "OUTSTANDING";
+            $stRecord['style_class'] = "outstanding";
           }
           elseif($student_subskill_marks_avg >OUTSTANDING && $student_subskill_marks_avg <= GIFTED ){
             $stRecord['student_marks_status'] = "GIFTED";
+            $stRecord['style_class'] = "gifted";
+
           }
           else{
               $stRecord['student_marks_status'] = "NOT_ATTACK";
+              $stRecord['style_class'] = "no_attack";
           }
 
           //if API has skill_id and subskill_id filter
