@@ -4639,7 +4639,7 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
   /**
    * This api is used for get student report of teacher
    */
-  public function getTeacherStudentReport($user_id=null,$grade=null,$course=null,$pgnum=1) {
+  public function getTeacherStudentReport($user_id=null,$grade=null,$course=null,$pnum=1) {
     try{
       $range = 10;
       $status = FALSE;
@@ -4648,6 +4648,7 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
       $i = 0;
       $total_sub_skill =1;
       $sub_skill_array = array();
+      $gap = array();
       if($user_id == null) {
         $message = 'Kindly Login';
         throw new Exception('Kindly Login');
@@ -4661,16 +4662,15 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
         $current_page = 1;
         $common_query = " SELECT student_id from student_teachers where "
                 . "teacher_id = $user_id AND grade_id = $grade AND course_id = $course";
-        $subskill_query = " Select course_id from course_details where parent_id "
-                . "IN(Select course_id from course_details where parent_id = $course)";
+        $subskill_query = " Select * from course_details where parent_id "
+                . "IN(Select course_id from course_details where parent_id = $course) ORDER BY parent_id ASC";
+        $skill_query = "Select * from course_details where parent_id = $course ORDER BY course_id ASC";
         if (!empty($pnum)) {
           $current_page = $pnum;
         }
-//        $question = TableRegistry::get('question_master');
         $connection = ConnectionManager::get('default');
         $sql = "select * from users where id IN ($common_query) ORDER BY id DESC ";
         $count = $connection->execute($sql)->count();
-//         $count = $question->find()->where(['created_by' => $user_id])->count();
         $last_page = ceil($count / $range);
         if ($current_page < 1) {
           $current_page = 1;
@@ -4678,11 +4678,11 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
           $current_page = $last_page;
         }
         $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
-        
         $connection = ConnectionManager::get('default');
         $sql = "select * from users where id IN ($common_query) ORDER BY id DESC $limit";
         $studentList = $connection->execute($sql)->fetchAll('assoc');
         $subskill =  $connection->execute($subskill_query)->fetchAll('assoc');
+        $skill =  $connection->execute($skill_query)->fetchAll('assoc');
         foreach($subskill as $key=>$value) {
           $sub_skill_array[$i] = $value['course_id'];
           $i++;
@@ -4694,8 +4694,9 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
           $started = 0;
           $temp = array();
           $j= 0 ;
+          $master_temp = array();
           $lsql = "select * from user_quizes where user_id = ".$value['id']." AND grade_id = $grade"
-                  . " AND course_id IN ($subskill_query) AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
+                  . " AND course_id IN (". implode(',',$sub_skill_array).") AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
           $quizAttempt = $connection->execute($lsql)->fetchAll('assoc');
           if(!empty($quizAttempt)) {
             foreach($quizAttempt as $ki => $val) {
@@ -4704,18 +4705,42 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
                   $temp[$j] = $val['course_id'];
                 }
                 $marks = ($val['score']/$val['exam_marks'])*100;
-                if($marks > 70) {
+                if($marks > QUIZ_PASS_SCORE) {
+                  if(!in_array($val['course_id'], $master_temp)){
+                    $master_temp[$j] = $val['course_id'];
+                  }
                   $mastered++;
                 }
                 $started++;
               }
             }
-            $student[$value['id']]['name'] = $value['id'];
+            $gap_array = array();
+            $student[$value['id']]['id'] = $value['id'];
             $student[$value['id']]['name'] = $value['first_name'].' '.$value['last_name'];
-            $student[$value['id']]['mastered'] = ($mastered*100)/$total_sub_skill;
-            $student[$value['id']]['started'] = (count($temp)*100)/$total_sub_skill;
-            $student[$value['id']]['notstarted'] = (($total_sub_skill-(count($temp)))*100)/$total_sub_skill;
+            $student[$value['id']]['mastered'] = round(($mastered*100)/$total_sub_skill,2);
+            $student[$value['id']]['started'] = round((count($temp)*100)/$total_sub_skill,2);
+            $student[$value['id']]['notstarted'] = round((($total_sub_skill-(count($temp)))*100)/$total_sub_skill,2);
             $student[$value['id']]['gap'] = $total_sub_skill - $mastered ;
+//            $gap_array = array_diff($temp, $master_temp);
+            $gap_array = array_diff($sub_skill_array, $master_temp);
+//            pr($gap_array);die();
+            $k = -1;
+            foreach ($subskill as $ke => $val) {
+              foreach($skill as $ki=> $vale){
+                if($val['parent_id'] == $vale['course_id']) {
+                  $k++;
+                  if(in_array($val['course_id'],$gap_array) ) {
+                    $gap[$value['id']][$k]['id'] = $value['id'];
+                    $gap[$value['id']][$k]['name'] = $value['first_name'].' '.$value['last_name'];
+                    $gap[$value['id']][$k]['skill_id'] = $vale['course_id'];
+                    $gap[$value['id']][$k]['skill_name'] = $vale['name'];
+                    $gap[$value['id']][$k]['sub_skill_id'] = $val['course_id'];
+                    $gap[$value['id']][$k]['sub_skill_name'] = $val['name'];
+                  } 
+                  break;
+                } 
+              }
+            }
             $mastered = 0;
             $notStarted = 0;
             $started = 0;
@@ -4723,13 +4748,32 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
             $j= 0 ;
             $status = true;
           }else{
-            $student[$value['id']]['name'] = $value['id'];
+            $student[$value['id']]['id'] = $value['id'];
             $student[$value['id']]['name'] = $value['first_name'].' '.$value['last_name'];
             $student[$value['id']]['mastered'] = 0;
             $student[$value['id']]['started'] = 0;
             $student[$value['id']]['notstarted'] = 0;
             $student[$value['id']]['gap'] = $total_sub_skill - $mastered ;
             $status = true;
+            $gap_array = array();
+            $gap_array = $sub_skill_array;
+            $k = -1;
+            foreach ($subskill as $ke => $val) {
+              foreach($skill as $ki=> $vale){
+                if($val['parent_id'] == $vale['course_id']) {
+                  $k++;
+                  if(in_array($val['course_id'],$gap_array) ) {
+                    $gap[$value['id']][$k]['id'] = $value['id'];
+                    $gap[$value['id']][$k]['name'] = $value['first_name'].' '.$value['last_name'];
+                    $gap[$value['id']][$k]['skill_id'] = $vale['course_id'];
+                    $gap[$value['id']][$k]['skill_name'] = $vale['name'];
+                    $gap[$value['id']][$k]['sub_skill_id'] = $val['course_id'];
+                    $gap[$value['id']][$k]['sub_skill_name'] = $val['name'];
+                  } 
+                  break;
+                } 
+              }
+            }
           }
         }        
       }
@@ -4740,12 +4784,158 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
     $this->set([
         'response' => $student,
         'message' => $message,
+        'gap' => $gap,
         'status' => $status,
         'lastPage' => $last_page,
         'start' => (($current_page - 1) * $range) + 1,
         'last' => (($current_page - 1) * $range) + $range,
         'total' => $count,
-        '_serialize' => ['response','message','status','lastPage', 'start', 'last', 'total']
+        '_serialize' => ['response','message','gap','status','lastPage', 'start', 'last', 'total']
+    ]);
+  }
+  
+  /**
+   * This api is used for get student report of teacher
+   */
+  public function getTeacherStudentGap($user_id=null,$grade=null,$course=null,$pnum=1,$id=null,$type=null) {
+    try{
+      $range = 5;
+      $status = FALSE;
+      $message = '';
+      $student = array();
+      $studentDetail= array();
+      $studentList = array();
+      $lackingStudent = 0;
+      $i = 0;
+      $total_sub_skill =1;
+      $sub_skill_array = array();
+      $lacking = array();
+      if($user_id == null) {
+        $message = 'Kindly Login';
+        throw new Exception('Kindly Login');
+      }else if($grade == null) {
+        $message = 'Some error occurred.';
+        throw new Exception('Please define Grade');
+      }else if($course == null) {
+        $message = 'Some error occurred.';
+        throw new Exception('Please define Course.');
+      }else{
+        $current_page = 1;
+        $common_query = " SELECT student_id from student_teachers where "
+                . "teacher_id = $user_id AND grade_id = $grade AND course_id = $course";
+        if (!empty($pnum)) {
+          $current_page = $pnum;
+        }
+        $connection = ConnectionManager::get('default');
+        $sql = "select * from users where id IN ($common_query) ORDER BY id DESC ";
+        $count = $connection->execute($sql)->count();
+        $last_page = ceil($count / $range);
+        if ($current_page < 1) {
+          $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+          $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+        $m = 0;
+        $connection = ConnectionManager::get('default');
+        if($id == null && $type == null) {
+          $sql = "select * from users where id IN ($common_query) ORDER BY id DESC";
+          $studentDetail = $connection->execute($sql)->fetchAll('assoc');
+          foreach ($studentDetail as $key => $value) {
+            $studentList[$m] = $value['id'];
+            $m++;
+          }
+        }else if ($id != null && $type == 'student') {
+          $sql = "select * from users where id = $id ORDER BY id DESC";
+          $studentDetail = $connection->execute($sql)->fetchAll('assoc');
+          foreach ($studentDetail as $key => $value) {
+            $studentList[$m] = $value['id'];
+            $m++;
+          }
+        }else if($id != null && $type == 'group') {
+          $sql = "select * from users where id IN(".explode(',',$id).") ORDER BY id DESC";
+          $studentDetail = $connection->execute($sql)->fetchAll('assoc');
+          foreach ($studentDetail as $key => $value) {
+            $studentList[$m] = $value['id'];
+            $m++;
+          }
+        }
+        $skill_query = "Select * from course_details where parent_id = $course ORDER BY course_id ASC $limit";
+        $skill =  $connection->execute($skill_query)->fetchAll('assoc');
+        $s = 0;
+        $skill_array = array();
+        foreach ($skill as $key => $value) {
+          $skill_array[$s] = $value['id'];
+          $s++;
+        }
+        $subskill_query = " Select * from course_details where parent_id "
+                . "IN(".  implode(',', $skill_array) .") ORDER BY parent_id ASC";
+        $subskill =  $connection->execute($subskill_query)->fetchAll('assoc');
+//        foreach($subskill as $key=>$value) {
+//          $sub_skill_array[$i] = $value['course_id'];
+//          $i++;
+//        }
+        $total_sub_skill = $i;
+        $p = 0;
+        $lack_subskill = array();
+        foreach ($skill as $key => $value) {
+          foreach($subskill as $ke=>$val) {
+            if($val['parent_id'] == $value['course_id']) {
+              $sub_skill_array[$i] = $val['course_id'];
+              $lack_subskill[$i]['sub_skill_id'] = $val['course_id'];
+              $lack_subskill[$i]['sub_skill_name'] = $val['name'];
+              $i++;
+            }
+          }
+          $count = 0;
+          $temp = array();
+          $j= 0 ;
+          $master_temp = array();
+          if(!empty($sub_skill_array)){
+            $lsql = "select *  from user_quizes where user_id IN (".implode(',',$studentList) .") AND grade_id = $grade"
+                  . " AND course_id IN (". implode(',',$sub_skill_array).") AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
+            $quizAttempt = $connection->execute($lsql)->fetchAll('assoc');
+            foreach($studentList as $ky=>$valu){
+              if(!empty($quizAttempt)) {
+                foreach($quizAttempt as $ki => $val) {
+                  if(in_array($val['course_id'], $sub_skill_array)) {
+                    $marks = ($val['score']/$val['exam_marks'])*100;
+                    if($marks < QUIZ_PASS_SCORE) {
+                      if(!in_array($val['user_id'], $temp)){
+                        $temp[$j] = $val['user_id'];
+                        $j++;
+                        $count++;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            $lackingStudentList = array_diff($studentList,$temp);
+            $lackingStudent = count($lackingStudentList);
+          }
+          $lacking[$p]['skill_id'] = $value['course_id'];
+          $lacking[$p]['skill_name'] = $value['name'];
+          $lacking[$p]['lack_student'] = $lackingStudent;
+          $lacking[$p]['sub_skill'] = $lack_subskill;
+          $p++;
+          $sub_skill_array = array();
+          $lack_subskill = array();
+        }
+      }
+    }catch(Exception $e) {
+       $this->log('Error in getTeacherStudentReport function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'response' => $lacking,
+        'message' => $message,
+        'status' => $status,
+        'lastPage' => $last_page,
+        'start' => (($current_page - 1) * $range) + 1,
+        'last' => (($current_page - 1) * $range) + $range,
+        'total' => $count,
+        '_serialize' => ['response','message','gap','status','lastPage', 'start', 'last', 'total']
     ]);
   }
 }
