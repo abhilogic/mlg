@@ -1443,11 +1443,11 @@ class CoursesController extends AppController{
 
 
   /** important  API will return skill and subskill of a subject
-        if find subskill of skill then child_level=1 and parent_id= skill_id
+        if find skill of subject then child_level=1 and parent_id= skill_id
         if find subskill of subject then child_level=2 and parent_id
         return_type defind return type =1/2 of function as as json=1 or array=2
    **/
-   public function getSkillListOfSubject($parent_id=null, $child_level=1, $return_type=1){ // child_level is hierarchical
+   public function getChildCoursesOfSubject($parent_id=null, $child_level=1, $return_type=1){ // child_level is hierarchical
       if(!empty($parent_id)){  // parent_id can be subject_id or skill_id.
             $connection = ConnectionManager::get('default');
            
@@ -1480,7 +1480,7 @@ class CoursesController extends AppController{
                 if(count($records) > 0) {
                     foreach ($records as $record) {
                         $cid = $record['id'];
-                        $data[]= $this->getSkillListOfSubject($record['id'],1,2);                                              
+                        $data[]= $this->getChildCoursesOfSubject($record['id'],1,2);                                              
                     }                    
                     $data['status'] = True;
                 }

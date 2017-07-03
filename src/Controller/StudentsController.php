@@ -71,7 +71,7 @@ public function getStudentAssignments($user_id = null, $subject_id=null){
 
             // find all subskill of subject on which assignments list need to findout
             $crObj = new CoursesController();
-            $courses_info= $crObj->getSkillListOfSubject($subject_id,2,2);
+            $courses_info= $crObj->getChildCoursesOfSubject($subject_id,2,2);
             
             $subskill_ids = array();
             foreach ($courses_info as $coursesinfo) {                     
@@ -634,11 +634,6 @@ public function getNeedAttentionOFStudent($student_id=null){
                     $assg['subject_id'] = 'issue/not found';
                 }
 
-
-
-
-
-
               if($stQuizRecord['student_result'] > QUIZ_PASS_SCORE){
                 $data['student_attention_records'][] = $stQuizRecord;
               }
@@ -658,6 +653,190 @@ public function getNeedAttentionOFStudent($student_id=null){
           '_serialize' => ['response']
         ]);
 }
+
+
+// API need attention of a student
+/* API to get Need Attention on teacher dashboard*/
+public function getStudentScoreForSubskills($student_id=null,$subject_id=null){
+  
+  $student_id = isset($_REQUEST['student_id']) ? $_REQUEST['student_id'] : $student_id;
+  $subject_id = isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
+  
+  if(!empty($student_id) && !empty($subject_id)){
+        $connection = ConnectionManager::get('default');
+
+        //step-1 get subskill list of a subject through which student is linked
+        $course_obj = new CoursesController();
+        $array_subskillidsinfo =$course_obj->getChildCoursesOfSubject($subject_id,2,2);
+        $subskill_ids = array();
+        if(!empty($array_subskillidsinfo)){
+            foreach ($array_subskillidsinfo as $resultsubskill) {
+              if(isset($resultsubskill['childcourse_ids'])){
+                    $subskill_ids =array_merge($subskill_ids,$resultsubskill['childcourse_ids']) ;
+              }
+            }
+        }
+        
+        // Step-2 after getting subskill get result of student on subskill
+        if(!empty($subskill_ids)){              
+
+            foreach ($subskill_ids as $subskillid) {
+
+               // to get subject/class , skill subskill name of a subject
+                $base_url = Router::url('/', true);
+                $json_courseinfo = $this->curlPost($base_url.'courses/getCourseInfo/'.$subskillid, array() );                
+                $array_courseinfo = (array)json_decode($json_courseinfo);
+                if(isset($array_courseinfo['response'])) {
+                    if(isset($array_courseinfo['response']->parent_info_of_skill)){
+                        
+                      $stQuizRecord['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
+                       $stQuizRecord['subject_id'] = $array_courseinfo['response']->parent_info_of_skill->id;
+                      $stQuizRecord['subject_name'] = $array_courseinfo['response']->parent_info_of_skill->course_name; 
+                      $stQuizRecord['skill_id'] = $array_courseinfo['response']->skill_info_of_subskill->id;
+                      $stQuizRecord['skill_name'] = $array_courseinfo['response']->skill_info_of_subskill->course_name;
+
+                       $stQuizRecord['subskill_id'] = $array_courseinfo['response']->course_Information->id;
+                      $stQuizRecord['subskill_name'] = $array_courseinfo['response']->course_Information->course_name;
+
+                      // get students quiz result for subskills
+                      $sql = "SELECT max((score*100)/exam_marks) as student_percentage FROM user_quizes as uq WHERE uq.user_id=$student_id AND uq.course_id=$subskillid AND uq.quiz_type_id IN (2,4,5,6,7) ORDER BY created DESC";
+            
+                      $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
+                      if(count($stQuizRecords) > 0){
+                          foreach ($stQuizRecords as $row) {                 
+                            $stQuizRecord['student_subskill_percentage'] = round($row['student_percentage'],2) ;         
+                          } // foreach end
+
+                          $data['status'] =True; 
+                          $data['student_percentage'][] = $stQuizRecord;      
+                      }else{
+                              $data['status'] =False;
+                              $data['message']="No Records For Your Attention.";                            
+                       }                                                 
+                    }else{
+                        $data['status'] =False;
+                         $data['message'] = 'No subjects found on this subskill.';
+                    }
+                }else{
+                      $data['status'] =False;
+                     $data['message'] = 'No subjects found on this subskill.';
+                }
+
+            } // end foreache of subskill
+
+        }else{
+            $data['status'] = False;
+            $data['message'] = "No subskill found for this subject.";
+        }
+  }else{
+        $data['status'] = False;
+        $data['message'] = "Student Id cannot null.";
+    }
+
+      $this->set([
+          'response' => $data, 
+          '_serialize' => ['response']
+        ]);
+}
+
+
+
+
+/*** API to call student records for skills ***/
+// API for student profile page in teacher module
+public function getStudentScoreForSkills($student_id=null,$subject_id=null){
+
+  $student_id = isset($_REQUEST['student_id']) ? $_REQUEST['student_id'] : $student_id;
+  $subject_id = isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id'] : $subject_id;
+  
+  if(!empty($student_id) && !empty($subject_id)){
+        $connection = ConnectionManager::get('default');
+
+        //step-1 get skill list of a subject through which student is linked
+        $course_obj = new CoursesController();
+        $array_skillidsinfo =$course_obj->getChildCoursesOfSubject($subject_id,1,2);        
+        $skill_ids = array();
+        if(!empty($array_skillidsinfo)){              
+            if(isset($array_skillidsinfo['childcourse_ids'])){
+               $skill_ids =array_merge($skill_ids,$array_skillidsinfo['childcourse_ids']) ;
+            }
+            
+        }
+        
+       
+        // Step-2 after getting skill get subskill list of skill
+        if(!empty($skill_ids)){              
+
+            foreach ($skill_ids as $skillid) {
+
+              // subskill information
+              $base_url = Router::url('/', true);
+              $stRecord =array();
+              $json_courseinfo = $this->curlPost($base_url.'courses/getCourseInfo/'.$skillid, array() );               
+              $array_courseinfo = (array)json_decode($json_courseinfo);
+              if(isset($array_courseinfo['response'])) {                
+                $stRecord['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
+                $stRecord['subject_id'] = $array_courseinfo['response']->parent_info_of_skill->id;
+                $stRecord['subject_name'] = $array_courseinfo['response']->parent_info_of_skill->course_name;     
+                $stRecord['skill_id'] = $array_courseinfo['response']->course_Information->id;
+                $stRecord['skill_name'] = $array_courseinfo['response']->course_Information->course_name;
+              }
+
+               //2. to get subskills of a skill
+                $array_subskillidsinfo =$course_obj->getChildCoursesOfSubject($skillid,1,2);        
+                $subskill_ids = array();                
+                if(!empty($array_subskillidsinfo)){              
+                    if(isset($array_subskillidsinfo['childcourse_ids'])){
+                        $subskill_ids =array_merge($subskill_ids,$array_subskillidsinfo['childcourse_ids']) ;
+                    }
+                    
+                }
+
+
+                //3. Now get the max result from all susbkills of a skill
+                if(!empty($subskill_ids)){
+                    $subskillids= implode(',', $subskill_ids);
+                    
+                    // get max result of a students in quizes of all subskills of a skill
+                    $sql = "SELECT uq.*,c.course_name as subskill_name, max((score*100)/exam_marks) as student_percentage FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
+                    WHERE uq.user_id=$student_id AND uq.course_id IN ($subskillids) AND uq.quiz_type_id IN (2,4,5,6,7) HAVING max((score*100)/exam_marks) ORDER BY created DESC"; 
+
+                      $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
+                      if(count($stQuizRecords) > 0){
+                        foreach ($stQuizRecords as $row) {                          
+                          $stRecord = array_merge($stRecord, $row);
+                          $stRecord['student_quiz_attempt'] =1;
+                        }
+                      }else{
+                        $stRecord['student_quiz_attempt'] =0;
+                      }
+                      $stRecord['status'] = True;
+                      
+                      
+                }else{
+                  $stRecord['status'] = False;
+                  $stRecord['message'] = "No subskills found.";
+                }
+               
+                $data['student_skill_percentage'][] = $stRecord;               
+
+            } // end foreache of skill
+
+        }else{
+            $data['status'] = False;
+            $data['message'] = "No skill found for this subject.";
+        }
+  }else{
+        $data['status'] = False;
+        $data['message'] = "Student Id cannot null.";
+    }
+
+      $this->set([
+          'response' => $data, 
+          '_serialize' => ['response']
+        ]);
+}
+
 
 
 
@@ -773,7 +952,7 @@ public function getStudentProgress($user_id=null){
                   foreach ($array_subjectsinfo['response']->student_courses as $sub) {
 
                       //step-2 get subskill list of a subject through which student is linked
-                      $json_subskillidsinfo = $this->curlPost($base_url.'courses/getSkillListOfSubject/'.$sub->id.'/2/1', array() );                      
+                      $json_subskillidsinfo = $this->curlPost($base_url.'courses/getChildCoursesOfSubject/'.$sub->id.'/2/1', array() );                      
                       $array_subskillidsinfo = (array)json_decode($json_subskillidsinfo);                      
                       if(isset($array_subskillidsinfo['response'])) {                        
                         if($array_subskillidsinfo['response']->status ==1){                          
@@ -849,6 +1028,160 @@ public function getStudentProgress($user_id=null){
     ]);
 
 }
+
+
+/***** API to get students of a teacher and their records  ***/
+public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,$skill_id=null,$subskill_id=null,$student_classification=null){
+ 
+  $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id']:$teacher_id;
+  $subject_id = isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id']:$subject_id;
+  $skill_id = isset($_REQUEST['skill_id']) ? $_REQUEST['skill_id']:$skill_id;
+  $subskill_id = isset($_REQUEST['subskill_id']) ? $_REQUEST['subskill_id']:$subskill_id;
+  $student_classification = isset($_REQUEST['student_classification']) ? $_REQUEST['student_classification']:$student_classification;
+
+   if(!empty($teacher_id) && !empty($subject_id)){
+
+
+      //get students
+      $connection = ConnectionManager::get('default');
+      $sql ="SELECT u.*, ud.profile_pic FROM student_teachers as st INNER JOIN users as u ON u.id=st.student_id INNER JOIN user_details as ud ON ud.user_id=st.student_id INNER JOIN user_courses as uc ON uc.user_id=st.student_id INNER JOIN courses as c ON c.id=uc.course_id  WHERE st.teacher_id=$teacher_id AND uc.course_id = $subject_id ";
+     
+
+      $student_records = $connection->execute($sql)->fetchAll('assoc');
+      $studentcount = count($student_records);
+      $course_obj = new CoursesController(); 
+
+      if ($studentcount > 0) {
+        foreach ($student_records as $studentrow) {
+          if ($studentrow['profile_pic'] == NULL) {
+            $studentrow['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
+          } else {
+            $studentrow['profile_pic'] = $studentrow['profile_pic'];
+          }
+
+          $stRecord = $studentrow;
+          $subskill_ids = array(); 
+          $subskill_counts = 1;
+
+            // get student records on subject, skill and subskill Filter
+            $where = "uq.user_id=".$studentrow['id'];
+
+            if(!empty($subject_id) && empty($skill_id)){ //subject filter
+                
+                $courses_info= $course_obj->getChildCoursesOfSubject($subject_id,2,2);
+                $subject_subskill_ids = array();
+                foreach ($courses_info as $coursesinfo) {                     
+                    if($coursesinfo['status']==1){
+                      $subskill_ids = array_merge($subskill_ids, $coursesinfo['childcourse_ids'] );
+                    }
+                }
+                
+                if(!empty($subskill_ids) ){
+                  $subskill_counts = count($subskill_ids);
+                  $course_subskillids = implode(',', $subskill_ids);
+                  $where .= " AND uq.course_id IN ($course_subskillids)";
+                }
+            }
+
+            elseif(!empty($skill_id) && empty($subskill_id)){ //skill filter
+               
+                //get all subskill_ids            
+                $base_url = Router::url('/', true);                                                             
+                $array_subskillidsinfo =$course_obj->getChildCoursesOfSubject($skill_id,1,2);        
+                if(!empty($array_subskillidsinfo)){              
+                    if(isset($array_subskillidsinfo['childcourse_ids'])){
+                        $subskill_ids =$array_subskillidsinfo['childcourse_ids'] ;
+                    }
+                      
+                }
+                if(!empty($subskill_ids) ){ 
+                  $subskill_counts = count($subskill_ids); 
+                  $subskillids = implode(',', $subskill_ids);
+                  $where .= " AND uq.course_id IN ($subskillids)";
+                }            
+            }
+
+            elseif(!empty($subskill_id)){ //subskill filter
+              $where .= " AND uq.course_id=$subskill_id ";
+
+            }elseif(!empty($student_classification)){
+
+            }else{
+                //$where = "uq.user_id=".$studentrow['id'];
+            }
+
+
+
+          $str= "SELECT max(score*100/exam_marks) as student_percentage FROM user_quizes as uq where $where GROUP BY course_id";
+          $stquizrecords = $connection->execute($str)->fetchAll('assoc');
+          $student_subskill_marks= 0;
+          $stRecord['student_marks'] =0;
+          $student_subskill_marks_avg =0;
+          $stRecord['student_marks_status']='';
+          $userquiz_count = count($stquizrecords);
+          if ($userquiz_count > 0) {              
+            foreach ($stquizrecords as $strow) {
+              $student_subskill_marks= $student_subskill_marks+ $strow['student_percentage'];
+            }
+            $student_subskill_marks_avg = $student_subskill_marks/$subskill_counts ;
+            $stRecord['student_marks'] = $student_subskill_marks_avg;
+          }
+
+          if($student_subskill_marks_avg <= REMEDIAL){            
+            $stRecord['student_marks_status'] = "REMEDIAL";            
+          }
+          elseif($student_subskill_marks_avg >REMEDIAL && $student_subskill_marks_avg <= STRUGGLING ){
+            $stRecord['student_marks_status'] = "STRUGGLING";
+          }
+          elseif($student_subskill_marks_avg >STRUGGLING && $student_subskill_marks_avg <= ON_TARGET ){
+              $stRecord['student_marks_status'] = "ON_TARGET";
+          }
+          elseif($student_subskill_marks_avg >ON_TARGET && $student_subskill_marks_avg <= OUTSTANDING ){
+            $stRecord['student_marks_status'] = "OUTSTANDING";
+          }
+          elseif($student_subskill_marks_avg >OUTSTANDING && $student_subskill_marks_avg <= GIFTED ){
+            $stRecord['student_marks_status'] = "GIFTED";
+          }
+          else{
+              $stRecord['student_marks_status'] = "NOT_ATTACK";
+          }
+
+          //if API has skill_id and subskill_id filter
+          if(!empty($skill_id) || !empty($subskill_id) ){
+            if($userquiz_count>0){                           
+              $data['students'][] = $stRecord;
+              $data['status'] = True; 
+            }              
+          }
+          else{  
+              $data['students'][] = $stRecord;
+              $data['status'] = True;  
+          }
+           
+        
+
+
+
+        }
+      }
+      else{
+        $data['status'] = False;
+        $data['message'] = "No students found for subject ";
+      } 
+
+
+  }else{
+      $data['status'] =False;
+      $data['message'] = "The teacher_id and subject_id cannot be null.";
+  }
+
+  $this->set([
+    'response' =>$data,
+    '_serialize'=>['response']
+  ]);
+
+}
+
 
 /* To find award acheive of children for parent */
   public function getAwardsofChild($child_id=null){
@@ -934,7 +1267,6 @@ public function getStudentProgress($user_id=null){
       curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
       $response = curl_exec($ch);
       curl_close($ch);
-
       return $response;
   }
  
