@@ -628,7 +628,7 @@ class TeachersController extends AppController {
           } else {
             $standard = implode(',', $this->request->data['standard']);
             //$standard_type = implode(',', $this->request->data['standard_type']);
-            $question = implode(',', $this->request->data['ques_type']);
+            $question = $this->request->data['ques_type'];
             $content = $template_detail->newEntity();
             $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
             $content->created_by = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
@@ -1705,7 +1705,7 @@ class TeachersController extends AppController {
             $question->course_id = $value;
             $question->level = $this->request->data['ques_diff_name'];
             $question->difficulty_level_id = $this->request->data['ques_diff'];
-            $question->type = implode(',', $this->request->data['ques_type']);
+            $question->type =  $this->request->data['ques_type'];
             $question->standard = implode(',', $this->request->data['standard']);
             $question->status = 'approved';
             $question->marks = $marks;
