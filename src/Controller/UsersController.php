@@ -3402,7 +3402,7 @@ class UsersController extends AppController{
   /**
   * This api is used for get parent child report
   * **/
-public function getParentChildReport($user_id=null,$pgnum=1){
+public function getParentChildReport($user_id=null,$pnum=1){
     $range = 10;
     $status = FALSE;
     if(!empty($user_id)){
@@ -3977,7 +3977,7 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
   /**
   * This api is used for get parent child assignment
   * **/
-  public function getParentChildAssignment($user_id=null,$parent_id=null,$pgnum=1){
+  public function getParentChildAssignment($user_id=null,$parent_id=null,$pnum=1){
     try{
       $range = 10;
       if(!empty($user_id)){
@@ -4084,13 +4084,14 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
    $this->set([
         'attempted_assignment' => $attempted_assignment,
         'assignment_list' =>  $assignmentdetails,
-        '_serialize' => ['attempted_assignment','assignment_list']
+        'lastPage' => $last_page,
+        '_serialize' => ['attempted_assignment','assignment_list','lastPage']
     ]);
  }
  /**
   * This api is used for get parent child reward
   * **/
- public function getParentChildReward($user_id=null,$pgnum=1){
+ public function getParentChildReward($user_id=null,$pnum=1){
     try{
       $range = 10;
       if(!empty($user_id)){
@@ -4120,7 +4121,8 @@ public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
    }
    $this->set([
         'response' => $results ,
-        '_serialize' => ['response']
+        'lastPage' => $last_page,
+        '_serialize' => ['response','lastPage']
     ]);
  }
  /**
