@@ -62,8 +62,8 @@ class TeachersController extends AppController {
                       'country' => $country,
                       'state' => $state,
                       'district' => $district,
-                      'district' => $school_address,
-                      'district' => $zipcode,
+                      'school_address' => $school_address,
+                      'zipcode' => $zipcode,
                       'step_completed' => 1
                   ])->where(['user_id' => $id])->execute();
           $row_count = $result->rowCount();
@@ -3517,6 +3517,7 @@ class TeachersController extends AppController {
       $count = '';
       $result = '';
       $subskills = '';
+      $subskill_list = array();
       $users_record = '';
       $range = 10;
       if ($user_id == NULL) {
@@ -3551,6 +3552,8 @@ class TeachersController extends AppController {
             $subskil = $course_detail->find('all')->where(['parent_id IN' => $skils]);
             foreach ($subskil as $key => $value) {
               $subskill[$key] = $value['course_id'];
+              $subskill_list[$key]['id'] = $value['course_id'];
+              $subskill_list[$key]['name'] = $value['name'];
             }
           } else if ($grade != -1 && $course != -1 && $skill == -1) {
             $result = $course_detail->find('all')->where(['parent_id' => $course])->toArray();
@@ -3561,6 +3564,8 @@ class TeachersController extends AppController {
             $subskills = $course_detail->find('all')->where(['parent_id IN' => $skills]);
             foreach ($subskills as $key => $value) {
               $subskill[$key] = $value['course_id'];
+              $subskill_list[$key]['id'] = $value['course_id'];
+              $subskill_list[$key]['name'] = $value['name'];
             }
             if (empty($subskill)) {
               $message = 'Result Not Found.';
@@ -3569,12 +3574,21 @@ class TeachersController extends AppController {
             $subskil = $course_detail->find()->where(['parent_id IN' => $skill])->toArray();
             foreach ($subskil as $key => $value) {
               $subskill[$key] = $value['course_id'];
+              $subskill_list[$key]['id'] = $value['course_id'];
+              $subskill_list[$key]['name'] = $value['name'];
             }
             if (empty($subskill)) {
               $message = 'Result Not Found.';
             }
           }
-          $users_record = $course_content->find('all')->where(['course_detail_id IN' => $subskill, 'created_by' => $user_id])->toArray();
+//          $users_record = $course_content->find('all')->where(['course_detail_id IN' => $subskill, 'created_by' => $user_id])->toArray();
+           $connection = ConnectionManager::get('default');
+           $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
+                . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
+                . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
+                . " WHERE course_contents.created_by = " . $user_id ." AND course_contents.course_detail_id IN(".implode(',',$subskill) .")"
+                . " ORDER BY course_contents.id DESC  $limit";
+          $users_record = $connection->execute($sql)->fetchAll('assoc'); 
         }
       }
     } catch (Exception $e) {
