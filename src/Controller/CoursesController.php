@@ -1507,5 +1507,35 @@ class CoursesController extends AppController{
         
     
     }// end function
-
+  /**
+   * This api is used for getting standard.
+   **/
+   public function getStandard($type,$grade,$course_id){
+     try{
+       $message = '';
+       if($type == null || $type == ''){
+         $message = 'Select standard type';
+         throw new Exception('Select standard type');
+       }else if($grade == null || $grade == ''){
+         $message = 'Select grade';
+         throw new Exception('Select grade');
+       }else if($course_id == null || $course_id == ''){
+         $message = 'Select course';
+         throw new Exception('Select course.');
+       }else{
+         $connection = ConnectionManager::get('default');
+         $sql = "select * from standard where type = '$type' AND grade_id = $grade AND course_id = $course_id";
+         $standardList = $connection->execute($sql)->fetchAll('assoc');
+       }
+     }catch(Exception $e){
+       $this->log('Error in getStandard function in Courses Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+     }
+     $this->set([
+        'response' => $standardList,
+        'message' => $message,
+//        'status' => $status,
+        '_serialize' => ['response','message']
+    ]);
+   }
 }

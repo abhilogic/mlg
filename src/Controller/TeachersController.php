@@ -562,10 +562,10 @@ class TeachersController extends AppController {
             $message = "please select a grade.";
           } elseif ($this->request->data['course'] == '-1') {
             $message = "please select a course.";
-          } elseif (empty($this->request->data['standard'])) {
-            $message = "please select a standard.";
           } elseif (empty($this->request->data['standard_type'])) {
             $message = "please select a standard type.";
+          } elseif (empty($this->request->data['standard'])) {
+            $message = "please select a standard.";
           } elseif (empty($this->request->data['lesson'])) {
             $message = "please select a lesson name";
           } elseif (empty($this->request->data['skills'])) {
@@ -601,6 +601,8 @@ class TeachersController extends AppController {
             $message = "please select a grade.";
           } elseif ($this->request->data['course'] == '-1') {
             $message = "please select a course.";
+          } elseif (empty($this->request->data['standard_type'])) {
+            $message = "please select a standard type.";
           } elseif (empty($this->request->data['standard'])) {
             $message = "please select a standard.";
           } elseif (empty($this->request->data['skills'])) {
@@ -627,14 +629,14 @@ class TeachersController extends AppController {
             $message = 'Please give template name.';
           } else {
             $standard = implode(',', $this->request->data['standard']);
-            //$standard_type = implode(',', $this->request->data['standard_type']);
+            $standard_type = implode(',', $this->request->data['standard_type']);
             $question = $this->request->data['ques_type'];
             $content = $template_detail->newEntity();
             $content->template_name = isset($this->request->data['temp_name']) ? $this->request->data['temp_name'] : '';
             $content->created_by = isset($this->request->data['tid']) ? $this->request->data['tid'] : '';
             $content->grade = isset($this->request->data['grade']) ? $this->request->data['grade'] : '';
             $content->standard = $standard;
-            //$content->standard_type = $standard_type;
+            $content->standard_type = $standard_type;
             $content->course_id = isset($this->request->data['course']) ? $this->request->data['course'] : '';
             $content->skill_ids = implode(',', $this->request->data['skills']);
             $content->sub_skill_ids = implode(',', $this->request->data['sub_skill']);
@@ -1657,9 +1659,13 @@ class TeachersController extends AppController {
           $message = "please select a grade.";
         } elseif ($this->request->data['course'] == '-1') {
           $message = "please select a course.";
-        } elseif (empty($this->request->data['standard'])) {
+        } 
+//        elseif (empty($this->request->data['standard_type'])) {
+//          $message = "please select a standard type.";
+//        } 
+        elseif (empty($this->request->data['standard'])) {
           $message = "please select a standard.";
-        } elseif (empty($this->request->data['skills'])) {
+        }elseif (empty($this->request->data['skills'])) {
           $message = "please select skills.";
         } elseif (empty($this->request->data['sub_skill'])) {
           $message = "please select sub skills.";
