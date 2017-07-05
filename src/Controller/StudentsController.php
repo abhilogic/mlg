@@ -688,7 +688,8 @@ public function getStudentScoreForSubskills($student_id=null,$subject_id=null){
                 $array_courseinfo = (array)json_decode($json_courseinfo);
                 if(isset($array_courseinfo['response'])) {
                     if(isset($array_courseinfo['response']->parent_info_of_skill)){
-                        
+                      
+                      $stQuizRecord['grade_id'] = $array_courseinfo['response']->parent_info_of_skill->level_id;
                       $stQuizRecord['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
                        $stQuizRecord['subject_id'] = $array_courseinfo['response']->parent_info_of_skill->id;
                       $stQuizRecord['subject_name'] = $array_courseinfo['response']->parent_info_of_skill->course_name; 
@@ -743,7 +744,7 @@ public function getStudentScoreForSubskills($student_id=null,$subject_id=null){
 
 
 /*** API to call student records for skills ***/
-// API for student profile page in teacher module
+// API for student profile page in teacher module for student line chart graph for grade analysis
 public function getStudentScoreForSkills($student_id=null,$subject_id=null){
 
   $student_id = isset($_REQUEST['student_id']) ? $_REQUEST['student_id'] : $student_id;
@@ -797,8 +798,8 @@ public function getStudentScoreForSkills($student_id=null,$subject_id=null){
                 if(!empty($subskill_ids)){
                     $subskillids= implode(',', $subskill_ids);
                     
-                    // get max result of a students in quizes of all subskills of a skill
-                    $sql = "SELECT uq.*,c.course_name as subskill_name, max((score*100)/exam_marks) as student_percentage FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
+                    //Start-  Student Score: get avg result of a students  in attemped quizes of all subskills of a skill
+                    $sql = "SELECT uq.*,c.course_name as subskill_name, avg((score*100)/exam_marks) as student_percentage,  FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
                     WHERE uq.user_id=$student_id AND uq.course_id IN ($subskillids) AND uq.quiz_type_id IN (2,4,5,6,7) HAVING max((score*100)/exam_marks) ORDER BY created DESC"; 
 
                       $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
@@ -810,15 +811,36 @@ public function getStudentScoreForSkills($student_id=null,$subject_id=null){
                       }else{
                         $stRecord['student_quiz_attempt'] =0;
                       }
-                      $stRecord['status'] = True;
-                      
+                      //Start-  Student Score:
+
+
+                      //4. start - class students of a teacher : avg score
+
+
+                        $sql = "SELECT uq.*,c.course_name as subskill_name, avg((score*100)/exam_marks) as student_percentage,  FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
+                          WHERE uq.user_id=$student_id AND uq.course_id IN ($subskillids) AND uq.quiz_type_id IN (2,4,5,6,7) ORDER BY created DESC"; 
+
+                      $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
+                      if(count($stQuizRecords) > 0){
+                        foreach ($stQuizRecords as $row) {                          
+                          $stRecord = array_merge($stRecord, $row);
+                          $stRecord['student_quiz_attempt'] =1;
+                        }
+                      }else{
+                        $stRecord['student_quiz_attempt'] =0;
+                      }
+
+                      //end - class students avg score
+                                           
                       
                 }else{
                   $stRecord['status'] = False;
                   $stRecord['message'] = "No subskills found.";
                 }
                
-                $data['student_skill_percentage'][] = $stRecord;               
+                $data['status']= True;
+                $data['student_skill_percentage'][] = $stRecord;
+
 
             } // end foreache of skill
 
@@ -839,6 +861,138 @@ public function getStudentScoreForSkills($student_id=null,$subject_id=null){
 
 
 
+/*** 
+Important
+  The function we return the list of classmates of a students.
+  This function will return Json(return_type=1) and array(return_type=2)
+  If student if belong to teacher then classmate will return accordingly
+  but if students/child is belog to parent then returns all classmates belong to same grade of the portal
+***/
+public function getClassmatesofStudent($student_id=null, $return_type=1){
+    $student_id = isset($_REQUEST['student_id'])? $_REQUEST['student_id'] : $student_id;
+    if(!empty($student_id)){
+        //1. check teacher of the student
+        $connection = ConnectionManager::get('default');
+       $sql = "SELECT teacher_id, uc.course_id, c.course_name,c.level_id, l.name FROM student_teachers as st 
+                INNER JOIN user_courses as uc ON uc.user_id=st.student_id
+                INNER JOIN courses as c ON c.id=uc.course_id
+                INNER JOIN levels as l ON l.id=c.level_id
+                WHERE student_id=$student_id";
+
+        $steacher = $connection->execute($sql)->fetchAll('assoc');
+        if(count($steacher) > 0){  // that means student is beloning to a teacher
+          foreach ($steacher as $trow) {
+              $teacher_id = $trow['teacher_id'];              
+              $subject_id = $trow['course_id'];
+              $subject_name = $trow['course_name'];
+              $grade_id = $trow['level_id'];
+               $grade_name = $trow['name'];
+
+               //2. get classmates list
+                $sql1 = "SELECT u.* FROM users as u 
+                          INNER JOIN user_details as ud ON ud.user_id=u.id
+                          INNER JOIN user_courses as uc ON uc.user_id=u.id
+                          INNER JOIN student_teachers as st ON st.student_id=u.id                          
+                          WHERE st.teacher_id=$teacher_id AND uc.course_id=$subject_id"; 
+
+                  $stclassmates = $connection->execute($sql1)->fetchAll('assoc');
+                  if(count($stclassmates) > 0){
+                    foreach ($stclassmates as $stclassmate) {
+                        $stclassmate['grade_id'] = $grade_id;
+                        $stclassmate['grade_name'] =$grade_name;
+                        $stclassmate['subject_id'] = $subject_id;
+                        $stclassmate['subject_name'] = $subject_name;
+                        
+                        $st_classmates[]= $stclassmate; 
+                        $st_classmate_ids['classmates_ids'][]= $stclassmate['id'];                    
+                    }
+                  }
+
+                  if(count($st_classmates) > 0){
+                    $data['student_classmates'][$subject_name] = array_merge($st_classmates, $st_classmate_ids );
+                  }else{
+                    $data['status'] =False;
+                    $data['message'] = "No classmates found.";
+                  }
+          }
+      }
+        else{  // that means student is beloning to a parents only
+
+              $str = "SELECT  ud.parent_id,c.level_id, l.name, uc.course_id, c.course_name FROM users as u
+                      INNER JOIN user_details as ud ON ud.user_id=u.id                      
+                      INNER JOIN user_courses as uc ON uc.user_id=u.id
+                      INNER JOIN courses as c ON c.id=uc.course_id
+                      INNER JOIN levels as l ON l.id=c.level_id
+                      WHERE ud.user_id=$student_id";
+              $stparent = $connection->execute($str)->fetchAll('assoc');
+              if(count($stparent) > 0){
+                  foreach ($stparent as $prow) {
+                      $parent_id = $prow['parent_id'];                                   
+                      $subject_id = $prow['course_id'];
+                      $subject_name = $prow['course_name'];
+                      $grade_id = $prow['level_id'];
+                      $grade_name = $prow['name'];
+                      $st_classmates=[];
+                      $st_classmate_ids['classmates_ids']=[];
+
+
+                      //2. get classmates list
+                       $sql1 = "SELECT u.* FROM users as u 
+                                INNER JOIN user_details as ud ON ud.user_id=u.id
+                                INNER JOIN user_courses as uc ON uc.user_id=u.id                               
+                                WHERE uc.course_id=$subject_id AND u.id!=$student_id"; 
+
+                          $stclassmates = $connection->execute($sql1)->fetchAll('assoc');
+                          if(count($stclassmates) > 0){
+                            foreach ($stclassmates as $stclassmate) {
+                                $stclassmate['grade_id'] = $grade_id;
+                                $stclassmate['grade_name'] =$grade_name;
+                                $stclassmate['subject_id'] = $subject_id;
+                                $stclassmate['subject_name'] = $subject_name;
+                                
+                                $st_classmates[]= $stclassmate; 
+                                $st_classmate_ids['classmates_ids'][]= $stclassmate['id'];                    
+                            }
+                          }
+
+                          if(count($st_classmates) > 0){
+                            $data['student_classmates'][$subject_name] = array_merge($st_classmates, $st_classmate_ids );
+                          }else{
+                            $data['status'] =False;
+                            $data['message'] = "No classmates found.";
+                          }
+
+
+
+
+
+                  }
+              }else{
+                $data['status'] = False;
+                $data['message'] = "Please set the correct student id.";
+              }
+
+        }
+
+
+
+
+
+    }else{
+
+
+    }
+
+    if($return_type==1){
+      $this->set([
+          'response' => $data, 
+          '_serialize' => ['response']
+        ]);
+    }else{
+      return $data;
+    }
+
+}
 
 /***
        API subskil Analytic of a student for profile 

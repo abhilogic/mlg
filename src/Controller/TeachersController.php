@@ -1813,7 +1813,7 @@ class TeachersController extends AppController {
         $skill_id = $this->request->data['skill_id'];
         $subskill_id = $this->request->data['subskill_id'];
         $questions_limit = $this->request->data['questions_limit'];
-        $difficulty_level = $this->request->data['difficulty_level'];
+        $difficulty_level = isset($this->request->data['difficulty_level'])?$this->request->data['difficulty_level']:null;
 
         $difficulty = 'NA';
         if (!empty($difficulty_level)) {
