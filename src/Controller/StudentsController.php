@@ -800,7 +800,7 @@ public function getStudentScoreForSkills($student_id=null,$subject_id=null){
                     $subskillids= implode(',', $subskill_ids);
                     
                     //Start-  Student Score: get avg result of a students  in attemped quizes of all subskills of a skill
-                    $sql = "SELECT uq.*,c.course_name as subskill_name, avg((score*100)/exam_marks) as student_percentage,  FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
+                    $sql = "SELECT uq.*,c.course_name as subskill_name, avg((score*100)/exam_marks) as student_percentage  FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
                     WHERE uq.user_id=$student_id AND uq.course_id IN ($subskillids) AND uq.quiz_type_id IN (2,4,5,6,7) HAVING max((score*100)/exam_marks) ORDER BY created DESC"; 
 
                       $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
