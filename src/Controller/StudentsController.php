@@ -629,13 +629,13 @@ public function getNeedAttentionOFStudent($student_id=null){
                 if(isset($array_courseinfo['response']->parent_info_of_skill)){
                     $stQuizRecord['subject_id'] = $array_courseinfo['response']->parent_info_of_skill->id;
                     $stQuizRecord['subject_name'] = $array_courseinfo['response']->parent_info_of_skill->course_name;
-                    $stQuizRecord['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
+                  $stQuizRecord['class_name'] = $array_courseinfo['response']->parent_info_of_skill->grade_name;
                 }
             }else{
                     $assg['subject_id'] = 'issue/not found';
                 }
 
-              if($stQuizRecord['student_result'] > QUIZ_PASS_SCORE){
+              if($stQuizRecord['student_result'] < QUIZ_PASS_SCORE){
                 $data['student_attention_records'][] = $stQuizRecord;
               }
           } 
