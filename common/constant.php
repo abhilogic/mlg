@@ -28,8 +28,7 @@ define('PRINCIPAL_ROLE_ID', 6);
 //default image directory
 define('DEFAULT_IMAGE_DIRECTORY', 'upload/');
 
-//quiz_pass_score
-define('QUIZ_PASS_SCORE', 80);
+
 
 
 
@@ -52,6 +51,10 @@ define('PAYPAL_CURRENCY', 'USD');
 
 
 
+//quiz_pass_score
+define('QUIZ_PASS_SCORE', 80);
+
+
 // Class Students classification
 define('NO_ATTACK', 0); //student not present in user_quiz
 define('REMEDIAL', 50); //student scored 0 to 50
@@ -61,12 +64,30 @@ define('OUTSTANDING',95 ); // student scored 86 to 95
 define('GIFTED',100 );  // 96 to 100
 
 
+// Student conquered score
+define('CONQUERED', 80);
 
 
-  	
+//Awards criteria
+define('RED_BADGE', 85); //student have 80-85 score
+define('GREEN_BADGE',90); //student have 86-90 score
+define('STAR_BADGE', 95);  // student have 91-95 score
+define('CROWN_BADGE', 100);  //student have 96-100 score
+
+
+
+// Notification Category Ids
+define('NOTIFICATION_CATEGORY_ANALYTICS', 1);
+define('NOTIFICATION_CATEGORY_OFFERS', 2);
+define('NOTIFICATION_CATEGORY_SUBSCRIPTIONS', 3);
+define('NOTIFICATION_CATEGORY_COUPONS', 4);
+
+//Notification limit
+define('NOTIFICATION_LIMIT', 10);
 
 
 
 
 
-
+// ALERT_BEFORE_SUBSCRIPTION_EXPIRE" contain the no. of day after child subscription will expire
+define('ALERT_BEFORE_SUBSCRIPTION_EXPIRE', 7);

@@ -337,9 +337,9 @@ public function setUserQuizResponse(){
     if ($this->request->is('post')) {  
         $quiz_marks=0;  
         $student_score=0;
-        $attamp_questions=1;
+        $attamp_questions=0;
         $skip_count=0; 
-        $quiz_questions = 1;
+        $quiz_questions = 0;
        $attendQuizResponses= $this->request->data;
 
 
@@ -380,6 +380,24 @@ public function setUserQuizResponse(){
                 $data['message']="Successfull data is save.";
                 $data['status']="true";
 
+                  //set quiz for student in notification.
+                  $payment_controller = new PaymentController();
+                  $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+                  $param['return_transfer'] = TRUE;
+                  $param['post_fields'] = array(
+                    'user_id' => $uid,
+                    'role_id' => STUDENT_ROLE_ID,
+                    'bundle' => 'ANALYTICS',
+                    'category_id' => NOTIFICATION_CATEGORY_ANALYTICS,
+                    'sub_category_id' => $postdata['user_quiz_id'],
+                    'title' => 'QUIZ',
+                    'description' => 'sub category id defines quiz type',
+                    'created_date' =>  date('Y-m-d H:i:s')
+                  );
+                  $param['json_post_fields'] = TRUE;
+                  $param['curl_post'] = 1;
+                  $payment_controller->sendCurl($param);
+
                   //1. Add each question attamp response in user_quiz_response 
                   $userQuizResponses = TableRegistry::get('UserQuizResponses');                 
                   foreach ($attendQuizResponses as $attendQuizRes) {
@@ -417,7 +435,7 @@ public function setUserQuizResponse(){
                   }
 
                   //2. save data in user points
-                  if($points==1){
+                  if($pass==1){
                     $userPoints = TableRegistry::get('UserPoints');
                     $new_userPoints= $userPoints->newEntity(array('user_id'=>$uid, 'quiz_id'=>$eid ,'point_type_id'=>7 ,'points' =>$points, 'status'=>1,'created_date'=>time() ) );
                       if ($resultpoints=$userPoints->save($new_userPoints)) {
@@ -666,10 +684,7 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
                     $data['status'] =False;
                     $data['message'] = "No quiz is attend by student for subskill ".$row['course_name'];
                   }
-
-
-
-                    
+              
               } 
 
           }
@@ -677,13 +692,7 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
             $data ['status'] =False;
             $data['message'] = "No Subskill added on this skill.";
           }
-          
-        
-
-
-
-
-
+      
       }else{
         $data['status'] = False;
         $data['message'] ="please set skill_id and user_id";

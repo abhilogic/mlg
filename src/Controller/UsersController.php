@@ -656,6 +656,32 @@ class UsersController extends AppController{
                         $warning = 1;
                         $child_info[] = $child;
                       }
+
+                      // if subcription is going to expire after the defiend alert days
+                      // the activity will be stored to notification.
+                      // "ALERT_BEFORE_SUBSCRIPTION_EXPIRE" contain the no of day after child
+                      //  subscription will expire.
+                      $date_1 = date_create();
+                      $date_2 = date_create($child['subscription_end_date']);
+                      $diff = date_diff($date_1,$date_2);
+                      if ($diff->d < ALERT_BEFORE_SUBSCRIPTION_EXPIRE) {
+                        $payment_controller = new PaymentController();
+                        $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+                        $param['return_transfer'] = TRUE;
+                        $param['post_fields'] = array(
+                          'user_id' => $child['user_id'],
+                          'role_id' => STUDENT_ROLE_ID,
+                          'bundle' => 'SUBSCRIPTIONS',
+                          'category_id' => NOTIFICATION_CATEGORY_SUBSCRIPTIONS,
+                          'sub_category_id' => $child['user_id'],
+                          'title' => 'SUBSCRIPTION EXPIRE',
+                          'description' => 'expire in ' . $diff->d . ' day(s)',
+                          'created_date' =>  date('Y-m-d H:i:s')
+                          );
+                        $param['json_post_fields'] = TRUE;
+                        $param['curl_post'] = 1;
+                        $payment_controller->sendCurl($param);
+                      }
                     }
                   }
                 }
@@ -1997,7 +2023,8 @@ class UsersController extends AppController{
        'status' => $status,
        'message' => $message,
        'result' => $offer_list,
-       '_serialize' => ['status', 'message', 'result']
+       'base_url' => Router::url('/', true),
+       '_serialize' => ['status', 'message', 'result', 'base_url']
      ]);
    }
 
@@ -2370,7 +2397,127 @@ class UsersController extends AppController{
       'message' => $message,
       'user_type' => $user_type,
       'result' => $coupon_results,
-      '_serialize' => ['status', 'message', 'user_type', 'result']
+      'base_url' => Router::url('/', true),
+      '_serialize' => ['status', 'message', 'user_type', 'result', 'base_url']
+    ]);
+  }
+
+  /*
+   * function setCoupon().
+   */
+  public function setCoupon() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $request = $this->request;
+      if ($request->is('post')) {
+        $data = $request->data;
+
+        // for coupon table
+        if (!isset($data['title']) || empty($data['title'])) {
+          $message = 'Title can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['description']) || empty($data['description'])) {
+          $message = 'Description can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['validity']) || empty($data['validity'])) {
+          $message = 'Validity can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['applied_for']) || empty($data['applied_for'])) {
+          $message = 'Category must be specified for coupon';
+          throw new Exception($message);
+        }
+        if (!isset($data['coupon_code'])) {
+          $message = 'Coupon code key must be included , either with code or empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['user_type']) || empty($data['user_type'])) {
+          $message = 'user type can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['external_coupon'])) {
+          $message = 'External coupon key must be included , either with code or empty';
+          throw new Exception($message);
+        }
+        if (isset($data['external_coupon']) && ($data['external_coupon'] == 0)
+          && empty($data['coupon_code'])) {
+          $message = 'Internal coupon must have coupon code';
+          throw new Exception($message);
+        }
+
+        //for coupon conditions
+        if (!isset($data['condition_key']) || empty($data['condition_key'])) {
+          $message = 'condition key can not be empty';
+          throw new Exception($message);
+        }
+        if (!isset($data['condition_value']) || empty($data['condition_value'])) {
+          $message = 'condition value can not be empty';
+          throw new Exception($message);
+        }
+        $image = array();
+        if (isset($data['image'])) {
+          $image = $this->_uploadFiles($data['image'], DEFAULT_IMAGE_DIRECTORY);
+        }
+        $coupons_table = TableRegistry::get('coupons');
+        $new_coupon = $coupons_table->newEntity(array(
+          'title' => $data['title'],
+          'description' => $data['description'],
+          'image' => !empty($image) ? $image['file_name'] : '',
+          'coupon_code' => isset($data['coupon_code']) ? $data['coupon_code'] : '',
+          'validity' => $data['validity'],
+          'max_users' => isset($data['max_users']) ? $data['max_users'] : 0,
+          'user_type' => $data['user_type'],
+          'applied_for' => $data['applied_for'],
+          'external_coupon' => $data['external_coupon'],
+        ));
+        if ($coupons_table->save($new_coupon)) {
+          $coupon_conditions_table = TableRegistry::get('coupon_conditions');
+          $new_conditions = $coupon_conditions_table->newEntity(array(
+            'coupon_id' => $new_coupon->id,
+            'condition_key' => $data['condition_key'],
+            'condition_value' => $data['condition_value'],
+            'created' => date('Y-m-d'),
+            'modified' => date('Y-m-d')
+          ));
+          if (!$coupon_conditions_table->save($new_conditions)) {
+            $message = 'Some error occured';
+            throw new Exception('Unable to save coupon conditions');
+          }
+          $status = TRUE;
+          if (strtoupper($data['applied_for']) == 'OFFER') {
+            //set for parent offers
+            $payment_controller = new PaymentController();
+            $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+            $param['return_transfer'] = TRUE;
+            $param['post_fields'] = array(
+              'user_id' => 0,
+              'role_id' => PARENT_ROLE_ID,
+              'bundle' => 'OFFERS',
+              'category_id' => NOTIFICATION_CATEGORY_OFFERS,
+              'sub_category_id' => $new_coupon->id,
+              'title' => 'OFFERS',
+              'description' => 'Offer for parent',
+              'created_date' =>  date('Y-m-d H:i:s')
+            );
+            $param['json_post_fields'] = TRUE;
+            $param['curl_post'] = 1;
+            $payment_controller->sendCurl($param);
+          }
+        } else {
+          $message = 'Some error occured';
+          throw new Exception('Unable to save coupon');
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
     ]);
   }
 
@@ -2412,7 +2559,8 @@ class UsersController extends AppController{
       'status' => $status,
       'message' => $message,
       'result' => $coupons_status_result,
-      '_serialize' => ['status', 'message', 'result']
+      'base_url' => Router::url('/', true),
+      '_serialize' => ['status', 'message', 'result', 'base_url']
     ]);
   }
 
@@ -2534,9 +2682,27 @@ class UsersController extends AppController{
               throw new Exception('unable to save in coupon availble transactions');
             }
             $status = TRUE;
-          }
 
-       } else {
+            $role_id = $this->getRoleIdByUserId($param['user_id']);
+            //setting notification for coupon.
+            $payment_controller = new PaymentController();
+            $param['url'] = Router::url('/', true) . 'users/setUserNotifications';
+            $param['return_transfer'] = TRUE;
+            $param['post_fields'] = array(
+              'user_id' => $param['user_id'],
+              'role_id' => $role_id,
+              'bundle' => 'COUPONS',
+              'category_id' => NOTIFICATION_CATEGORY_COUPONS,
+              'sub_category_id' => $param['coupon_id'],
+              'title' => strtoupper($param['status']), //coupon in state of reedemed , approved , rejected or pending for approval by mlg
+              'description' => 'Coupon is ' . strtoupper($param['status']),
+              'created_date' =>  date('Y-m-d H:i:s')
+            );
+            $param['json_post_fields'] = TRUE;
+            $param['curl_post'] = 1;
+            $payment_controller->sendCurl($param);
+          }
+        } else {
          $message = 'Coupon Id cannot be empty';
          throw new Exception('Coupon Id cannot be empty');
        }
@@ -2600,7 +2766,7 @@ class UsersController extends AppController{
             $data['status'] = "False";
             $data['message'] ="not updated;";
        }
-    
+
       $this->set([
       'response' => $data,      
       '_serialize' => ['response']
@@ -2654,6 +2820,7 @@ class UsersController extends AppController{
           fwrite($file, $imgData);
           fclose($file);
           $user = TableRegistry::get('user_details');
+          $stepCompleted = $user->find()->where(['user_id' => $id])->toArray();
           $query = $user->query();
           $result = $query->update()->set([
                 'profile_pic' => '/upload/Avtar/'.$image,
@@ -3232,7 +3399,102 @@ class UsersController extends AppController{
       'parent_subscription_timestamp' => $parent_subscription_timestamp
     ];
   }
+  /**
+  * This api is used for get parent child report
+  * **/
+public function getParentChildReport($user_id=null,$pnum=1){
+    $range = 10;
+    $status = FALSE;
+    if(!empty($user_id)){
+      $current_page = 1;
+      if (!empty($pnum)) {
+        $current_page = $pnum;
+      }
+      $UserQuizes = TableRegistry::get('UserQuizes') ;
+      $count= $UserQuizes->find('all')->where(['user_id' => $user_id ,'course_id >'=>-1])->count();
+      $last_page = ceil($count / $range);
+      if ($current_page < 1) {
+        $current_page = 1;
+      } elseif ($current_page > $last_page && $last_page > 0) {
+        $current_page = $last_page;
+      }
+      $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+      $connection = ConnectionManager::get('default');
+      $sql = "SELECT uq.*, cr.id,cr.course_name,cr.level_id as grade_id,lev.name as grade_name FROM user_quizes as uq,
+        courses as cr ,levels as lev WHERE 
+        uq.course_id=cr.id 
+        ANd uq.grade_id=cr.level_id
+        ANd cr.level_id=lev.id
+       AND uq.user_id=$user_id $limit";
+      $results = $connection->execute($sql)->fetchAll('assoc');
+      if(count($results) > 0){
+        foreach ($results as $result) { 
+          $row['user_quiz_id'] = $result['id'];  
+          $row['grade_id']=$result['grade_id'];
+          $row['course_id']=$result['course_id'];
+          $row['quiz_type_id'] = $result['quiz_type_id'];  
+          $row['quiz_id'] = $result['exam_id'];                                      
+          $row['exam_marks']=$result['exam_marks'];
+          $row['student_score']=$result['score'];
+          $row['course_name']=$result['course_name'];
 
+          if($result['exam_marks']!=0){
+            $row['student_result_percent']=(int)( ($result['score']/$result['exam_marks'])*(100));
+          }else{ 
+              $row['student_result_percent'] = 0;
+              $row['message'] = "Either quiz is not started or quiz attempted incomplete.";
+          } 
+          // To check other students on same course_id and grade_id
+          $UserQuizes = TableRegistry::get('UserQuizes') ;
+          $userquiz_results= $UserQuizes->find('all')->where(['course_id'=>$row['course_id'], 'user_id !='=> $user_id,'quiz_type_id'=>$row['quiz_type_id'] ])->order(['id'=>'ASC']);
+          if($userquiz_results->count()>0){
+              $othersts_score_percent = 0;
+              $high_sts_score_percent = 0;
+              $st_count = 0;
+              $hist_count = 0;
+              foreach ($userquiz_results as $otherstrow) {
+                 $temp_percent = ($otherstrow['score']/$otherstrow['exam_marks'])*(100);
+                 if($row['student_result_percent']< $temp_percent) {
+                   $high_sts_score_percent = $high_sts_score_percent+$temp_percent;
+                   $hist_count++;
+                 }
+                 $othersts_score_percent = $othersts_score_percent +$temp_percent;
+                 $st_count = $st_count +1;
+              }
+              if($st_count) {
+              $row['other_Student_average'] = round( ($othersts_score_percent/$st_count ),1); 
+              }
+              if($hist_count > 0) {
+               $row['best_Student_average'] = round( ($high_sts_score_percent/$hist_count),1); 
+              }else{
+               $row['best_Student_average'] = 0;
+              }
+          }else{
+            $row['other_Student_average'] ="";
+            $row['message'] = 'No students found for same course';
+          }
+          $data['details'][] = $row;
+          $row['other_Student_average'] ="";
+          $row['message'] ="";
+          $status = TRUE;
+        }               
+      }else{
+        $data['message'] = "No result found.";
+      }
+    }else{
+      $data['status'] = "";
+      $data['message'] ="please set user_id";
+    }
+     $this->set([
+        'response' => $data,
+        'status' => $status,
+        'lastPage' => $last_page,
+        'start' => (($current_page - 1) * $range) + 1,
+        'last' => (($current_page - 1) * $range) + $range,
+        'total' => $count,
+        '_serialize' => ['response','status','lastPage','start','last','total']
+    ]);
+}
   /*
    * function updateUserCourseDetailsByUserPurchaseItems().
    *
@@ -3322,6 +3584,867 @@ class UsersController extends AppController{
       'status' => $status,
       'message' => $message,
       '_serialize' => ['status', 'message']
+    ]);
+  }
+
+  /*
+   * function getRoleIdByUserId()
+   */
+  public function getRoleIdByUserId($user_id) {
+    //getting roll_id
+    $user_roles = TableRegistry::get('UserRoles');
+    $valid_user = $user_roles->find('all')->where(['user_id' => $user_id]);
+    $role_id = $valid_user->first()->role_id;
+    return $role_id;
+  }
+
+  /**
+   * function setUserNotifications().
+   */
+  public function setUserNotifications() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $notifications_table = TableRegistry::get('notifications');
+      $new_notification = $notifications_table->newEntity($this->request->data);
+      if ($notifications_table->save($new_notification)) {
+        $status = TRUE;
+      } else {
+        $message = 'Unable to save notification';
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
+ /*
+   * function getNotificationForParent().
+   *
+   * user_id will be used as child id as well as parent id. (situation based).
+   */
+  public function getNotificationForParent() {
+    try{
+      $message = '';
+      $notification_info = array();
+      $req_data = $this->request->data;
+      if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
+        $message = 'parent id can not be blank';
+        throw new Exception($message);
+      }
+      if (isset($req_data['child_ids']) && empty($req_data['child_ids'])) {
+        $message = 'child id cannot be blank';
+        throw new Exception($message);
+      }
+      if (!isset($req_data['child_ids'])) {
+        $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
+        if (!empty($children)) {
+          foreach ($children as $student) {
+            $req_data['ids'][] = $student['user_id'];
+          }
+        }
+        $req_data['ids'][] = 0;
+      }
+      $req_data['ids'][] = $req_data['parent_id'];
+      $notifications_table = TableRegistry::get('notifications');
+      $notifications = $notifications_table->find()->where(['user_id IN' => $req_data['ids']])->limit(NOTIFICATION_LIMIT)->orderDesc('id');
+
+      foreach ($notifications as $notification) {
+        switch($notification['bundle']) {
+          case 'ANALYTICS':
+            //child information
+            $child = $this->Users->get($notification['user_id'])->toArray();
+
+            //quiz information
+            $user_quizes_table = TableRegistry::get('UserQuizes');
+            $user_quizes = $user_quizes_table->get($notification['sub_category_id'])->toArray();
+
+            //quiz type information
+            $quiz_types_table = TableRegistry::get('quiz_types');
+            $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
+
+            $exam_type = '';
+            if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
+              $exam_type = 'Pre Test';
+            }
+            if (strtoupper($quiz_type['variable']) == 'SUBSKILL_QUIZ') {
+              $exam_type = 'Sub skill quiz';
+            }
+            if (strtoupper($quiz_type['variable']) == 'PRACTICES') {
+              $exam_type = 'Practices';
+            }
+            if (strtoupper($quiz_type['variable']) == 'KNIGHT_CHALLENGE') {
+              $exam_type = 'Knight challenge';
+            }
+            if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
+              $exam_type = 'Teacher custom assignment';
+            }
+            if (strtoupper($quiz_type['variable']) == 'TEACHER_AUTO_ASSIGNMENT') {
+              $exam_type = 'Teacher auto assignment';
+            }
+            if (strtoupper($quiz_type['variable']) == 'PARENT_AUTO_ASSIGNMENT') {
+              $exam_type = 'Parent auto assignment';
+            }
+
+            $notification_info[] = array(
+              'kind' => 'ANALYTICS',
+              'message' => $child['first_name'] . ' ' . $child['last_name'] .
+                  ' has recently given the ' . $exam_type . ' and scored '
+                  . round((($user_quizes['score'] / $user_quizes['exam_marks']) * 100), 2) . ' %',
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'OFFERS':
+            $coupons_table = TableRegistry::get('coupons');
+            $parent_offer = $coupons_table->get($notification['sub_category_id'])->toArray();
+            $notification_info[] = array(
+              'kind' => 'OFFERS',
+              'message' => $parent_offer['description'],
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'SUBSCRIPTIONS':
+            $subscription_message = '';
+            $child = $this->Users->get($notification['user_id'])->toArray();
+            if (strtoupper($notification['title']) == 'SUBSCRIPTION EXPIRE') {
+              $date1 = $child['subscription_end_date'];
+              $date2 = date_create();
+              $date = date_diff($date1, $date2);
+              $subscription_message = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end after ' . $date->days . ' days';
+            }
+            $notification_info[] = array(
+              'kind' => 'SUBCRIPTIONS',
+              'message' => $subscription_message,
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+
+          case 'COUPONS':
+            $coupon_message = '';
+            $child = $this->Users->get($notification['user_id'])->toArray();
+            if (strtoupper($notification['title']) == 'APPROVAL PENDING') {
+              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
+            }
+            if (strtoupper($notification['title']) == 'ACQUIRED') {
+              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
+            }
+            $notification_info[] = array(
+              'kind' => 'COUPONS',
+              'message' => $coupon_message,
+              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+            );
+            break;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'error_message' => $message,
+      'notifications' => $notification_info,
+      '_serialize' => ['error_message', 'notifications']
+    ]);
+  }
+
+  /* Area of Notification on parent dashboard*/
+  public function getAreaOfFocusForParent($child_id=null){
+      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
+
+      if(!empty($child_id)){
+          $connection = ConnectionManager::get('default');
+
+          // get students quiz result for subskills
+           $sql = "SELECT uq.*,u.username,u.first_name,u.last_name,qt.name as quiz_type_name, cr.course_name      FROM user_quizes as uq
+                     INNER JOIN users as u ON uq.user_id = u.id
+                     INNER JOIN courses as cr ON uq.course_id = cr.id 
+                     INNER JOIN quiz_types as qt ON uq.quiz_type_id = qt.id
+                     WHERE uq.user_id =$child_id AND uq.quiz_type_id IN (2,3,4,5,6) ORDER BY created DESC ";
+          $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
+
+          if(count($stQuizRecords) > 0){
+              foreach ($stQuizRecords as $stQuizRecord) {
+                  if($stQuizRecord['pass']==0){
+                      $data['attention_records'][] = $stQuizRecord;
+                  }
+              }
+              $data['status'] = True;        
+          }else{
+                    $data['status'] =False;
+                    $data['message']="No Records Found For Area oF Focus.";
+            }
+      }else{
+        $data['status'] = False;
+        $data['message']= "Please set child id.";
+      }
+
+      $this->set([
+      'response' => $data, 
+      '_serialize' => ['response']
+    ]);
+
+  }
+
+
+  
+
+// API to get the child marks and his pear group marks on subskill
+public function getChildSubskillResult($child_id=null, $subskill_id=null, $user_quiz_id=null){
+      $child_id = isset($_REQUEST['child_id']) ?$_REQUEST['child_id']:$child_id;
+      $subskill_id = isset($_REQUEST['subskill_id']) ?$_REQUEST['subskill_id']:$subskill_id;
+      $user_quiz_id = isset($_REQUEST['user_quiz_id']) ?$_REQUEST['user_quiz_id']:$user_quiz_id;
+
+      if(!empty($child_id) && !empty($subskill_id) && !empty($user_quiz_id)){
+
+
+          $connection = ConnectionManager::get('default');
+          $sql = "SELECT uq.*, CONCAT(u.first_name, ' ', u.last_name) as child_name , c.course_name
+                  FROM user_quizes as uq
+                  INNER JOIN users as u ON uq.user_id=u.id
+                  INNER JOIN courses as c ON uq.course_id=c.id
+                  WHERE  uq.course_id= $subskill_id AND uq.quiz_type_id IN (2,4,5,6)";
+           
+           $peer_child_count = 0;
+           $peer_child_result=0;
+
+          $quiz_results = $connection->execute($sql)->fetchAll('assoc');
+          if(count($quiz_results)>0){
+              foreach ($quiz_results as $qresult) {
+                  
+                  // child result
+                  if($qresult['user_id']==$child_id &&  $qresult['id']==$user_quiz_id){ 
+                      $data['child_result'] =  $qresult;
+                  }
+
+                 //peer group result
+                 if($qresult['user_id']!=$child_id) {                  
+                      if($qresult['exam_marks']>0){
+                          $peer_child_result = $peer_child_result + (($qresult['score']*100)/$qresult['exam_marks']);
+                          $peer_child_count ++;
+                      }
+                  }              
+              }
+              if($peer_child_count > 0){
+                $data['peer_children_result'] = round( ($peer_child_result/$peer_child_count),2) ;
+              }else{
+                $data['peer_children_result'] =0;
+              }
+            $data['peer_num_of_children'] = $peer_child_count;
+            $data['status'] = True ;
+        }else{
+            $data['status'] = False;
+            $data['message'] = "No Result Found.";
+        }
+
+      }else{
+          $data['status'] = False;
+          $data['message'] = "Please select child_id and subskill_id and user_quiz_id.";
+      }
+
+      $this->set([
+        'response' => $data, 
+        '_serialize' => ['response']
+      ]);
+  }
+
+
+
+//API to send Assignment by parent
+/*  function to save the Custom Assignment Created by Teacher */      
+  public function setAutoAssignmentByParents($grade_id=null, $subskill_id=null,$parent_id=null,$user_id=null,$quiz_type_id=0,$questions_limit=10){
+
+  // Step-1 auto generate 15 questions
+  
+  $base_url = Router::url('/', true);
+  $grade_id = isset($this->request->data['grade_id'])? $this->request->data['grade_id'] : grade_id ;  
+  $subskill_id = isset($this->request->data['subskill_id']) ? $this->request->data['subskill_id']: $subskill_id;
+  $questions_limit = isset($this->request->data['questions_limit']) ? $this->request->data['questions_limit']: $questions_limit;
+  $quiz_type_id = isset($this->request->data['quiz_type_id']) ? $this->request->data['quiz_type_id']: $quiz_type_id;
+  $default_quiz_name ='mlg'.date("YmdHis");
+  $quiz_name = isset($this->request->data['quiz_name']) ? $this->request->data['quiz_name']: $default_quiz_name;
+
+  $difficulty_level = 'Easy|Moderate|Difficult';
+  $user_id = isset($this->request->data['user_id'] )? $this->request->data['user_id'] :$user_id ;
+  $parent_id = isset($this->request->data['parent_id'] )? $this->request->data['parent_id']:$parent_id ;   
+
+if(!empty($parent_id) && !empty($user_id) && !empty($subskill_id)){
+  $dataToGetQuestions['subjects'] = $subskill_id; // ids of course as eg 3,13,15
+  $dataToGetQuestions['user_id'] = $user_id;
+  $dataToGetQuestions['grade_id'] = $grade_id;
+  $dataToGetQuestions['limit'] = $questions_limit;
+  $dataToGetQuestions['quiz_type_id'] = $quiz_type_id;
+  $dataToGetQuestions['quiz_name'] = $quiz_name;
+  $dataToGetQuestions['difficulty'] = 'Moderate|Easy|Difficult'; // eg Easy|Difficult|mod
+
+  $json_questionslist = $this->curlPost($base_url . 'students/getQuestionsList/', $dataToGetQuestions); 
+  $array_qlist = (array) json_decode($json_questionslist);
+   
+    if( isset($array_qlist['response']) ){
+        if ($array_qlist['response']->status == "True") {
+                      
+
+            // insert data in assignments table
+            $assign['quiz_id'] = $array_qlist['response']->quiz_id;
+            $assign['assignment_for'] = 'child';
+            $assign['grade_id'] = $array_qlist['response']->quiz_id;
+            $assign['course_id'] = $subskill_id;
+            $assign['student_id'] = $user_id;
+            $assign['created_by'] = $parent_id;
+            $assign['created'] = time();
+            $AssignmentDetails = TableRegistry::get('AssignmentDetails');
+            $new_assignment_details = $AssignmentDetails->newEntity($assign);
+            if ($qresult = $AssignmentDetails->save($new_assignment_details)) {
+                $data['status'] = True;
+                $data['message'] ="quiz is created and data inserted in quize, quiz_items and assignment_details " ;              
+               //$data['questions'] = $array_qlist['response']->questions;
+            }else{
+              $data['status'] = False;
+              $data['message'] = "Quiz is created(record insert in quizes and quiz_items) but not inserted in assignment_details.";
+            }
+        } else {
+              $data['status'] = $array_qlist['response']->status;
+              $data['message'] = $array_qlist['response']->message;
+            }
+
+    }else{
+      $data ['status'] = False;
+      $data ['message'] = "Opps... No question get.";
+    }
+
+  }else{
+      $data ['status'] = False;
+      $data ['message'] = "parent_id, child_id/user_id and subskill_id cannot be null.";
+  }
+
+   $this->set(array(
+       'response' => $data,
+       '_serialize' => ['response']
+   ));
+}
+
+
+// API to get the result of correct and wrong answer of a quiz questions/items
+public function getUserQuizResponse($user_id=null, $user_quiz_id=null){
+    $user_id = isset($_REQUEST['user_id'])?$_REQUEST['user_id']:$user_id;
+    $user_quiz_id = isset($_REQUEST['user_quiz_id'])?$_REQUEST['user_quiz_id']:$user_quiz_id;
+
+    if(!empty($user_id) && !empty($user_quiz_id)){
+
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT uqr.*, qm.questionName FROM user_quiz_responses as uqr
+                  INNER JOIN user_quizes as uq ON uq.id=uqr.user_quiz_id 
+                  INNER JOIN question_master as qm ON qm.id=uqr.item_id                
+                  WHERE  uq.id= $user_quiz_id AND uqr.user_id = $user_id ";
+    
+        $quiz_results = $connection->execute($sql)->fetchAll('assoc');
+        if(count($quiz_results) >0){
+          foreach ($quiz_results as $qresult) {
+            $data['status'] = True;
+             $data['user_quiz_response'][] = $qresult;
+          }              
+        }else{
+            $data['status'] = False;
+            $data['message'] = "No Record Found.";
+        }
+
+    }else{
+      $data['status'] = False;
+      $data['message'] = "user_id and user_quiz_id cannot null.";
+    }
+    $this->set(array(
+       'response' => $data,
+       '_serialize' => ['response']
+   ));
+
+}
+
+
+// API to call curl 
+  /*way of calling $curl_response = $this->curlPost('http://localhost/mlg/exams/externalUsersAuthVerification',['username' => 'ayush','password' => 'abhitest', ]); */
+  public function curlPost($url, $data) {
+      $ch = curl_init($url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, True);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      $response = curl_exec($ch);
+      curl_close($ch);
+
+      return $response;
+  }
+  /**
+  * This api is used for get parent child assignment
+  * **/
+  public function getParentChildAssignment($user_id=null,$parent_id=null,$pnum=1){
+    try{
+      $range = 10;
+      if(!empty($user_id)){
+      $current_page = 1;
+      if (!empty($pnum)) {
+        $current_page = $pnum;
+      }
+      $UserQuizes = TableRegistry::get('UserQuizes') ;
+      $count= $UserQuizes->find('all')->where(['user_id' => $user_id ])->count();
+      $last_page = ceil($count / $range);
+      if ($current_page < 1) {
+        $current_page = 1;
+      } elseif ($current_page > $last_page && $last_page > 0) {
+        $current_page = $last_page;
+      }
+      $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+      }
+      $i = 0;
+      $j = 0;
+      $student_groups = array();
+      $final_result  = array();
+      $connection = ConnectionManager::get('default');
+      $sql = "select stt.id as student_teacher_id,stt.teacher_id as teacher_id,stg.id as group_id,"
+              . "stt.student_id as student_id,stg.student_id as group_detail"
+              . " from student_teachers as stt,student_groups as stg"
+               . " where stg.teacher_id = stt.teacher_id"
+               . " AND stt.student_id = $user_id ";
+      $results = $connection->execute($sql)->fetchAll('assoc');
+      if(!empty($results)) {
+        foreach ($results as $key => $value) {
+          $teacher_id = $value['teacher_id'];
+          $group = explode(',',$value['group_detail']);
+          foreach ($group as $key => $val) {
+            if($val == $user_id ) {
+              $student_groups[$i] = $value['group_id'];
+              $i++;   
+            }
+          }
+        }
+        $qsql = " SELECT * from user_quizes where user_id = $user_id  $limit ";
+        $att_quiz = $connection->execute($qsql)->fetchAll('assoc');
+        $grp = implode(',',$student_groups);
+        $fsql = "select * from assignment_details as ass "
+                . " INNER Join quizes as qu ON qu.id = ass.quiz_id "
+                . " where ass.created_by = $teacher_id $limit "; 
+        $group_result = $connection->execute($fsql)->fetchAll('assoc');
+        foreach($group_result as $key=>$value) {
+          if($value['assignment_for'] == 'students' && $value['student_id'] == $user_id ) {
+             $final_result[$j] = $value;
+             $j++;
+          }else if($value['assignment_for'] == 'groups' && !empty($student_groups)) {
+            if(in_array($value['group_id'],$student_groups)) {
+              $final_result[$j] = $value;
+              $j++;
+            } 
+          }else if($value['assignment_for'] == 'class') {
+            $class = explode(',',$value['student_id']);
+            foreach($class as $key=>$val) {
+              if($val == $user_id) {
+                $final_result[$j] = $value;
+                $j++;
+              }
+            }
+          } 
+        }
+      }
+      if($parent_id != NULL) {
+       $fisql = "select * from assignment_details "
+              . " where student_id = $user_id and created_by = $parent_id $limit";
+       $result = $connection->execute($fisql)->fetchAll('assoc');
+       foreach ($result as $key => $valu) {
+          $final_result[$j] = $valu;
+          $j++;
+       }
+      }
+      $i =0;
+      $j =0;
+      $assignmentdetails = '';
+      $attempted_assignment = '';
+      if(!empty($final_result)) {
+        foreach ($final_result as $key => $value) {
+          $temp = $i;
+          foreach ($att_quiz as $ki => $val) {
+            if($value['quiz_id'] == $val['exam_id']){
+              $attempted_assignment[$i] = $value;
+              $attempted_assignment[$i]['exam_marks'] = $val['exam_marks'];
+              $attempted_assignment[$i]['attempt_quiz'] = $val['created'];
+              $attempted_assignment[$i]['score'] = $val['score'];
+              $attempted_assignment[$i]['pass'] = $val['pass'];
+              $i++;
+              break;
+            } 
+          }
+          if($temp == $i) {
+            $assignmentdetails[$j] = $value;
+            $j++;
+          }
+        }
+      }
+   }catch(Exception $e) {
+     $this->log('Error in getParentChildAssignment function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+   }
+   $this->set([
+        'attempted_assignment' => $attempted_assignment,
+        'assignment_list' =>  $assignmentdetails,
+        'lastPage' => $last_page,
+        '_serialize' => ['attempted_assignment','assignment_list','lastPage']
+    ]);
+ }
+ /**
+  * This api is used for get parent child reward
+  * **/
+ public function getParentChildReward($user_id=null,$pnum=1){
+    try{
+      $range = 10;
+      if(!empty($user_id)){
+      $current_page = 1;
+      if (!empty($pnum)) {
+        $current_page = $pnum;
+      }
+      $UserQuizes = TableRegistry::get('UserQuizes') ;
+      $count= $UserQuizes->find('all')->where(['user_id' => $user_id ,'pass'=> '1'])->count();
+      $last_page = ceil($count / $range);
+      if ($current_page < 1) {
+        $current_page = 1;
+      } elseif ($current_page > $last_page && $last_page > 0) {
+        $current_page = $last_page;
+      }
+      $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+      }
+      $connection = ConnectionManager::get('default');
+      $sql = "SELECT q.name as name, uq.created as date, uq.score as score,"
+              . " uq.exam_marks as total_marks from user_quizes as uq , quizes "
+              . "as q where uq.user_id = $user_id AND uq.pass = '1' "
+              . "AND uq.course_id != '-1' AND q.id = uq.exam_id $limit";
+      $results = $connection->execute($sql)->fetchAll('assoc');
+   }catch(Exception $e) {
+     $this->log('Error in getParentChildAssignment function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+   }
+   $this->set([
+        'response' => $results ,
+        'lastPage' => $last_page,
+        '_serialize' => ['response','lastPage']
+    ]);
+ }
+ /**
+  * This api is used for get parent child subject
+  * **/
+  public function getParentChildrenSubjects($user_id=null) {
+    try{
+      if($user_id != NULL) {
+        $temp = '';
+        $i=0;
+        $j=0;
+        $k=-1;
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT cs.id as subject_id,cs.course_name as subject_name,cd.course_id as skill_id ,cd.name as skill_name from user_courses as us"
+                . " INNER JOIN courses as cs on cs.id = us.course_id"
+                . " INNER JOIN course_details as cd on cd.parent_id = us.course_id"
+                . " where us.user_id = $user_id";
+        $result = $connection->execute($sql)->fetchAll('assoc');
+        foreach($result as $key => $value) {
+          if($value['subject_id'] != $temp){
+            $j=0;
+            $k++;
+            $temp = $value['subject_id'];
+            $subject[$i]['id'] = $value['subject_id'];
+            $subject[$i]['name'] = $value['subject_name'];
+            $skill[$temp][$j]['id'] = $value['skill_id'];
+            $skill[$temp][$j]['name'] = $value['skill_name'];
+            $skill[$temp][$j]['parent_id'] = $value['subject_id'];
+            $skils[$k] = $value['skill_id'];
+            $j++;
+            $i++;
+          }else if($value['subject_id'] == $temp) {
+            $skill[$temp][$j]['id'] = $value['skill_id'];
+            $skill[$temp][$j]['name'] = $value['skill_name'];
+            $skill[$temp][$j]['parent_id'] = $value['subject_id'];
+            $skils[$k] = $skils[$k].','.$value['skill_id'];
+            $j++;
+          } 
+        }
+        $stemp = '';
+        $i = 0;
+        $j = 0;
+        $subskill = array();
+        foreach ($skils as $key => $value) {
+          $sql = "SELECT * from course_details where parent_id IN ($value)";
+          $subskils = $connection->execute($sql)->fetchAll('assoc');
+          foreach ($subskils as $key => $val) {
+            if($val['parent_id'] != $stemp) {
+              $i=0;
+              $stemp = $val['parent_id'];
+              $subskill[$stemp][$i]['id'] = $val['course_id'];
+              $subskill[$stemp][$i]['name'] = $val['name'];
+              $i++;
+            }else if($val['parent_id'] == $stemp) {
+              $subskill[$stemp][$i]['id'] = $val['course_id'];
+              $subskill[$stemp][$i]['name'] = $val['name'];
+              $i++;
+            }
+          }
+        }
+      } 
+    }catch(Exception $e) {
+      $this->log('Error in getParentChildrenSubjects function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'subject' => $subject,
+      'skill' => $skill,
+      'subSkill' => $subskill,
+      '_serialize' => ['subject', 'skill','subSkill']
+    ]);
+  }
+  /**
+   * This api is used for filtered  
+   **/
+  public function filterParentChildReport($user_id,$days=null,$subject=null,$skill=null,$subSkill=null) {
+    try{
+      if(!empty($user_id)){
+        $day_query = '';
+        $subSkill_query = '';
+        $skil = array();
+        $i=0;
+        if($days != NULL && $days != 0){
+         $day_query = " AND dateDiff(CURRENT_DATE(),uq.created) <= $days";
+        }
+        if($subject != NULL && $skill == null && $subSkill == NULL) {
+         $course_detail = TableRegistry::get('course_details'); 
+         $skills = $course_detail->find()->where(['parent_id'=>$subject])->toArray();
+         foreach($skills as $ki=>$val){
+           $skil[$i] = $val['course_id'];
+           $i++;
+         }
+         $i=0;
+         $sub_skill = $course_detail->find()->where(['parent_id IN '=>$skil])->toArray();
+         foreach($sub_skill as $ki=>$val){
+           $sub_skil[$i] = $val['course_id'];
+           $i++;
+         }
+         $suSkil = implode(',',$sub_skil);
+         $subSkill_query = " AND course_id IN ($suSkil)";
+        }
+        if($subject != NULL && $skill != null && $subSkill == NULL) {
+         $course_detail = TableRegistry::get('course_details'); 
+         $sub_skill = $course_detail->find()->where(['parent_id '=>$skill])->toArray();
+         foreach($sub_skill as $ki=>$val){
+           $sub_skil[$i] = $val['course_id'];
+           $i++;
+         }
+         $suSkil = implode(',',$sub_skil);
+         $subSkill_query = " AND course_id IN ($suSkil)";
+        }
+        if($subject != NULL && $skill != null && $subSkill != NULL) {
+         $subSkill_query = " AND uq.course_id = $subSkill";
+        }
+        $range = 10;
+      $status = FALSE;
+      if(!empty($user_id)){
+        $current_page = 1;
+        if (!empty($pnum)) {
+          $current_page = $pnum;
+        }
+        $UserQuizes = TableRegistry::get('UserQuizes') ;
+        $count= $UserQuizes->find('all')->where(['user_id' => $user_id ,'course_id >'=>-1])->count();
+        $last_page = ceil($count / $range);
+        if ($current_page < 1) {
+          $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+          $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
+        $connection = ConnectionManager::get('default');
+        $sql = "SELECT uq.*, cr.id,cr.course_name,cr.level_id as grade_id,lev.name as grade_name FROM user_quizes as uq,
+          courses as cr ,levels as lev WHERE 
+          uq.course_id=cr.id 
+          ANd uq.grade_id=cr.level_id
+          ANd cr.level_id=lev.id
+         AND uq.user_id=$user_id $day_query $subSkill_query  $limit";
+        $results = $connection->execute($sql)->fetchAll('assoc');
+        if(count($results) > 0){
+          foreach ($results as $result) { 
+            $row['user_quiz_id'] = $result['id'];  
+            $row['grade_id']=$result['grade_id'];
+            $row['course_id']=$result['course_id'];
+            $row['quiz_type_id'] = $result['quiz_type_id'];  
+            $row['quiz_id'] = $result['exam_id'];                                      
+            $row['exam_marks']=$result['exam_marks'];
+            $row['student_score']=$result['score'];
+            $row['course_name']=$result['course_name'];
+
+            if($result['exam_marks']!=0){
+              $row['student_result_percent']=(int)( ($result['score']/$result['exam_marks'])*(100));
+            }else{ 
+                $row['student_result_percent'] = 0;
+                $row['message'] = "Either quiz is not started or quiz attempted incomplete.";
+            } 
+            // To check other students on same course_id and grade_id
+            $UserQuizes = TableRegistry::get('UserQuizes') ;
+            $userquiz_results= $UserQuizes->find('all')->where(['course_id'=>$row['course_id'], 'user_id !='=> $user_id,'quiz_type_id'=>$row['quiz_type_id'] ])->order(['id'=>'ASC']);
+            if($userquiz_results->count()>0){
+                $othersts_score_percent = 0;
+                $high_sts_score_percent = 0;
+                $st_count = 0;
+                $hist_count = 0;
+                foreach ($userquiz_results as $otherstrow) {
+                   $temp_percent = ($otherstrow['score']/$otherstrow['exam_marks'])*(100);
+                   if($row['student_result_percent']< $temp_percent) {
+                     $high_sts_score_percent = $highsts_score_percent+$temp_percent;
+                     $hist_count++;
+                   }
+                   $othersts_score_percent = $othersts_score_percent +$temp_percent;
+                   $st_count = $st_count +1;
+                }
+                if($st_count) {
+                $row['other_Student_average'] = round( ($othersts_score_percent/$st_count ),1); 
+                }
+                if($hist_count > 0) {
+                 $row['best_Student_average'] = round( ($high_sts_score_percent/$hist_count),1); 
+                }else{
+                 $row['best_Student_average'] = 0;
+                }
+            }else{
+              $row['other_Student_average'] ="";
+              $row['message'] = 'No students found for same course';
+            }
+            $data['details'][] = $row;
+            $row['other_Student_average'] ="";
+            $row['message'] ="";
+            $status = TRUE;
+          }               
+        }else{
+          $data['message'] = "No result found.";
+        }
+      }else{
+        $data['status'] = "";
+        $data['message'] ="please set user_id";
+      }
+    }
+   }catch(Exception $e) {
+     $this->log('Error in getParentChildAssignment function in Users Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+   }
+    $this->set([
+        'response' => $data,
+        'status' => $status,
+        'lastPage' => $last_page,
+        'start' => (($current_page - 1) * $range) + 1,
+        'last' => (($current_page - 1) * $range) + $range,
+        'total' => $count,
+        '_serialize' => ['response','status','lastPage','start','last','total']
+    ]);
+  }
+
+  /*
+   * function cancelChildrenSubscriptions().
+   *
+   * To cancel billing Agreement of Parent's child.
+   */
+  public function cancelChildrenSubscriptions() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $req_data = $this->request->data;
+      if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
+        $message = 'parent_id can not be blank';
+        throw new Exception($message);
+      }
+      $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
+      if (!empty($children)) {
+        $payment_controller = new PaymentController();
+        $user_orders_table = TableRegistry::get('UserOrders');
+        foreach ($children as $child) {
+          $active_billing = $user_orders_table->find()->where(['child_id' => $child['user_id'], 'billing_state' => 'ACTIVE']);
+          if ($active_billing->count()) {
+            foreach ($active_billing as $billing) {
+              $billing_id = $billing['billing_id'];
+              $response = $payment_controller->cancelBillingAgreement($billing_id);
+              if (!empty($response)) {
+                $billing['billing_state'] = $response;
+                if (!$user_orders_table->save($billing)) {
+                  $status = FALSE;
+                  $message = 'unable to save order';
+                  throw new Exception($message);
+                }
+                $status = TRUE;
+              }
+            }
+          } else {
+            $message = 'No child found with active billing state';
+          }
+        }
+      } else {
+        $status = FALSE;
+        $message = 'There is no child';
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+     'status' => $status,
+     'message' => $message,
+      '_serialize' => ['status', 'message']
+    ]);
+  }
+
+  /**
+   * function childTimeSpentOnPlatform().
+   */
+  public function childTimeSpentOnPlatform() {
+    try {
+      $request = $this->request;
+      $request_data = $request->data;
+      $total_duration_in_secs = $total_duration_in_hrs = 0;
+      $status = FALSE;
+      $message = '';
+      if ($request->is('post')) {
+        if (!isset($request_data['user_ids'])) {
+          $message = 'user id required';
+          throw new Exception('user id required');
+        }
+        if (empty($request_data['user_ids'])) {
+          $message = 'user id can not be empty';
+          throw new Exception('user id can not be empty');
+        }
+        $conditions[] = 'user_id IN (' . implode(',', $request_data['user_ids']) . ')';
+        $conditions[] = 'time_spent IS NOT NULL';
+        $date = '';
+        if (isset($request_data['week'])) {
+          $date = date("Y-m-d", strtotime($request_data['week'] . " week"));
+          $conditions['check_in >='] = $date;
+        }
+        if (isset($request_data['month'])) {
+          $date = date("Y-m-d", strtotime($request_data['month'] . " month"));
+          $conditions['check_in >='] = $date;
+        }
+        $user_login_sessions = TableRegistry::get('user_login_sessions');
+        $query = $user_login_sessions->find();
+        $query_result = $query->select(['sum' => $query->func()->sum('user_login_sessions.time_spent')])
+          ->where($conditions);
+        if (!empty($query_result)) {
+          foreach ($query_result as $query_response) {
+            $status = TRUE;
+            $total_duration_in_secs = !empty($query_response->sum) ? $query_response->sum : 0;
+            $total_duration_in_hrs = round($total_duration_in_secs / (60 * 60), 2);
+          }
+        } else {
+          $message = 'No record found';
+        }
+      } else {
+        $message = 'Some error occured';
+        throw new Exception('Request is not POST');
+      }
+    } catch (Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'total_duration_in_secs' => $total_duration_in_secs,
+      'total_duration_in_hrs' => $total_duration_in_hrs,
+      'date' => $date,
+      'user_ids' => $request->data['user_ids'],
+      '_serialize' => ['status', 'message', 'total_duration_in_secs', 'total_duration_in_hrs', 'user_ids', 'date']
     ]);
   }
 }
