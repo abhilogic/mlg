@@ -337,9 +337,9 @@ public function setUserQuizResponse(){
     if ($this->request->is('post')) {  
         $quiz_marks=0;  
         $student_score=0;
-        $attamp_questions=1;
+        $attamp_questions=0;
         $skip_count=0; 
-        $quiz_questions = 1;
+        $quiz_questions = 0;
        $attendQuizResponses= $this->request->data;
 
 
