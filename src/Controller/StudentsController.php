@@ -583,7 +583,7 @@ public function getStudentReport($user_id=null){
               }
 
               $data['details'][] = $row;
-              $data['status'][] = True;
+              $data['status'] = True;
               $row['other_Student_average'] ="";
               $row['message'] ="";
             }               
