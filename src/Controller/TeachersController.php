@@ -4716,7 +4716,7 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
           $j= 0 ;
           $master_temp = array();
           $lsql = "select * from user_quizes where user_id = ".$value['id']." AND grade_id = $grade"
-                  . " AND course_id IN (". implode(',',$sub_skill_array).") AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
+                  . " AND course_id IN (". implode(',',$sub_skill_array).") AND quiz_type_id IN (2,5,6,7) ";
           $quizAttempt = $connection->execute($lsql)->fetchAll('assoc');
           if(!empty($quizAttempt)) {
             foreach($quizAttempt as $ki => $val) {
