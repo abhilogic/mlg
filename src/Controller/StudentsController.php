@@ -800,49 +800,60 @@ public function getStudentScoreForSkills($student_id=null,$subject_id=null){
                     $subskillids= implode(',', $subskill_ids);
                     
                     //Start-  Student Score: get avg result of a students  in attemped quizes of all subskills of a skill
-                    $sql = "SELECT uq.*,c.course_name as subskill_name, max((score*100)/exam_marks) as student_percentage  FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
-                    WHERE uq.user_id=$student_id AND uq.course_id IN ($subskillids) AND uq.quiz_type_id IN (2,4,5,6,7) HAVING max((score*100)/exam_marks) ORDER BY created DESC"; 
+                    $sql = "SELECT users.*,avg((score*100)/exam_marks) as student_percentage  FROM user_quizes as uq INNER JOIN users ON users.id=uq.user_id
+                    WHERE uq.user_id=$student_id AND uq.course_id IN ($subskillids) AND uq.quiz_type_id IN (2,4,5,6,7) ORDER BY created DESC"; 
+
 
                       $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
                       if(count($stQuizRecords) > 0){
-                        foreach ($stQuizRecords as $row) {                          
-                          $stRecord = array_merge($stRecord, $row);
+                        foreach ($stQuizRecords as $row) {                                              
+                         // $stRecord = array_merge($stRecord, $row);
+                          $stRecord['student_percentage'] =$row['student_percentage'];
                           $stRecord['student_quiz_attempt'] =1;
+
+                          $stDetails['username'] = $row['username'];
+                          $stDetails['first_name'] = $row['first_name'];
+                          $stDetails['last_name'] = $row['last_name'];                          
                         }
                       }else{
                         $stRecord['student_quiz_attempt'] =0;
-                      }
+                      }                       
                       //Start-  Student Score:
 
 
-                      //4. start - class students of a teacher : avg score
+                      //4. start - class students of a teacher : avg score 
+                        $st_classmate_ids= $this->getStudentInformations($student_id,$subject_id,2);
+                        if(isset($st_classmate_ids['student_informations']['classmates_ids']) ){
+                            $classmate_ids = $st_classmate_ids['student_informations']['classmates_ids'][ $stRecord['subject_name'].'-'.$stRecord['subject_id'] ];
+                          
+                            $str_classmate_ids = implode(',', $classmate_ids);
+                            $sql = "SELECT avg((score*100)/exam_marks) as student_percentage  
+                                    FROM user_quizes as uq
+                                    WHERE uq.user_id IN ($str_classmate_ids) AND uq.course_id IN ($subskillids) 
+                                    AND uq.quiz_type_id IN (2,4,5,6,7) ORDER BY created DESC"; 
+                                   
 
-
-                        $sql = "SELECT uq.*,c.course_name as subskill_name, max((score*100)/exam_marks) as student_percentage  FROM user_quizes as uq  INNER JOIN courses as c ON c.id=uq.course_id
-                          WHERE uq.user_id=$student_id AND uq.course_id IN ($subskillids) AND uq.quiz_type_id IN (2,4,5,6,7) HAVING max((score*100)/exam_marks) ORDER BY created DESC"; 
-
-                      $stQuizRecords = $connection->execute($sql)->fetchAll('assoc');
-                      if(count($stQuizRecords) > 0){
-                        foreach ($stQuizRecords as $row) {                          
-                          $stRecord = array_merge($stRecord, $row);
-                          $stRecord['student_quiz_attempt'] =1;
+                            $otherstQuizRecords = $connection->execute($sql)->fetchAll('assoc');
+                            if(count($otherstQuizRecords) > 0){
+                            foreach ($otherstQuizRecords as $otherstrow) {                              
+                              $stRecord['other_Student_average'] = $otherstrow['student_percentage'];
+                            }
+                          }else{
+                            $stRecord['other_Student_average'] = 0;
+                          }
                         }
-                      }else{
-                        $stRecord['student_quiz_attempt'] =0;
-                      }
-
-                      //end - class students avg score
-                                           
+                        $stRecord['status']= True;  
+                   //end - class students avg score                                          
                       
                 }else{
                   $stRecord['status'] = False;
+                  $stRecord['student_quiz_attempt'] =0;                  
                   $stRecord['message'] = "No subskills found.";
                 }
                
-                $data['status']= True;
+                $data['status'] =True;
+               $data['student_details'] =$stDetails;
                 $data['student_skill_percentage'][] = $stRecord;
-
-
             } // end foreache of skill
 
         }else{
@@ -869,16 +880,20 @@ Important
   If student if belong to teacher then classmate will return accordingly
   but if students/child is belog to parent then returns all classmates belong to same grade of the portal
 ***/
-public function getClassmatesofStudent($student_id=null, $return_type=1){
+public function getStudentInformations($student_id=null,$subject_id=null,$return_type=1){
     $student_id = isset($_REQUEST['student_id'])? $_REQUEST['student_id'] : $student_id;
+    $subject_id = isset($_REQUEST['subject_id'])? $_REQUEST['subject_id'] : $subject_id;
     if(!empty($student_id)){
         //1. check teacher of the student
-        $connection = ConnectionManager::get('default');
-       $sql = "SELECT teacher_id, uc.course_id, c.course_name,c.level_id, l.name FROM student_teachers as st 
+        $connection = ConnectionManager::get('default');     
+
+        $whereExt = !empty($subject_id) ? "  AND uc.course_id=$subject_id": ' ORDER BY u.id ';
+        $sql = "SELECT teacher_id, u.username,u.first_name,u.last_name,uc.course_id, c.course_name,c.level_id, l.name FROM student_teachers as st
+                INNER JOIN users as u ON u.id=st.student_id 
                 INNER JOIN user_courses as uc ON uc.user_id=st.student_id
                 INNER JOIN courses as c ON c.id=uc.course_id
                 INNER JOIN levels as l ON l.id=c.level_id
-                WHERE student_id=$student_id";
+                WHERE student_id=$student_id".$whereExt;
 
         $steacher = $connection->execute($sql)->fetchAll('assoc');
         if(count($steacher) > 0){  // that means student is beloning to a teacher
@@ -889,84 +904,88 @@ public function getClassmatesofStudent($student_id=null, $return_type=1){
               $grade_id = $trow['level_id'];
                $grade_name = $trow['name'];
 
+               $stinfo =['username'=>$trow['username'],'first_name'=>$trow['first_name'],'last_name'=>$trow['last_name'] ];
+
+               $stclassinfo =['grade_id'=>$grade_id,'grade_name'=>$grade_name,'subject_id'=>$subject_id,'subject_name'=>$subject_name ];
+
+
+              /*$stclassinfo['grade_id'] = $grade_id;
+              $stclassinfo['grade_name'] =$grade_name;
+              $stclassinfo['subject_id'] = $subject_id;
+              $stclassinfo['subject_name'] = $subject_name;*/
+
+
                //2. get classmates list
                 $sql1 = "SELECT u.* FROM users as u 
                           INNER JOIN user_details as ud ON ud.user_id=u.id
                           INNER JOIN user_courses as uc ON uc.user_id=u.id
                           INNER JOIN student_teachers as st ON st.student_id=u.id                          
-                          WHERE st.teacher_id=$teacher_id AND uc.course_id=$subject_id"; 
+                          WHERE u.id!=$student_id AND st.teacher_id=$teacher_id AND uc.course_id=$subject_id ORDER BY u.id".$whereExt; 
 
                   $stclassmates = $connection->execute($sql1)->fetchAll('assoc');
                   if(count($stclassmates) > 0){
-                    foreach ($stclassmates as $stclassmate) {
-                        $stclassmate['grade_id'] = $grade_id;
-                        $stclassmate['grade_name'] =$grade_name;
-                        $stclassmate['subject_id'] = $subject_id;
-                        $stclassmate['subject_name'] = $subject_name;
-                        
+                    foreach ($stclassmates as $stclassmate) {                       
                         $st_classmates[]= $stclassmate; 
-                        $st_classmate_ids['classmates_ids'][]= $stclassmate['id'];                    
+                        $st_classmate_ids[]= $stclassmate['id'];                    
                     }
                   }
+                  $data['status'] =True;
+                  $data['student_informations']['student_info'] = $stinfo;
+                  $data['student_informations']['student_subject_info'][$subject_name] = $stclassinfo;
 
-                  if(count($st_classmates) > 0){
-                    $data['student_classmates'][$subject_name] = array_merge($st_classmates, $st_classmate_ids );
-                  }else{
-                    $data['status'] =False;
-                    $data['message'] = "No classmates found.";
+                  if(isset($st_classmates) && count($st_classmates) > 0){
+                      $data['student_informations']['student_classmates'][$subject_name.'-'.$subject_id] = $st_classmates;
+                      $data['student_informations']['classmates_ids'][$subject_name.'-'.$subject_id] = $st_classmate_ids;       
+                  }else{                                       
+                    $data['student_informations']['student_classmates'][$subject_name.'-'.$subject_id] = "No classmates found"; 
                   }
           }
       }
         else{  // that means student is beloning to a parents only
 
-              $str = "SELECT  ud.parent_id,c.level_id, l.name, uc.course_id, c.course_name FROM users as u
+              $str = "SELECT  ud.parent_id,u.username, u.first_name, u.last_name, c.level_id, l.name, uc.course_id, c.course_name FROM users as u
                       INNER JOIN user_details as ud ON ud.user_id=u.id                      
                       INNER JOIN user_courses as uc ON uc.user_id=u.id
                       INNER JOIN courses as c ON c.id=uc.course_id
                       INNER JOIN levels as l ON l.id=c.level_id
-                      WHERE ud.user_id=$student_id";
+                      WHERE ud.user_id=$student_id".$whereExt;
               $stparent = $connection->execute($str)->fetchAll('assoc');
               if(count($stparent) > 0){
                   foreach ($stparent as $prow) {
-                      $parent_id = $prow['parent_id'];                                   
+                      $parent_id = $prow['parent_id'];
                       $subject_id = $prow['course_id'];
                       $subject_name = $prow['course_name'];
                       $grade_id = $prow['level_id'];
                       $grade_name = $prow['name'];
-                      $st_classmates=[];
-                      $st_classmate_ids['classmates_ids']=[];
 
+
+                      $stinfo = ['username'=>$prow['username'], 'first_name'=>$prow['first_name'], 'last_name'=>$prow['last_name'] ];
+
+                      $stclassinfo =['grade_id'=>$grade_id,'grade_name'=>$grade_name,'subject_id'=>$subject_id,'subject_name'=>$subject_name ];
 
                       //2. get classmates list
-                       $sql1 = "SELECT u.* FROM users as u 
+                      $sql1 = "SELECT u.* FROM users as u 
                                 INNER JOIN user_details as ud ON ud.user_id=u.id
-                                INNER JOIN user_courses as uc ON uc.user_id=u.id                               
-                                WHERE uc.course_id=$subject_id AND u.id!=$student_id"; 
+                                INNER JOIN user_courses as uc ON uc.user_id=u.id                                 
+                                WHERE uc.course_id=$subject_id AND u.id!=$student_id".$whereExt; 
 
-                          $stclassmates = $connection->execute($sql1)->fetchAll('assoc');
-                          if(count($stclassmates) > 0){
-                            foreach ($stclassmates as $stclassmate) {
-                                $stclassmate['grade_id'] = $grade_id;
-                                $stclassmate['grade_name'] =$grade_name;
-                                $stclassmate['subject_id'] = $subject_id;
-                                $stclassmate['subject_name'] = $subject_name;
-                                
-                                $st_classmates[]= $stclassmate; 
-                                $st_classmate_ids['classmates_ids'][]= $stclassmate['id'];                    
-                            }
+                        $stclassmates = $connection->execute($sql1)->fetchAll('assoc');
+                        if(count($stclassmates) > 0){
+                          foreach ($stclassmates as $stclassmate) {                       
+                              $st_classmates[]= $stclassmate; 
+                              $st_classmate_ids[]= $stclassmate['id'];                    
                           }
+                        }
+                        $data['status'] =True;
+                        $data['student_informations']['student_info'] = $stinfo;
+                        $data['student_informations']['student_subject_info'][$subject_name] = $stclassinfo;
 
-                          if(count($st_classmates) > 0){
-                            $data['student_classmates'][$subject_name] = array_merge($st_classmates, $st_classmate_ids );
-                          }else{
-                            $data['status'] =False;
-                            $data['message'] = "No classmates found.";
-                          }
-
-
-
-
-
+                        if(isset($st_classmates) && count($st_classmates) > 0){
+                            $data['student_informations']['student_classmates'][$subject_name.'-'.$subject_id] = $st_classmates;
+                            $data['student_informations']['classmates_ids'][$subject_name.'-'.$subject_id] = $st_classmate_ids;       
+                        }else{                                       
+                          $data['student_informations']['student_classmates'][$subject_name.'-'.$subject_id] = "No classmates found"; 
+                        }
                   }
               }else{
                 $data['status'] = False;
@@ -978,8 +997,9 @@ public function getClassmatesofStudent($student_id=null, $return_type=1){
 
 
 
-
     }else{
+        $data['status'] =False;
+        $data['message'] ="student id cannot null."; 
 
 
     }
