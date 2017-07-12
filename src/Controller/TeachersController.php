@@ -1524,6 +1524,8 @@ class TeachersController extends AppController {
   public function sendEmailToTeacher($tid = null) {
     if ($this->request->is('post')) {
       $teacher_id = isset($_GET['teacher_id']) ? $_GET['teacher_id'] : $tid;
+      $selected_courseName = isset($this->request->data['selected_courseName'])? $this->request->data['selected_courseName'] : '';
+    
       if ($teacher_id != null && !empty($teacher_id)) {
         $sids = implode(',', array_keys($this->request->data['selectedstudent']));
         $connection = ConnectionManager::get('default');
@@ -1570,7 +1572,8 @@ class TeachersController extends AppController {
           $to='anita@apparrant.com';
           $from = "info@mylearninguru.com";
           $subject = "Selected Student Recotds";
-          $email_message = "Hello  $teacher_firstname  $teacher_lastname" . $msg;
+          $email_message = "Hello  $teacher_firstname  $teacher_lastname \n\n
+                           <strong> Please find your students List for class $selected_courseName </strong> \n\n" . $msg;
 
 
           //sendEmail($to, $from, $subject,$email_message); // send email to teacher 
