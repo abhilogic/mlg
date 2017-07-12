@@ -1573,23 +1573,32 @@ class TeachersController extends AppController {
           $email_message = "Hello  $teacher_firstname  $teacher_lastname" . $msg;
 
           //sendEmail($to, $from, $subject,$email_message); // send email to teacher 
-          if ($this->sendEmail($to, $from, $subject, $email_message)) {
+          $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);         
+          if($sent_mail==TRUE){ 
             $data['message'] = "mail send";
+            $data['status'] = True;
           } else {
             $data['message'] = "mail is not send";
+            $data['status'] = False;
           }
         } else {
           $data['message'] = "Please select student first.";
-          $data['status'] = "false";
+          $data['status'] = False;
         }
       } else {
         $data['message'] = "Opps teaccher_id cannot be null. Please try again.";
-        $data['status'] = "false";
+        $data['status'] = False;
       }
     } else {
       $data['message'] = "Opps data is not recieved properly. Please try again.";
-      $data['status'] = "false";
+      $data['status'] = False;
     }
+
+
+    $this->set(array(
+            'data' => $data,
+            '_serialize' => array('data')
+        ));
   }
 
   /*protected function sendEmail($to, $from, $subject = null, $email_message = null) {
@@ -1619,11 +1628,15 @@ class TeachersController extends AppController {
 
             if (empty($to)) {
               $message = "Mail Address 'to' cannot be empty";
-              throw new Exception($message);
+              //throw new Exception($message);
+              $data['status']=False;
+              $data['message'] ="Mail Address 'to' cannot be empty";
             }
             if (empty($from)) {
               $message = "Mail Address 'from' cannot be empty";
-              throw new Exception($message);
+              //throw new Exception($message);
+              $data['status']=False;
+              $data['message'] ="Mail Address 'to' cannot be empty";
             }
             //send mail
             $email = new Email();
@@ -1632,13 +1645,19 @@ class TeachersController extends AppController {
             $email->emailFormat('html');
             if ($email->send($email_message)) {
               $status = TRUE;
+              $data['status']=False;
+              $data['message'] ="Mail Address 'to' cannot be empty";
+
             }else{
               $status = FALSE;
+              $data['status']=False;
+              $data['message'] ="Mail Address 'to' cannot be empty";
             }
           } catch (Exception $ex) {
             $this->log($ex->getMessage());
           }
-          return $status;
+          //return $status;
+          return $data ;
        }
 
   /**
