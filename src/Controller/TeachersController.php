@@ -1521,7 +1521,7 @@ class TeachersController extends AppController {
     ]);
   }
 
-  public function sendEmailToTeacher($tid = null) {
+  public function sendEmailStudentListToTeacher($tid = null) {
     if ($this->request->is('post')) {
       $teacher_id = isset($_GET['teacher_id']) ? $_GET['teacher_id'] : $tid;
       $selected_courseName = isset($this->request->data['selected_courseName'])? $this->request->data['selected_courseName'] : '';
@@ -1563,15 +1563,14 @@ class TeachersController extends AppController {
               $msg .= "<td>" . $userrow['open_key'] . "</td>";
               $msg .= "</tr>";
             }
-          }
-          /*$msg .= "</tr>";*/
+          }          
           $msg .= "</tbody></table>";
 
 
         //  $to = $teacher_email;
           $to='anita@apparrant.com';
           $from = "info@mylearninguru.com";
-          $subject = "Selected Student Recotds";
+          $subject = "Selected Student Records";
           $email_message = "Hello  $teacher_firstname  $teacher_lastname <br/><br/>
                            <strong> Please find your students List for class $selected_courseName </strong> <br/><br/>" . $msg;
 
@@ -1603,6 +1602,99 @@ class TeachersController extends AppController {
             'data' => $data,
             '_serialize' => array('data')
         ));
+  }
+
+
+
+  // Send email to each student to share their login info 
+  public function sendEmailStudentInfoToStudent($teacher_id=null) {
+      if ($this->request->is('post')) {
+          $teacher_id= isset($_GET['teacher_id']) ? $_GET['teacher_id']:$teacher_id; 
+          $students= isset($this->request->data['selectedstudent'])? $this->request->data['selectedstudent'] :null;
+            if( (!empty($students) ) && (!empty($teacher_id)) ){
+                  $sids = implode(',', array_keys($this->request->data['selectedstudent']));
+                  $connection = ConnectionManager::get('default');
+                  $str = "SELECT users.id,first_name,last_name,email,username,open_key FROM users, user_details WHERE users.id IN ($sids) AND users.id=user_details.user_id";
+
+                  $users_record = $connection->execute($str)->fetchAll('assoc');
+                  $usercount = count($users_record);
+                  $index = 0;
+
+                  if ($usercount > 1) {
+                      
+                    //teacher records
+                    $str1 = "SELECT users.id,first_name,last_name,email,username,open_key FROM users, user_details WHERE users.id=$teacher_id AND users.id=user_details.user_id"; 
+                    $teacher_record = $connection->execute($str1)->fetchAll('assoc');
+                    if( count($teacher_record) > 0){
+                      foreach ($teacher_record as $trow) {
+                            $teacher_firstname = $trow['first_name'];
+                            $teacher_lastname = $trow['last_name'];
+                            $teacher_email = $trow['email'];
+                      }
+                    }
+
+                    //student records
+                    foreach ($users_record as $userrow) {                        
+                        $msg = "<table><thead>
+                                  <tr>                                     
+                                      <th class='first-name'>First Name</th>
+                                      <th class='last-name'>Last Name</th>
+                                      <th class='parent-student-email'>Student E-mail</th>
+                                      <th class='user-name'>User Name</th>
+                                      <th class='pasword'>Pasword</th>                              
+                                  </tr>
+                              </thead><tbody>";
+
+                          
+                        $msg .= "<tr>";                        
+                        $msg .= "<td>" . $userrow['first_name'] . "</td>";
+                        $msg .= "<td>" . $userrow['last_name'] . "</td>";
+                        $msg .= "<td>" . $userrow['email'] . "</td>";
+                        $msg .= "<td>" . $userrow['username'] . "</td>";
+                        $msg .= "<td>" . $userrow['open_key'] . "</td>";
+                        $msg .= "</tr>";                            
+                        $msg .= "</tbody></table>";
+                        $to='anita@apparrant.com';
+                        //$to = $userrow['email'] ;
+                        $from = "info@mylearninguru.com";
+                        $subject = "Student information from teacher";
+                        $email_message = $index++."Hello  ".$userrow['first_name']." ". $userrow['last_name']." <br/><br/>
+                           <strong> Please find your information shared by your class teacher $teacher_firstname  $teacher_lastname</strong> <br/><br/>" . $msg;  
+                        
+                        $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);         
+                        if($sent_mail==TRUE){ 
+                          $data['status'] = True;
+                          $data['message'] = "mail send";
+                          
+                        } else {
+                          $data['message'] = "mail is not send";
+                          $data['status'] = False;
+                        }                            
+                  }
+
+              }else{
+                  $data['status'] = False;
+                  $data['message'] ="No student is selected to send email.";
+              }
+
+        }else {
+            $data['status'] = False;
+            $data['message'] = "Selected student and teacher_id cannot null.";
+          }
+        
+        }
+
+        else {
+            $data['status'] = False;
+            $data['message'] = "Opps data is not recieved properly. Please try again.";
+          }
+      
+
+      $this->set(array(
+            'data' => $data,
+            '_serialize' => array('data')
+        ));
+
   }
 
   /*protected function sendEmail($to, $from, $subject = null, $email_message = null) {
