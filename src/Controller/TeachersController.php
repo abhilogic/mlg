@@ -1540,12 +1540,11 @@ class TeachersController extends AppController {
                               <th class='sr-no'>Serial Num #</th>
                               <th class='first-name'>First Name</th>
                               <th class='last-name'>Last Name</th>
-                              <th class='parent-student-email'>Parent or Student E-mail</th>
+                              <th class='parent-student-email'>Student E-mail</th>
                               <th class='user-name'>User Name</th>
-                              <th class='pasword'>Pasword</th>
-                              <th class='actions'>Actions</th>
+                              <th class='pasword'>Pasword</th>                              
                           </tr>
-                        </thead><tbody><tr>";
+                        </thead><tbody>";
 
           foreach ($users_record as $userrow) {
             if ($userrow['id'] == $teacher_id) {
@@ -1553,15 +1552,17 @@ class TeachersController extends AppController {
               $teacher_lastname = $userrow['last_name'];
               $teacher_email = $userrow['email'];
             } else {
+              $msg .= "<tr>";
               $msg .="<td>" . $index++ . "</td>";
               $msg .= "<td>" . $userrow['first_name'] . "</td>";
               $msg .= "<td>" . $userrow['last_name'] . "</td>";
               $msg .= "<td>" . $userrow['email'] . "</td>";
               $msg .= "<td>" . $userrow['username'] . "</td>";
               $msg .= "<td>" . $userrow['open_key'] . "</td>";
+              $msg .= "</tr>";
             }
           }
-          $msg .= "</tr>";
+          /*$msg .= "</tr>";*/
           $msg .= "</tbody></table>";
 
 
@@ -1571,6 +1572,7 @@ class TeachersController extends AppController {
           $subject = "Selected Student Recotds";
           $email_message = "Hello  $teacher_firstname  $teacher_lastname" . $msg;
 
+pr($email_message); die;
           //sendEmail($to, $from, $subject,$email_message); // send email to teacher 
           $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);         
           if($sent_mail==TRUE){ 
