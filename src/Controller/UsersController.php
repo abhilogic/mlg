@@ -3631,6 +3631,7 @@ public function getParentChildReport($user_id=null,$pnum=1){
       $message = '';
       $notification_info = array();
       $req_data = $this->request->data;
+
       if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
         $message = 'parent id can not be blank';
         throw new Exception($message);
@@ -3646,13 +3647,13 @@ public function getParentChildReport($user_id=null,$pnum=1){
             $req_data['ids'][] = $student['user_id'];
           }
         }
-        $req_data['ids'][] = 0;
+        //$req_data['ids'][] = 0;
       }
-      $req_data['ids'][] = $req_data['parent_id'];
+      $req_data['ids'][] = $req_data['parent_id'];      
       $notifications_table = TableRegistry::get('notifications');
       $notifications = $notifications_table->find()->where(['user_id IN' => $req_data['ids']])->limit(NOTIFICATION_LIMIT)->orderDesc('id');
 
-      foreach ($notifications as $notification) {
+      foreach ($notifications as $notification) {       
         switch($notification['bundle']) {
           case 'ANALYTICS':
             //child information
@@ -3744,6 +3745,8 @@ public function getParentChildReport($user_id=null,$pnum=1){
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
+
+    
     $this->set([
       'error_message' => $message,
       'notifications' => $notification_info,

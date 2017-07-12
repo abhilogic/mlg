@@ -1449,7 +1449,7 @@ class TeachersController extends AppController {
           $student['email'] = $studentrow['email'];
           $student['password'] = $studentrow['password'];
           $open_key = $studentrow['open_key'];
-          $student['open_key'] = hex2bin($open_key);
+          $student['open_key'] = hex2bin($open_key); // decrypt
 
           if ($studentrow['profile_pic'] == NULL) {
             $student['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';

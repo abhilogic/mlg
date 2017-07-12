@@ -73,12 +73,15 @@ public function getStudentAssignments($user_id = null, $subject_id=null){
             $crObj = new CoursesController();
             $courses_info= $crObj->getChildCoursesOfSubject($subject_id,2,2);
             
+            
             $subskill_ids = array();
-            foreach ($courses_info as $coursesinfo) {                     
-                if($coursesinfo['status']==1){
+            foreach ($courses_info as $coursesinfo) { 
+
+                if(!empty($coursesinfo['status']) && ($coursesinfo['status']==1 )){
                     $subskill_ids = array_merge($subskill_ids, $coursesinfo['childcourse_ids'] );
                 }
             }
+            
            $subskillids = implode(',', $subskill_ids);
 
           if(!empty($subskill_ids)){
