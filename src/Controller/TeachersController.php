@@ -391,12 +391,11 @@ class TeachersController extends AppController {
             } else {
               $temp_data = explode(',', $this->request->data['content']);
               foreach ($temp_data as $key => $value) {
-                $temp = explode(': "', $value);
-                $temp_string = explode('"', $temp[1]);
+                 $temp_string = json_decode($value);
                 if ($key == 0) {
-                  $content = $temp_string[0];
+                  $content = $temp_string->response;
                 } else {
-                  $content = $content . ',' . $temp_string[0];
+                  $content = $content . ',' . $temp_string->response;
                 }
               }
             }
@@ -885,12 +884,11 @@ class TeachersController extends AppController {
             } else {
               $temp_data = explode(',', $this->request->data['updated_content']);
               foreach ($temp_data as $key => $value) {
-                $temp = explode(': "', $value);
-                $temp_string = explode('"', $temp[1]);
+                 $temp_string = json_decode($value);
                 if ($key == 0) {
-                  $content = $temp_string[0];
+                  $content = $temp_string->response;
                 } else {
-                  $content = $content . ',' . $temp_string[0];
+                  $content = $content . ',' . $temp_string->response;
                 }
               }
               $content = $this->request->data['pre_content'] . ',' . $content;
@@ -3335,6 +3333,8 @@ class TeachersController extends AppController {
       $status = false;
       $count = 0;
       $question_master = TableRegistry::get('question_master');
+      $answer_master = TableRegistry::get('answer_master');
+      $option_master = TableRegistry::get('option_master');
       if (isset($this->request->data['tid']) && empty($this->request->data['tid'])) {
         $message = 'login';
       } else if (isset($this->request->data['qId']) && empty($this->request->data['qId'])) {
@@ -3392,11 +3392,9 @@ class TeachersController extends AppController {
           $status = TRUE;
           $message = 'Question updated Successfully.';
         }
-        $option_master = TableRegistry::get('option_master');
         $opt_id = $option_master->find('all', ['fields' => ['id']])->where(['uniqueId' => $unique_id[0]['uniqueId']])->min('id')->toArray('assoc');
         $option_id = $opt_id['id'];
         if ($this->request->data['type'] == 'text') {
-          $answer_master = TableRegistry::get('answer_master');
           foreach ($corect_answer as $ki => $val) {
             foreach ($option as $key => $value) {
               if ($key != 0) {
@@ -3431,14 +3429,15 @@ class TeachersController extends AppController {
           $edit_option = explode(',', $answer_list[0]);
           $edit_count = count($edit_option);
           $new_option = explode(',',$answer_list[1]);
-          if($edit_count <= $this->request->data['correctanswer'] ) {
+          if($edit_count >= $this->request->data['correctanswer'] ) {
             foreach($edit_option as $key => $val) {
               if ($key+1  == $this->request->data['correctanswer']) {
-                $answer_master = TableRegistry::get('answer_master');
-                $answer = $answer_master->newEntity();
-                $answer->uniqueId = $unique_id[0]['uniqueId'];
-                $answer->answers = $value;
-                if($answer_master->save($answer)){
+                $query = $answer_master->query();
+                $result_ans = $query->update()->set([
+                            'answers' => $val
+                        ])->where(['uniqueId' => $unique_id[0]['uniqueId']])->execute();
+                $row_count = $result_ans->rowCount();
+                if($row_count > 0){
                   $status = TRUE;
                   $message = 'Question updated Successfully.';
                 }
@@ -3446,18 +3445,18 @@ class TeachersController extends AppController {
             }
           }
           foreach ($new_option as $key => $value) {
-            $option_master = TableRegistry::get('option_master');
             $option = $option_master->newEntity();
             $option->uniqueId = $unique_id[0]['uniqueId'];
             $option->options = 'upload/' . $value;
             if($option_master->save($option)) {
-              if($this->request->data['correctanswer_type'] == 'image' && $this->request->data['correctanswer'] > $edit_option) {
+              if($this->request->data['correctanswer_type'] == 'image' && $this->request->data['correctanswer'] > $edit_count) {
                 if ($key+$edit_count+1  == $this->request->data['correctanswer']) {
-                  $answer_master = TableRegistry::get('answer_master');
-                  $answer = $answer_master->newEntity();
-                  $answer->uniqueId = $unique_id[0]['uniqueId'];
-                  $answer->answers = $value;
-                  if($answer_master->save($answer)){
+                  $query = $answer_master->query();
+                  $result_ans = $query->update()->set([
+                            'answers' => $value
+                        ])->where(['uniqueId' => $unique_id[0]['uniqueId']])->execute();
+                  $row_count = $result_ans->rowCount();
+                  if($row_count > 0){
                     $status = TRUE;
                     $message = 'Question updated Successfully.';
                  }
@@ -3539,10 +3538,12 @@ class TeachersController extends AppController {
   public function filteredTeacherLessons($user_id = null, $pnum = 1, $grade, $course, $skill) {
     try {
       $message = '';
+      $status = FALSE;
       $count = '';
       $result = '';
       $subskills = '';
       $subskill_list = array();
+      $subskill = array();
       $users_record = '';
       $range = 10;
       if ($user_id == NULL) {
@@ -3606,14 +3607,21 @@ class TeachersController extends AppController {
               $message = 'Result Not Found.';
             }
           }
-//          $users_record = $course_content->find('all')->where(['course_detail_id IN' => $subskill, 'created_by' => $user_id])->toArray();
-           $connection = ConnectionManager::get('default');
-           $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
+          if(empty($subskill)) {
+            $message = 'data not found';
+          }else{
+            //          $users_record = $course_content->find('all')->where(['course_detail_id IN' => $subskill, 'created_by' => $user_id])->toArray();
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
                 . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
                 . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
                 . " WHERE course_contents.created_by = " . $user_id ." AND course_contents.course_detail_id IN(".implode(',',$subskill) .")"
                 . " ORDER BY course_contents.id DESC  $limit";
-          $users_record = $connection->execute($sql)->fetchAll('assoc'); 
+            $users_record = $connection->execute($sql)->fetchAll('assoc');
+            if(!empty($users_record)) {
+              $status = TRUE;
+            }
+          }
         }
       }
     } catch (Exception $e) {
@@ -3622,11 +3630,12 @@ class TeachersController extends AppController {
     }
     $this->set([
       'data' => $users_record,
+      'status' => $status,
       'lastPage' => $last_page,
       'start' => (($current_page - 1) * $range) + 1,
       'last' => (($current_page - 1) * 10) + 10,
       'total' => $count,
-      '_serialize' => ['data', 'lastPage', 'start', 'last', 'total']
+      '_serialize' => ['data','status', 'lastPage', 'start', 'last', 'total']
     ]);
   }
 
@@ -4976,5 +4985,38 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
         'total' => $count,
         '_serialize' => ['response','message','gap','status','lastPage', 'start', 'last', 'total']
     ]);
+  }
+  // get default scope
+  
+  public function restoreScope(){
+    try{
+      $course_detail = TableRegistry::get('course_details');
+      $user_role = TableRegistry::get('user_roles');
+      $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+      foreach ($role as $key => $value) {
+        $rol[$key] = $value['user_id'];
+      }
+      $id = implode(',',$rol);
+      $id = $id.','.$user_id;
+      $connection = ConnectionManager::get('default');
+      $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+      $skills = $connection->execute($sql)->fetchAll('assoc');
+      if(count($skills) > 0) {
+        foreach ($skills as $key => $value) {
+        $skill['course_id'] = $value['course_id'];
+        $skill['parent_id'] = $value['parent_id'];
+        $skill['name'] = $value['name'];
+        $skill['start_date'] = $value['start_date'];
+        $skill['end_date'] = $value['end_date'];
+        $skill['created_by'] = $value['created_by'];
+        $skill['status'] = $value['status'];
+        $skill['visibility'] = 1;
+        $scopes[] = $skill;
+        }
+        $status = TRUE; 
+      }
+    }catch(Exception $e){
+      
+    }
   }
 }
