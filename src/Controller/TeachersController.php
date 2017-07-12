@@ -3025,7 +3025,7 @@ class TeachersController extends AppController {
     ]);
   }
 
-  public function filteredTeacherQuestions($user_id = null, $pnum = 1, $grade, $course, $skill) {
+  public function filteredTeacherQuestions($user_id = null, $pnum = 1, $grade, $course, $skill,$standard=null) {
     try {
       $message = '';
       $count = '';
@@ -3087,15 +3087,54 @@ class TeachersController extends AppController {
                     . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id = " . $grade
                     . " ORDER BY question_master.id DESC " . $limit;
           } else if ($grade != -1 && $course != -1 && $skill == -1) {//110
-            $sql = " SELECT * ,question_master.status from question_master"
+            if($standard == 'state' || $standard == 'cc'){
+              $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . 
+                       " AND question_master.course_id IN (" . implode(',', $subskills) . ") "
+                    . " AND standard IN (select standard from standard where type = '$standard' ) "
+                    . " ORDER BY question_master.id DESC " . $limit;
+            }else if($standard == NULL){
+              $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "
                     . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . " AND question_master.course_id IN (" . implode(',', $subskills) . ")"
                     . " ORDER BY question_master.id DESC " . $limit;
-          } else if ($grade != -1 && $course != -1 && $skill != -1) {//111
-            $sql = " SELECT * ,question_master.status from question_master"
+            }else{
+              $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "
-                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . " AND question_master.course_id IN (" . implode(',', $subskils) . ")"
+                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . 
+                       " AND question_master.course_id IN (" . implode(',', $subskills) . ") "
+                    . " AND standard = '$standard'"
                     . " ORDER BY question_master.id DESC " . $limit;
+            }
+            
+          } else if ($grade != -1 && $course != -1 && $skill != -1) {//111
+//            $sql = " SELECT * ,question_master.status from question_master"
+//                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+//                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade 
+//                    . " AND question_master.course_id IN (" . implode(',', $subskils) . ")"
+//                    . " ORDER BY question_master.id DESC " . $limit;
+            if($standard == 'state' || $standard == 'cc'){
+              $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . 
+                       " AND question_master.course_id IN (" . implode(',', $subskills) . ") "
+                    . " AND standard IN (select standard from standard where type = '$standard' ) "
+                    . " ORDER BY question_master.id DESC " . $limit;
+            }else if($standard == NULL){
+              $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade 
+                      . " AND question_master.course_id IN (" . implode(',', $subskills) . ")"
+                    . " ORDER BY question_master.id DESC " . $limit;
+            }else{
+              $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . 
+                       " AND question_master.course_id IN (" . implode(',', $subskills) . ") "
+                    . " AND standard = '$standard'"
+                    . " ORDER BY question_master.id DESC " . $limit;
+            } 
           }
           $users_record = $connection->execute($sql)->fetchAll('assoc');
         }
@@ -3634,7 +3673,7 @@ class TeachersController extends AppController {
     ]);
   }
 
-  public function filteredTeacherLessons($user_id = null, $pnum = 1, $grade, $course, $skill) {
+  public function filteredTeacherLessons($user_id = null, $pnum = 1, $grade, $course, $skill,$standard=null) {
     try {
       $message = '';
       $status = FALSE;
@@ -3711,11 +3750,30 @@ class TeachersController extends AppController {
           }else{
             //          $users_record = $course_content->find('all')->where(['course_detail_id IN' => $subskill, 'created_by' => $user_id])->toArray();
             $connection = ConnectionManager::get('default');
-            $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
-                . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
-                . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
-                . " WHERE course_contents.created_by = " . $user_id ." AND course_contents.course_detail_id IN(".implode(',',$subskill) .")"
-                . " ORDER BY course_contents.id DESC  $limit";
+            if($standard == 'state' || $standard == 'cc'){
+             $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
+                      . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
+                      . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
+                      . " WHERE course_contents.created_by = " . $user_id ." "
+                      . " AND course_contents.course_detail_id IN(".implode(',',$subskill) .")"
+                      . " AND standard_type = '$standard'"
+                      . " ORDER BY course_contents.id DESC  $limit"; 
+            }else if($standard == null){
+              $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
+                      . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
+                      . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
+                      . " WHERE course_contents.created_by = " . $user_id ." AND course_contents.course_detail_id IN(".implode(',',$subskill) .")"
+                      . " ORDER BY course_contents.id DESC  $limit";
+            }else{
+              $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
+                      . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
+                      . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
+                      . " WHERE course_contents.created_by = " . $user_id .""
+                      . " AND course_contents.course_detail_id IN(".implode(',',$subskill) .")"
+                      . " AND standards = '$standard' "
+                      . " ORDER BY course_contents.id DESC  $limit";
+            }
+            
             $users_record = $connection->execute($sql)->fetchAll('assoc');
             if(!empty($users_record)) {
               $status = TRUE;
