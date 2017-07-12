@@ -1572,10 +1572,10 @@ class TeachersController extends AppController {
           $to='anita@apparrant.com';
           $from = "info@mylearninguru.com";
           $subject = "Selected Student Recotds";
-          $email_message = "Hello  $teacher_firstname  $teacher_lastname \n\n
-                           <strong> Please find your students List for class $selected_courseName </strong> \n\n" . $msg;
+          $email_message = "Hello  $teacher_firstname  $teacher_lastname <br/><br/>
+                           <strong> Please find your students List for class $selected_courseName </strong> <br/><br/>" . $msg;
 
-
+//pr($email_message); die; 
           //sendEmail($to, $from, $subject,$email_message); // send email to teacher 
           $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);         
           if($sent_mail==TRUE){ 
