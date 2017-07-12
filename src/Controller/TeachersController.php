@@ -1535,7 +1535,7 @@ class TeachersController extends AppController {
         $usercount = count($users_record);
         $index = 0;
 
-        if ($usercount > 1) {
+        if ($usercount > 0) {
           $msg = "<table>";
           $msg .= "<thead>
                           <tr>
@@ -1620,7 +1620,7 @@ class TeachersController extends AppController {
                   $usercount = count($users_record);
                   $index = 0;
 
-                  if ($usercount > 1) {
+                  if ($usercount > 0) {
                       
                     //teacher records
                     $str1 = "SELECT users.id,first_name,last_name,email,username,open_key FROM users, user_details WHERE users.id=$teacher_id AND users.id=user_details.user_id"; 
