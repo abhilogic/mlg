@@ -1525,8 +1525,9 @@ class TeachersController extends AppController {
     if ($this->request->is('post')) {
       $teacher_id = isset($_GET['teacher_id']) ? $_GET['teacher_id'] : $tid;
       $selected_courseName = isset($this->request->data['selected_courseName'])? $this->request->data['selected_courseName'] : '';
+      $students= isset($this->request->data['selectedstudent'])? $this->request->data['selectedstudent'] :null;
     
-      if ($teacher_id != null && !empty($teacher_id)) {
+      if ($teacher_id != null && (!empty($teacher_id)) && (!empty($students)) ) {
         $sids = implode(',', array_keys($this->request->data['selectedstudent']));
         $connection = ConnectionManager::get('default');
         $str = "SELECT users.id,first_name,last_name,email,username,open_key FROM users, user_details WHERE users.id IN ($sids,$teacher_id) AND users.id=user_details.user_id";
@@ -1589,7 +1590,7 @@ class TeachersController extends AppController {
           $data['status'] = False;
         }
       } else {
-        $data['message'] = "Opps teaccher_id cannot be null. Please try again.";
+        $data['message'] = "Opps either teacher_id or students are not selected for mail. Please try again.";
         $data['status'] = False;
       }
     } else {
@@ -1599,8 +1600,8 @@ class TeachersController extends AppController {
 
 
     $this->set(array(
-            'data' => $data,
-            '_serialize' => array('data')
+            'response' => $data,
+            '_serialize' => array('response')
         ));
   }
 
@@ -1691,8 +1692,8 @@ class TeachersController extends AppController {
       
 
       $this->set(array(
-            'data' => $data,
-            '_serialize' => array('data')
+            'response' => $data,
+            '_serialize' => array('response')
         ));
 
   }
