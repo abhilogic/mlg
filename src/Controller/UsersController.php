@@ -3648,6 +3648,7 @@ public function getParentChildReport($user_id=null,$pnum=1){
           }
         }
         //$req_data['ids'][] = 0;
+        
       }
       $req_data['ids'][] = $req_data['parent_id'];      
       $notifications_table = TableRegistry::get('notifications');
@@ -3746,7 +3747,6 @@ public function getParentChildReport($user_id=null,$pnum=1){
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
 
-    
     $this->set([
       'error_message' => $message,
       'notifications' => $notification_info,
