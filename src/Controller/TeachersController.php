@@ -1572,7 +1572,7 @@ class TeachersController extends AppController {
           $subject = "Selected Student Recotds";
           $email_message = "Hello  $teacher_firstname  $teacher_lastname" . $msg;
 
-pr($email_message); die;
+
           //sendEmail($to, $from, $subject,$email_message); // send email to teacher 
           $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);         
           if($sent_mail==TRUE){ 
