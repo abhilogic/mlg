@@ -1565,7 +1565,8 @@ class TeachersController extends AppController {
           $msg .= "</tbody></table>";
 
 
-          $to = $teacher_email;
+        //  $to = $teacher_email;
+          $to='anita@apparrant.com';
           $from = "info@mylearninguru.com";
           $subject = "Selected Student Recotds";
           $email_message = "Hello  $teacher_firstname  $teacher_lastname" . $msg;
