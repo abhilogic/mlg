@@ -3626,131 +3626,169 @@ public function getParentChildReport($user_id=null,$pnum=1){
    *
    * user_id will be used as child id as well as parent id. (situation based).
    */
-  public function getNotificationForParent() {
+  public function getNotifications($notificationfor=null, $parent_or_teacher_id=null) {
     try{
-      $message = '';
-      $notification_info = array();
-      $req_data = $this->request->data;
+          //$message = '';
+          $notification_info = array();
+          //$req_data = $this->request->data;
+          $connection = ConnectionManager::get('default');
 
-      if (!isset($req_data['parent_id']) || empty($req_data['parent_id'])) {
-        $message = 'parent id can not be blank';
-        throw new Exception($message);
-      }
-      if (isset($req_data['child_ids']) && empty($req_data['child_ids'])) {
-        $message = 'child id cannot be blank';
-        throw new Exception($message);
-      }
-      if (!isset($req_data['child_ids'])) {
-        $children = $this->getChildrenDetails($req_data['parent_id'], null, TRUE);
-        if (!empty($children)) {
-          foreach ($children as $student) {
-            $req_data['ids'][] = $student['user_id'];
+          $notificationfor = isset($_GET['notificationfor']) ? $_GET['notificationfor'] : $notificationfor;
+          $parent_or_teacher_id = isset($_GET['id']) ? $_GET['id'] : $parent_or_teacher_id;
+
+          if(!empty($notificationfor) && !empty($parent_or_teacher_id)){
+              $req_data['ids'][] = $parent_or_teacher_id;
+              if($notificationfor=='parents'){              
+                    //1. get chidren of parents
+                    $children = $this->getChildrenDetails($parent_or_teacher_id, null, TRUE);
+                    if (!empty($children)) {
+                          foreach ($children as $pstudent) {
+                                $req_data['ids'][] = $pstudent['user_id'];
+                          }
+                    }                
+              }elseif($notificationfor=='teacher'){               
+                      //1. get students of teacher
+                      $teacher_students = TableRegistry::get('StudentTeachers')->find()->where(['teacher_id'=>$parent_or_teacher_id ]);
+                      if ($teacher_students->count() > 0) {
+                          foreach($teacher_students as $tstudent){                                          
+                              $req_data['ids'][] = $tstudent['student_id'];
+                          }
+                      }
+              }else{
+                    $data['message'] = "set notificationfor:parents/teacher.";
+                    $data['status'] =False;
+              }
+          }else{
+              $data['status'] = False;
+              $data['message'] = "set notificationfor:parents/teacher AND set id to whom students is attachered on MLG(parent/teacher)";
+            }
+
+    
+          // Get Notification for parent/teacher     
+          $notifications_table = TableRegistry::get('notifications');
+          $notifications = $notifications_table->find()->where(['user_id IN' => $req_data['ids']])->limit(NOTIFICATION_LIMIT)->orderDesc('id');           
+          foreach ($notifications as $notification){
+
+            switch($notification['bundle']) {
+                
+                case 'ANALYTICS':
+                    //child information
+                    $child = $this->Users->get($notification['user_id'])->toArray();
+
+                    /*//quiz information
+                    $user_quizes_table = TableRegistry::get('UserQuizes');
+                    $user_quizes = $user_quizes_table->get($notification['sub_category_id'])->toArray();
+
+                    //quiz type information
+                    $quiz_types_table = TableRegistry::get('quiz_types');
+                    $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
+
+                    $exam_type = '';
+                    if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
+                      $exam_type = 'Pre Test';
+                    }
+                    if (strtoupper($quiz_type['variable']) == 'SUBSKILL_QUIZ') {
+                      $exam_type = 'Sub skill quiz';
+                    }
+                    if (strtoupper($quiz_type['variable']) == 'PRACTICES') {
+                      $exam_type = 'Practices';
+                    }
+                    if (strtoupper($quiz_type['variable']) == 'KNIGHT_CHALLENGE') {
+                      $exam_type = 'Knight challenge';
+                    }
+                    if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
+                      $exam_type = 'Teacher custom assignment';
+                    }
+                    if (strtoupper($quiz_type['variable']) == 'TEACHER_AUTO_ASSIGNMENT') {
+                      $exam_type = 'Teacher auto assignment';
+                    }
+                    if (strtoupper($quiz_type['variable']) == 'PARENT_AUTO_ASSIGNMENT') {
+                      $exam_type = 'Parent auto assignment';
+                    }*/
+
+             
+                    $uquiz_sql = " SELECT uq.*, qt.name  FROM user_quizes as uq INNER JOIN quiz_types as qt ON qt.id = uq.quiz_type_id WHERE uq.id =".$notification['sub_category_id'].' ORDER BY uq.id'; 
+                    $uquiz_result = $connection->execute($uquiz_sql)->fetchAll('assoc');        
+                    if(count($uquiz_sql) > 0){
+                          foreach ($uquiz_result as $uquiz_row) {
+                                $notification_info[] = array(
+                                      'kind' => 'ANALYTICS',
+                                      'message' => $child['first_name'] . ' ' . $child['last_name'] .
+                                            ' has recently given the ' . $uquiz_row['name'] . ' and scored '
+                                            . round((($uquiz_row['score'] / $uquiz_row['exam_marks']) * 100), 2) . ' %',
+                                      'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+                                );
+                          }             
+                      }else{
+                            $data['status'] = False;
+                            $data['notification_type'] ="ANALYTICS";
+                            $data['message1'] = "No records for analytic.";
+                      }            
+
+                    break;
+
+                  case 'OFFERS':
+                      $coupons_table = TableRegistry::get('coupons');
+                      $parent_offer = $coupons_table->get($notification['sub_category_id'])->toArray();
+                      $notification_info[] = array(
+                              'kind' => 'OFFERS',
+                              'message' => $parent_offer['description'],
+                              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+                        );
+                  break;
+
+                  case 'SUBSCRIPTIONS':
+                        $subscription_message = '';
+                        $child = $this->Users->get($notification['user_id'])->toArray();
+                        if (strtoupper($notification['title']) == 'SUBSCRIPTION EXPIRE') {
+                          $date1 = $child['subscription_end_date'];
+                          $date2 = date_create();
+                          $date = date_diff($date1, $date2);
+                          $subscription_message = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end after ' . $date->days . ' days';
+                        }
+                        $notification_info[] = array(
+                          'kind' => 'SUBCRIPTIONS',
+                          'message' => $subscription_message,
+                          'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+                        );
+                break;
+
+                case 'COUPONS':
+                      $coupon_message = '';
+                      $child = $this->Users->get($notification['user_id'])->toArray();
+                      if (strtoupper($notification['title']) == 'APPROVAL PENDING') {
+                        $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
+                      }
+                      if (strtoupper($notification['title']) == 'ACQUIRED') {
+                        $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
+                      }
+                      $notification_info[] = array(
+                        'kind' => 'COUPONS',
+                        'message' => $coupon_message,
+                        'time_before' => (array)date_diff(date_create(),$notification['created_date']),
+                      );
+                  break;
+              } // end  switch
+         }// end foreach
+
+         if(count($notification_info) >0){
+            $data['status'] =True;
+            $data['notifications'] =$notification_info;
+         }else{
+            $data['status'] = False;
+            $data['message'] ="No Notification Yet.";
           }
-        }
-        //$req_data['ids'][] = 0;
-        
-      }
-      $req_data['ids'][] = $req_data['parent_id'];      
-      $notifications_table = TableRegistry::get('notifications');
-      $notifications = $notifications_table->find()->where(['user_id IN' => $req_data['ids']])->limit(NOTIFICATION_LIMIT)->orderDesc('id');
-
-      foreach ($notifications as $notification) {       
-        switch($notification['bundle']) {
-          case 'ANALYTICS':
-            //child information
-            $child = $this->Users->get($notification['user_id'])->toArray();
-
-            //quiz information
-            $user_quizes_table = TableRegistry::get('UserQuizes');
-            $user_quizes = $user_quizes_table->get($notification['sub_category_id'])->toArray();
-
-            //quiz type information
-            $quiz_types_table = TableRegistry::get('quiz_types');
-            $quiz_type = $quiz_types_table->find()->where(['id' => $user_quizes['quiz_type_id']])->last()->toArray();
-
-            $exam_type = '';
-            if (strtoupper($quiz_type['variable']) == 'PRE_TEST') {
-              $exam_type = 'Pre Test';
-            }
-            if (strtoupper($quiz_type['variable']) == 'SUBSKILL_QUIZ') {
-              $exam_type = 'Sub skill quiz';
-            }
-            if (strtoupper($quiz_type['variable']) == 'PRACTICES') {
-              $exam_type = 'Practices';
-            }
-            if (strtoupper($quiz_type['variable']) == 'KNIGHT_CHALLENGE') {
-              $exam_type = 'Knight challenge';
-            }
-            if (strtoupper($quiz_type['variable']) == 'TEACHER_CUSTOM_ASSIGNMENT') {
-              $exam_type = 'Teacher custom assignment';
-            }
-            if (strtoupper($quiz_type['variable']) == 'TEACHER_AUTO_ASSIGNMENT') {
-              $exam_type = 'Teacher auto assignment';
-            }
-            if (strtoupper($quiz_type['variable']) == 'PARENT_AUTO_ASSIGNMENT') {
-              $exam_type = 'Parent auto assignment';
-            }
-
-            $notification_info[] = array(
-              'kind' => 'ANALYTICS',
-              'message' => $child['first_name'] . ' ' . $child['last_name'] .
-                  ' has recently given the ' . $exam_type . ' and scored '
-                  . round((($user_quizes['score'] / $user_quizes['exam_marks']) * 100), 2) . ' %',
-              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
-            );
-            break;
-
-          case 'OFFERS':
-            $coupons_table = TableRegistry::get('coupons');
-            $parent_offer = $coupons_table->get($notification['sub_category_id'])->toArray();
-            $notification_info[] = array(
-              'kind' => 'OFFERS',
-              'message' => $parent_offer['description'],
-              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
-            );
-            break;
-
-          case 'SUBSCRIPTIONS':
-            $subscription_message = '';
-            $child = $this->Users->get($notification['user_id'])->toArray();
-            if (strtoupper($notification['title']) == 'SUBSCRIPTION EXPIRE') {
-              $date1 = $child['subscription_end_date'];
-              $date2 = date_create();
-              $date = date_diff($date1, $date2);
-              $subscription_message = 'Your subscription for ' . $child['first_name'] . ' ' . $child['last_name'] . ' is going to end after ' . $date->days . ' days';
-            }
-            $notification_info[] = array(
-              'kind' => 'SUBCRIPTIONS',
-              'message' => $subscription_message,
-              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
-            );
-            break;
-
-          case 'COUPONS':
-            $coupon_message = '';
-            $child = $this->Users->get($notification['user_id'])->toArray();
-            if (strtoupper($notification['title']) == 'APPROVAL PENDING') {
-              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has requested to redeem a coupon';
-            }
-            if (strtoupper($notification['title']) == 'ACQUIRED') {
-              $coupon_message['coupons'] = $child['first_name'] . ' ' . $child['last_name'] . ' has acquired a coupon';
-            }
-            $notification_info[] = array(
-              'kind' => 'COUPONS',
-              'message' => $coupon_message,
-              'time_before' => (array)date_diff(date_create(),$notification['created_date']),
-            );
-            break;
-        }
-      }
     } catch (Exception $ex) {
-      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      //$this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+      $data['status'] =False;
+      $data['message'] = "Issue";
     }
 
-    $this->set([
-      'error_message' => $message,
-      'notifications' => $notification_info,
-      '_serialize' => ['error_message', 'notifications']
+
+
+    $this->set([      
+      'response' => $data,
+      '_serialize' => ['response']
     ]);
   }
 
