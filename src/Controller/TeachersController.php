@@ -1832,6 +1832,7 @@ class TeachersController extends AppController {
             $question->status = 'approved';
             $question->marks = $marks;
             $question->uniqueId = $unique_id;
+            $question->createdDate = date('Y-m-d', time());
             $insertedId = $question_master->save($question)->id;
             if (is_numeric($insertedId)) {
               $header_master = TableRegistry::get('header_master');
