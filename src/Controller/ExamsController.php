@@ -649,7 +649,7 @@ public function getUserQuizResponse($uid=null,$quiz_id=null,$user_quiz_id=null, 
      
       //Query - how can prevent to send a assignment by teacher/parent if student mastered.
       if(!empty($skill_id) && !empty($user_id) ){
-       echo   $getsubskill_str = "SELECT cr.id as subskill_id, cr.course_name FROM courses as cr, course_details  as cd WHERE cr.id=cd.course_id AND parent_id=$skill_id ORDER BY cr.id ASC";
+         $getsubskill_str = "SELECT cr.id as subskill_id, cr.course_name FROM courses as cr, course_details  as cd WHERE cr.id=cd.course_id AND parent_id=$skill_id ORDER BY cr.id ASC";
 
           $connection = ConnectionManager::get('default');
           $subskills_results = $connection->execute($getsubskill_str)->fetchAll('assoc');
