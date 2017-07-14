@@ -498,14 +498,15 @@ class TeachersController extends AppController {
               $detail->id = $id + 1;
             }
             $detail = $course_detail->newEntity();
-            $detail->name = isset($temp['lesson']) ? $temp['lesson'] : '';
-            $detail->text_title = isset($temp['text_title']) ? $temp['text_title'] : '';
-            $detail->text_description = isset($temp['text_description']) ? $temp['text_description'] : '';
-            $detail->video_title = isset($temp['video_title']) ? $temp['video_title'] : '';
-            $detail->video_url = isset($temp['video_url']) ? $temp['video_url'] : '';
-            $detail->image_title = isset($temp['image_title']) ? $temp['image_title'] : '';
-            $detail->image_url = isset($temp['image_url']) ? $temp['image_url'] : '';
             $detail->course_detail_id = $value;
+            $detail->lesson_name = isset($temp['lesson']) ? $temp['lesson'] : '';
+            $detail->title = isset($temp['text_title']) ? $temp['text_title'] : '';
+            $detail->type = isset($temp['text_description']) ? $temp['text_description'] : '';
+            $detail->content = isset($temp['video_title']) ? $temp['video_title'] : '';
+            $detail->status = 'approved';
+            $detail->standard_type = isset($temp['image_url']) ? $temp['image_url'] : '';
+            $detail->standards = isset($temp['image_title']) ? $temp['image_title'] : '';
+            $detail->shared_mode = isset($temp['image_title']) ? $temp['image_title'] : '';
             if ($course_detail->save($detail)) {
               $id = $detail->id;
             }
@@ -5207,35 +5208,55 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
   }
   // get default scope
   
-  public function restoreScope(){
+  public function restoreScope($user_id=null,$parent_id=null){
     try{
-      $course_detail = TableRegistry::get('course_details');
-      $user_role = TableRegistry::get('user_roles');
-      $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
-      foreach ($role as $key => $value) {
-        $rol[$key] = $value['user_id'];
+      $message = '';
+      $scopes = array();
+      $status = FALSE;
+      if($user_id == null) {
+        $message = "Login.";
+        throw new Exception('User not login.');
+      }elseif($parent_id == null){
+        $message = "Choose subject.";
+        throw new Exception('Choose subject.'); 
       }
-      $id = implode(',',$rol);
-      $id = $id.','.$user_id;
-      $connection = ConnectionManager::get('default');
-      $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
-      $skills = $connection->execute($sql)->fetchAll('assoc');
-      if(count($skills) > 0) {
-        foreach ($skills as $key => $value) {
-        $skill['course_id'] = $value['course_id'];
-        $skill['parent_id'] = $value['parent_id'];
-        $skill['name'] = $value['name'];
-        $skill['start_date'] = $value['start_date'];
-        $skill['end_date'] = $value['end_date'];
-        $skill['created_by'] = $value['created_by'];
-        $skill['status'] = $value['status'];
-        $skill['visibility'] = 1;
-        $scopes[] = $skill;
+      if($message == ''){
+        $course_detail = TableRegistry::get('course_details');
+        $user_role = TableRegistry::get('user_roles');
+        $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+        foreach ($role as $key => $value) {
+          $rol[$key] = $value['user_id'];
         }
-        $status = TRUE; 
+        $id = implode(',',$rol);
+        $id = $id.','.$user_id;
+        $connection = ConnectionManager::get('default');
+        $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+        $skills = $connection->execute($sql)->fetchAll('assoc');
+        if(count($skills) > 0) {
+          foreach ($skills as $key => $value) {
+          $skill['course_id'] = $value['course_id'];
+          $skill['parent_id'] = $value['parent_id'];
+          $skill['name'] = $value['name'];
+          $skill['start_date'] = $value['start_date'];
+          $skill['end_date'] = $value['end_date'];
+          $skill['created_by'] = $value['created_by'];
+          $skill['status'] = $value['status'];
+          $skill['visibility'] = 1;
+          $scopes[] = $skill;
+          }
+          $status = TRUE; 
+        }
       }
-    }catch(Exception $e){
       
+    }catch(Exception $e){
+      $this->log('Error in restoreScope function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
     }
+    $this->set([
+        'response' => $scopes,
+        'message' => $message,
+        'status' => $status,
+        '_serialize' => ['response','message','status']
+    ]);
   }
 }
