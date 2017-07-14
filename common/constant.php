@@ -91,3 +91,8 @@ define('NOTIFICATION_LIMIT', 10);
 
 // ALERT_BEFORE_SUBSCRIPTION_EXPIRE" contain the no. of day after child subscription will expire
 define('ALERT_BEFORE_SUBSCRIPTION_EXPIRE', 7);
+
+// Standard Type
+define('STANDARD_TYPE',  json_encode( array('state','cc')));
+// RANGE FOR PAGINATION
+define('RANGE', 10);

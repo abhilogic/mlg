@@ -2930,7 +2930,7 @@ class TeachersController extends AppController {
    * */
   public function getUserQuestions($user_id = null, $pnum = 1) {
     try {
-      $range = 10;
+      $range = RANGE;
       $message = '';
       $count = '';
       $users_record = '';
@@ -2943,14 +2943,12 @@ class TeachersController extends AppController {
         if (!empty($pnum)) {
           $current_page = $pnum;
         }
-//        $question = TableRegistry::get('question_master');
         $connection = ConnectionManager::get('default');
         $sql = " SELECT * ,question_master.id as question_id,question_master.status from question_master"
                 . " INNER JOIN user_points ON question_master.id = user_points.question_id "
                 . " WHERE question_master.created_by = " . $user_id
                 . " ORDER BY question_master.id DESC ";
         $count = $connection->execute($sql)->count();
-//         $count = $question->find()->where(['created_by' => $user_id])->count();
         $last_page = ceil($count / $range);
         if ($current_page < 1) {
           $current_page = 1;
@@ -3035,6 +3033,7 @@ class TeachersController extends AppController {
       $subskills = '';
       $users_record = '';
       $range = 10;
+      $connection = ConnectionManager::get('default');
       if ($user_id == NULL) {
         $message = 'login first';
         throw new Exception('login first');
@@ -3045,14 +3044,6 @@ class TeachersController extends AppController {
           $current_page = $pnum;
         }
         $question = TableRegistry::get('question_master');
-        $count = $question->find()->where(['created_by' => $user_id])->count();
-        $last_page = ceil($count / $range);
-        if ($current_page < 1) {
-          $current_page = 1;
-        } elseif ($current_page > $last_page && $last_page > 0) {
-          $current_page = $last_page;
-        }
-        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
         if ($course != -1) {
           $course_detail = TableRegistry::get('course_details');
           $result = $course_detail->find('all')->where(['parent_id' => $course])->toArray();
@@ -3070,13 +3061,55 @@ class TeachersController extends AppController {
         } if ($skill != '-1') {
           $subskill = $course_detail->find()->where(['parent_id IN' => $skill])->toArray();
           foreach ($subskill as $key => $value) {
-            $subskils[$key] = $value['course_id'];
+            $subskills[$key] = $value['course_id'];
           }
-          if (empty($subskils)) {
+          if (empty($subskills)) {
             $message = 'Result Not Found.';
           }
         }
-        $connection = ConnectionManager::get('default');
+        if($grade != -1 && !empty($subskills)){
+          if(in_array($standard,json_decode(STANDARD_TYPE))){
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . 
+                       " AND question_master.course_id IN (" . implode(',', $subskills) . ") "
+                    . " AND standard IN (select standard from standard where type = '$standard' ) "
+                    . " ORDER BY question_master.id DESC ";
+            $count = $connection->execute($sql)->count();          
+          }else if($standard == null){
+            $count = $question->find()->where(['created_by' => $user_id,
+              'grade_id' => $grade,
+              'course_id IN' => $subskills])->count();
+          }else{
+            $count = $question->find()->where(['created_by' => $user_id,
+              'grade_id' => $grade,
+              'course_id IN' => $subskills,
+              'standard' => $standard])->count();
+          }
+        }else if($grade != -1 && empty($subskills)) {
+          if(in_array($standard,json_decode(STANDARD_TYPE))){
+            $sql = " SELECT * ,question_master.status from question_master"
+                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
+                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id = " . $grade
+                    . " AND question_master.standard IN (select standard from standard where type = '$standard' ) "
+                    . " ORDER BY question_master.id DESC " ;
+            $count = $connection->execute($sql)->count();
+          }else if($standard == null){
+            $count = $question->find()->where(['created_by' => $user_id,
+              'grade_id' => $grade])->count();
+          }else{
+            $count = $question->find()->where(['created_by' => $user_id,
+              'grade_id' => $grade,
+              'standard' => $standard ])->count();
+          }
+        }
+        $last_page = ceil($count / $range);
+        if ($current_page < 1) {
+          $current_page = 1;
+        } elseif ($current_page > $last_page && $last_page > 0) {
+          $current_page = $last_page;
+        }
+        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
         if ($message == '') {
           if ($grade == -1 && $course == -1 && $skill == -1) {//000
             $sql = " SELECT * ,question_master.status from question_master"
@@ -3089,7 +3122,7 @@ class TeachersController extends AppController {
                     . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id = " . $grade
                     . " ORDER BY question_master.id DESC " . $limit;
           } else if ($grade != -1 && $course != -1 && $skill == -1) {//110
-            if($standard == 'state' || $standard == 'cc'){
+            if(in_array($standard, json_decode(STANDARD_TYPE))){
               $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "
                     . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . 
@@ -3111,12 +3144,7 @@ class TeachersController extends AppController {
             }
             
           } else if ($grade != -1 && $course != -1 && $skill != -1) {//111
-//            $sql = " SELECT * ,question_master.status from question_master"
-//                    . " INNER JOIN user_points ON question_master.id = user_points.question_id "
-//                    . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade 
-//                    . " AND question_master.course_id IN (" . implode(',', $subskils) . ")"
-//                    . " ORDER BY question_master.id DESC " . $limit;
-            if($standard == 'state' || $standard == 'cc'){
+            if(in_array($standard, json_decode(STANDARD_TYPE))){
               $sql = " SELECT * ,question_master.status from question_master"
                     . " INNER JOIN user_points ON question_master.id = user_points.question_id "
                     . " WHERE question_master.created_by = " . $user_id . " AND question_master.grade_id =" . $grade . 
@@ -3625,7 +3653,7 @@ class TeachersController extends AppController {
       $message = '';
       $count = '';
       $users_record = '';
-      $range = 10;
+      $range = RANGE;
       if ($user_id == NULL) {
         $message = 'login first';
         throw new Exception('login first');
@@ -3659,7 +3687,6 @@ class TeachersController extends AppController {
         $course_details = $connection->execute($sql)->fetchAll('assoc'); 
         $course_detail = TableRegistry::get('course_details');
         $subskill = $course_detail->find()->where(['course_id' => $course_details[0]['course_detail_id']]);
-//        $course_detail[0]['sub_skill_name'] = $subskill[0]['name'];
       }
     } catch (Exception $e) {
       $this->log($e->getMessage() . '(' . __METHOD__ . ')');
@@ -3696,14 +3723,6 @@ class TeachersController extends AppController {
           $current_page = $pnum;
         }
         $course_content = TableRegistry::get('course_contents');
-        $count = $course_content->find()->where(['created_by' => $user_id])->count();
-        $last_page = ceil($count / $range);
-        if ($current_page < 1) {
-          $current_page = 1;
-        } elseif ($current_page > $last_page && $last_page > 0) {
-          $current_page = $last_page;
-        }
-        $limit = 'limit ' . ($current_page - 1) * $range . ',' . $range;
         $connection = ConnectionManager::get('default');
         if ($message == '') {
           $course_detail = TableRegistry::get('course_details');
@@ -3721,6 +3740,17 @@ class TeachersController extends AppController {
               $subskill_list[$key]['id'] = $value['course_id'];
               $subskill_list[$key]['name'] = $value['name'];
             }
+            if(in_array($standard, json_decode(STANDARD_TYPE))) {
+             $count = $course_content->find()->where(['created_by' => $user_id ,
+                 'course_detail_id IN' => $subskill,
+                 'standard_type' => $standard])->count(); 
+            }else if($standard == null) {
+              $count = $course_content->find()->where(['created_by' => $user_id ,'course_detail_id IN' => $subskill])->count();
+            }else{
+              $count = $course_content->find()->where(['created_by' => $user_id ,
+                 'course_detail_id IN' => $subskill,
+                 'standards' => $standard])->count();
+            }
           } else if ($grade != -1 && $course != -1 && $skill == -1) {
             $result = $course_detail->find('all')->where(['parent_id' => $course])->toArray();
             $skills = '';
@@ -3735,6 +3765,18 @@ class TeachersController extends AppController {
             }
             if (empty($subskill)) {
               $message = 'Result Not Found.';
+            }else{
+             if(in_array($standard, json_decode(STANDARD_TYPE))) {
+              $count = $course_content->find()->where(['created_by' => $user_id ,
+                  'course_detail_id IN' => $subskill,
+                  'standard_type' => $standard])->count(); 
+             }else if($standard == null) {
+               $count = $course_content->find()->where(['created_by' => $user_id ,'course_detail_id IN' => $subskill])->count();
+             }else{
+               $count = $course_content->find()->where(['created_by' => $user_id ,
+                  'course_detail_id IN' => $subskill,
+                  'standards' => $standard])->count();
+             }
             }
           } else if ($grade != -1 && $course != -1 && $skill != -1) {
             $subskil = $course_detail->find()->where(['parent_id IN' => $skill])->toArray();
@@ -3745,14 +3787,32 @@ class TeachersController extends AppController {
             }
             if (empty($subskill)) {
               $message = 'Result Not Found.';
+            }else{
+             if(in_array($standard, json_decode(STANDARD_TYPE))) {
+              $count = $course_content->find()->where(['created_by' => $user_id ,
+                  'course_detail_id IN' => $subskill,
+                  'standard_type' => $standard])->count(); 
+             }else if($standard == null) {
+               $count = $course_content->find()->where(['created_by' => $user_id ,'course_detail_id IN' => $subskill])->count();
+             }else{
+               $count = $course_content->find()->where(['created_by' => $user_id ,
+                  'course_detail_id IN' => $subskill,
+                  'standards' => $standard])->count();
+             }
             }
           }
+          $last_page = ceil($count / RANGE);
+          if ($current_page < 1) {
+            $current_page = 1;
+          } elseif ($current_page > $last_page && $last_page > 0) {
+            $current_page = $last_page;
+          }
+          $limit = 'limit ' . ($current_page - 1) * RANGE . ',' . RANGE;
           if(empty($subskill)) {
             $message = 'data not found';
           }else{
-            //          $users_record = $course_content->find('all')->where(['course_detail_id IN' => $subskill, 'created_by' => $user_id])->toArray();
             $connection = ConnectionManager::get('default');
-            if($standard == 'state' || $standard == 'cc'){
+            if(in_array($standard, json_decode(STANDARD_TYPE))){
              $sql = " SELECT * ,course_contents.id as course_content_id,course_contents.status,course_details.name as sub_skill_name from course_contents"
                       . " INNER JOIN user_points ON course_contents.id = user_points.course_content_id "
                       . " INNER JOIN course_details ON course_contents.course_detail_id = course_details.course_id "
