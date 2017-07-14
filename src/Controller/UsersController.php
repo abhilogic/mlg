@@ -3813,7 +3813,14 @@ public function getParentChildReport($user_id=null,$pnum=1){
                       $data['attention_records'][] = $stQuizRecord;
                   }
               }
-              $data['status'] = True;        
+              if(isset($data['attention_records'])){
+                $data['status'] = True;
+              }else{
+                    $data['status'] =False;
+                    $data['message']="No Records Found For Area oF Focus.";
+              }
+
+                      
           }else{
                     $data['status'] =False;
                     $data['message']="No Records Found For Area oF Focus.";
