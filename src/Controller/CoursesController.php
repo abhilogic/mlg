@@ -7,6 +7,7 @@ use Cake\I18n\Time;
 use Cake\Core\Exception\Exception;
 use Cake\Routing\Router;
 use Cake\Datasource\ConnectionManager;
+use App\Controller\TeachersController;
 
 /**
  * Courses Controller
@@ -762,15 +763,16 @@ class CoursesController extends AppController{
 */
 
      public function getCourseListForLevel($grade=null){
-        if($grade!=null){
+       $data = array('message' => '', 'courses' => array(), 'course_list' => '');
+       if($grade!=null){
           $courses_count= $this->Courses->find('all')->where(['level_id'=>$grade])->count();
-         // $courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails'=>['CourseContents'] ]);
-          $courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails']);
+         /*$courses= $this->Courses->find('all')->where(['level_id'=>$grade])->contain(['CourseDetails'=>['CourseContents'] ]);*/
+          $courses= $this->Courses->find('all')->where(['level_id'=>$grade , 'parent_id'=>0])->contain(['CourseDetails']);
           if($courses_count>0){
               foreach ($courses as $course) {
                 $data['message']="Records to course level $grade ";
                 $data['courses'][]= $course;
-                 $data['course_list']= 1;
+                $data['course_list']= 1;
               }
           }else{
             $data['message']="Records is not found ";
@@ -790,26 +792,51 @@ class CoursesController extends AppController{
 
      }
        
-     public function getAllCourseList($parent_id=0, $type=null, $course_id = null){
-      try{
+     public function getAllCourseList($parent_id=0, $type=null, $course_id = null, $user_id = null){
+      try {
+        $base_url = Router::url('/', true);
+        $teacher_controller = new TeachersController();
+        if ($parent_id == null || $parent_id == 'null') {
+          $json_course_parent_response = $teacher_controller->curlPost($base_url.'courses/getCourseInfo/' . $course_id);
+          $course_parent_response = json_decode($json_course_parent_response, TRUE);
+          if (isset($course_parent_response['response']) && $course_parent_response['response']['skill_info_of_subskill']
+            && !empty($course_parent_response['response']['skill_info_of_subskill'])) {
+            $parent_id = $course_parent_response['response']['skill_info_of_subskill']['id'];
+          }
+        }
         $khan_api_slugs = array();
         $teacher_contents = array();
         $khan_api_content_title = array();
         $course_details_table = TableRegistry::get('CourseDetails');
+        $courses_table= TableRegistry::get('Courses');
         if ($type == 'type') {
           $connection = ConnectionManager::get('default');
           $sql = "SELECT * FROM course_details WHERE parent_id = $parent_id";
           $course_details = $connection->execute($sql)->fetchAll('assoc');
+          $course_info = $connection->execute("select * from courses where id=$parent_id")->fetchAll('assoc');
 //          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
-          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
+          if($type == 'student') {
+            $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
+            $course_info = $courses_table->find('all')->where(['id' => $parent_id]);
+          }else{
+            $user_role = TableRegistry::get('user_roles');
+            $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+            foreach ($role as $key => $value) {
+              $rol[$key] = $value['user_id'];
+            }
+            $id = implode(',',$rol);
+            $id = $id.','.$user_id;
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+            $course_details = $connection->execute($sql)->fetchAll('assoc');
+            $course_info = $courses_table->find('all')->where(['id' => $parent_id]); 
+          }
         }
       }  catch (Exception $e) {
         $this->log('Error in getAllCourseList function in Courses Controller.'
               .$e->getMessage().'(' . __METHOD__ . ')');
       }
-
-
       if($type == 'type') {
         foreach ($course_details as $course_detail) {
           if (isset($course_detail['slug']) && !empty($course_detail['slug'])) {
@@ -828,7 +855,16 @@ class CoursesController extends AppController{
             }
           }
           if (!empty($course_id) && ($course_detail['course_id'] == $course_id)) {
-            $sql = "SELECT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
+            $teacher_id = '';
+            $json_student_teacher_response = $teacher_controller->curlPost($base_url.'teachers/getTeachersOfStudents/', json_encode(array('sid' => $user_id)), TRUE);
+            $student_teacher_response = json_decode($json_student_teacher_response, TRUE);
+            if ($student_teacher_response['status'] == TRUE) {
+              if (isset($student_teacher_response['student_teacher_relation'][$user_id])) {
+                $teacher_id = $student_teacher_response['student_teacher_relation'][$user_id];
+              }
+            }
+            $sql = "SELECT DISTINCT * FROM course_contents WHERE course_detail_id = " . $course_detail['course_id'];
+            $sql.= ' AND (created_by = ' . "'" . $teacher_id . "'" . ' OR shared_mode = 1)';
             $course_detail['course_contents'] = $connection->execute($sql)->fetchAll('assoc');
           }
           if (isset($course_detail['course_contents']) && !empty($course_detail['course_contents'])) {
@@ -855,7 +891,7 @@ class CoursesController extends AppController{
         }
       }
       $this->set([
-         'response' => ['course_details' => $course_details,
+         'response' => ['course_information'=>$course_info ,'course_details' => $course_details,
          'khan_api_slugs' => $khan_api_slugs,
          'khan_api_content_title' => $khan_api_content_title,
          'teacher_contents' => $teacher_contents],
@@ -980,6 +1016,120 @@ class CoursesController extends AppController{
        ]);
    }
 
+
+/* important API get course/skill/subskill information */
+  public function getCourseInfo($course_id=null){
+      $course_id = isset($_GET['course_id']) ? $_GET['course_id'] : $course_id ;
+
+      if(!empty($course_id)){
+      $connection = ConnectionManager::get('default');
+       $sql =" SELECT courses.id,courses.level_id, courses.course_code, courses.course_name, cd.parent_id ,levels.name as grade_name
+                 from courses"
+                . " INNER JOIN course_details as cd ON courses.id = cd.course_id "
+               . " INNER JOIN levels ON courses.level_id = levels.id "
+                . " WHERE courses.id =".$course_id." ORDER BY level_id ";
+        $cdetails = $connection->execute($sql)->fetchAll('assoc');
+       //pr($result);
+        $course_count = count($cdetails);
+        if($course_count>0){
+            foreach ($cdetails as $coursedetail) {
+                $parent_id = $coursedetail['parent_id'];
+                $data['course_Information'] = $coursedetail;
+            
+                if($parent_id==0){                   
+                    $data['course_Information']['course_type'] ="Main course/subject.";
+              }
+
+              //second level check
+              else{                  
+                  $data['course_Information']['course_type'] ="skill";
+
+                // to check skill of course
+                $sql1 =" SELECT courses.id,courses.level_id, courses.course_code, courses.course_name, cd.parent_id ,levels.name as grade_name
+                 from courses"
+                  . " INNER JOIN course_details as cd ON courses.id = cd.course_id "
+                  . " INNER JOIN levels ON courses.level_id = levels.id "
+                  . " WHERE courses.id =".$parent_id." ORDER BY level_id ";
+                  $cdetails1 = $connection->execute($sql1)->fetchAll('assoc');
+
+                  $count1 = count($cdetails1);
+                  if($count1>0){
+                      foreach ($cdetails1 as $cdetailrow) {
+                          $parentid = $cdetailrow['parent_id'];
+                          //$data['parent_Information'][] = $cdetailrow;
+
+                          if($parentid==0){
+                              $data['course_Information']['course_type'] ="skill";
+                              $data['parent_info_of_skill'] = $cdetailrow;
+                        }
+                        else{
+
+                          $data['course_Information']['course_type'] ="Sub skill";
+                          $data['skill_info_of_subskill'] = $cdetailrow;
+
+                          $sql2 =" SELECT courses.id,courses.level_id, courses.course_code, courses.course_name, cd.parent_id ,levels.name as grade_name
+                           from courses"
+                          . " INNER JOIN course_details as cd ON courses.id = cd.course_id "
+                          . " INNER JOIN levels ON courses.level_id = levels.id "
+                          . " WHERE courses.id =".$parentid." ORDER BY level_id ";
+
+                            $cdetails2 = $connection->execute($sql2)->fetchAll('assoc');
+                            $count2 = count($cdetails2);
+
+
+                            if($count2>0){
+
+                                foreach ($cdetails2 as $crow) {
+                                  $prid = $crow['parent_id'];                                 
+                                    if($prid==0){                                      
+                                      $data['course_Information']['course_type'] ="Sub skill";
+                                      $data['parent_info_of_skill'] = $crow;
+                                    }
+                                    else{
+                                      $data['hhh'] ="kk";
+                                    }
+                                }
+                            }
+
+                        }                   
+
+
+                      }
+
+                  }
+
+
+              }
+
+            }
+
+
+
+          
+
+        }
+        else{
+          $data['status'] ="False";
+          $data['message'] = " No Course information for this course id.";
+        }
+
+      }
+      else{
+        $data['status'] = "False";
+        $data['message'] = "Course_id cannot null. Please set course course id.";
+      }
+
+      $this->set([
+        'response' => $data,
+         '_serialize' => ['response']
+       ]);
+
+
+
+  }
+
+
+
    /*
     * function getUserRoleByid
     *
@@ -1007,6 +1157,7 @@ class CoursesController extends AppController{
     }
     return $user;
   }
+
 
 
   // Function to get courses of a grade : for main course (math) parent_id=0; but course (number system) parent_id=course_id of math is as skill, but for course(number system) parent_id=course_id of number system as subkill.
@@ -1042,6 +1193,349 @@ class CoursesController extends AppController{
      '_serialize' => ['response']
   ]);
 }
+/**
+ * This api is used for getting student skills.
+ **/
+  public function getStudentSkills($user_id=null,$parent_id=null,$course=null) {
+    try{
+      $message='';
+      $status = FALSE;
+      $scopes = array();
+      $course_details = '';
+      $setting = FALSE;
+      $by = 'course';
+      $scope = TableRegistry::get('scope_and_sequence');
+      $group = TableRegistry::get('student_groups');
+      $course_detail = TableRegistry::get('course_details');
+      if($user_id == NULL) {
+        $message = 'Please login.';
+        throw new Exception('Please Login');
+      }else if($parent_id == NULL) {
+        $message = 'Please select a subject.';
+        throw new Exception('Please select a subject.');
+      }else{
+        $connection = ConnectionManager::get('default');
+        if($course == NULL ) {
+          $sql = " SELECT * from student_teachers where student_id = $user_id AND course_id = $parent_id "; 
+        }else if($course == '-1'){
+          $result = $course_detail->find('all',['fields'=>['parent_id']])->where(['course_id' => $parent_id])->toArray();
+          $sql = " SELECT * from student_teachers where student_id = $user_id AND course_id = ".$result[0]['parent_id'] ;
+        }else{
+          $sql = " SELECT * from student_teachers where student_id = $user_id AND course_id = $course ";
+        }
+        $tid = $connection->execute($sql)->fetchAll('assoc');
+        $scopes = $scope->find()->where(['created_for'=> $user_id,'parent_id' => $parent_id]);
+        $scopCount = $scopes->count();
+        if($scopCount == 1 ) {
+          $by = 'scope';
+          $status = TRUE;
+          $course_details[0] = $scopes;
+        }else{
+          if(!empty($tid)) {
+            $user_setting = TableRegistry::get('teacher_settings')
+              ->find()->where(['user_id' => $tid[0]['teacher_id'], 'course_id' => $tid[0]['course_id'], 
+                 'level_id' => $tid[0]['grade_id']]);
+            $scopes = $scope->find()->where(['created_by'=> $tid[0]['teacher_id'] ,'parent_id' => $parent_id,
+              'type IN'=>['class','group']])->orderDESC('type','created');
+            $scopCount = $scopes->count();
+            if($scopCount > 0) {
+            $by = 'scope';
+            $count = 0;
+            foreach ($scopes  as $key => $value) {
+               if($count >= 1) {
+                    break;
+               }
+              if($value['type'] == 'group') {
+                $data = $group->find()->where(['id' => $value['created_for']]);
+                foreach($data as $ki=>$val) {
+                  $students = explode(',', $val['student_id']);
+                  if(in_array($user_id,$students)){
+                    $course_details[0] = $value;
+                    $count++;
+                    $status = TRUE;
+                    break;
+                  }
+                }
+              }else if($value['type'] == 'class') {
+                $course_details[0] = $value;
+                $status = TRUE;
+              }
+            }
+          }else{
+            $course_detail = TableRegistry::get('course_details');
+            $user_role = TableRegistry::get('user_roles');
+            $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+            foreach ($role as $key => $value) {
+              $rol[$key] = $value['user_id'];
+            }
+            $id = implode(',',$rol);
+            $id = $id.','.$tid[0]['teacher_id'];
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+            $skills = $connection->execute($sql)->fetchAll('assoc');
+            if(count($skills) > 0) {
+              foreach ($skills as $key => $value) {
+              $skill['course_id'] = $value['course_id'];
+              $skill['parent_id'] = $value['parent_id'];
+              $skill['name'] = $value['name'];
+              $skill['start_date'] = $value['start_date'];
+              $skill['end_date'] = $value['end_date'];
+              $skill['created_by'] = $value['created_by'];
+              $skill['status'] = $value['status'];
+              $skill['visibility'] = 1;
+              $course_details[] = $skill;
+              }
+              $status = TRUE; 
+            }
+          }
+          if(!empty($user_setting)) {
+            foreach ($user_setting as $key => $value) {
+             $temp_setting[$key] = json_decode($value['settings']);
+            }
+            foreach($temp_setting as $ki=>$val) {
+              if($val->auto_progression == TRUE) {
+                if($val->auto_progression_by == 'individual'
+                        && $val->auto_progression_for_individual == $user_id ) {
+                  $setting = TRUE;
+                }else if($val->auto_progression_by == 'group') {
+                  $data = $group->find()->where(['id' => $val->auto_progression_for_group]);
+                  foreach($data as $key=>$value) {
+                    $students = explode(',', $value['student_id']);
+                    if(in_array($val->$user_id,$students)){
+                      $setting = TRUE;
+                      break;
+                    }
+                  } 
+                }else if($val->auto_progression_by == 'all_class') {
+                  $setting = TRUE;
+                }
+              }
+            }
+   
+          }
+          }else{
+            $course_detail = TableRegistry::get('course_details');
+            $user_role = TableRegistry::get('user_roles');
+            $role = $user_role->find('all', ['fields' => ['user_id']])->where(['role_id' => 1])->toArray();
+            foreach ($role as $key => $value) {
+              $rol[$key] = $value['user_id'];
+            }
+            $id = implode(',',$rol);
+            $connection = ConnectionManager::get('default');
+            $sql = " SELECT * from course_details where created_by IN ($id) AND parent_id = $parent_id ";
+            $skills = $connection->execute($sql)->fetchAll('assoc');
+            if(count($skills) > 0) {
+              foreach ($skills as $key => $value) {
+              $skill['course_id'] = $value['course_id'];
+              $skill['parent_id'] = $value['parent_id'];
+              $skill['name'] = $value['name'];
+              $skill['start_date'] = $value['start_date'];
+              $skill['end_date'] = $value['end_date'];
+              $skill['created_by'] = $value['created_by'];
+              $skill['status'] = $value['status'];
+              $skill['visibility'] = 1;
+              $course_details[] = $skill;
+              }
+              $status = TRUE; 
+            }
+          }
+        }
+      }
+    }catch(Exception $e) {
+      $this->log('Error in getUserCreatedScope function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'response' => $course_details,
+        'setting' => $setting,
+        'message' => $message,
+        'status' => $status,
+        'by' => $by,
+        '_serialize' => ['response','message','status','by','setting']
+    ]);
+  }
+
+  /*
+   * function deleteUserCourses().
+   */
+  public function deleteUserAllCourses() {
+    try {
+      $status = FALSE;
+      $record_found = '';
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+          $message = 'user id cannot be null';
+          throw new Exception('user_id cannot be null');
+        }
+        $user_courses_table = TableRegistry::get('UserCourses');
+        $record_found = $user_courses_table->find()->where(['user_id' => $this->request->data['user_id']])->count();
+        if (!$record_found) {
+          $message = 'No record to delete';
+          throw new Exception($message);
+        }
+        if ($user_courses_table->deleteAll(['user_id' => $this->request->data['user_id']])) {
+          $status = TRUE;
+        } else {
+          $message = 'unable to delete user courses entries';
+          throw new Exception($message);
+        }
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      'record_found' => $record_found,
+      '_serialize' => ['status','message','record_found']
+    ]);
+  }
+
+  /*
+   * function setUserCourse().
+   */
+  public function setUserCourse() {
+    try {
+      $status = FALSE;
+      $message = '';
+      if ($this->request->is('post')) {
+        if (!isset($this->request->data['user_id']) && empty($this->request->data['user_id'])) {
+          $message = 'user id cannot be null';
+          throw new Exception('user_id cannot be null');
+        }
+        if (!isset($this->request->data['course_ids']) && empty($this->request->data['course_ids'])) {
+          $message = 'course id cannot be null';
+          throw new Exception('course id cannot be null');
+        }
+        $course_ids = $this->request->data['course_ids'];
+        if (!is_array($course_ids)) {
+          $message = 'course id must be an array';
+          throw new Exception($message);
+        }
+        $user_id = $this->request->data['user_id'];
+        $expiry_date = isset($this->request->data['expiry_date']) ? $this->request->data['expiry_date'] : date('Y-m-d');
+        $user_courses_table = TableRegistry::get ('UserCourses');
+        $data = array();
+        foreach ($course_ids as $course_id) {
+          $data[] = [
+            'user_id' => $user_id,
+            'course_id' => $course_id,
+            'expiry_date' => $expiry_date
+          ];
+        }
+        $entities = $user_courses_table->newEntities($data);
+        if ($user_courses_table->saveMany($entities)) {
+          $status = TRUE;
+        } else {
+          $message = 'unable to save data';
+        }
+      }
+    } catch(Exception $e) {
+      $this->log($e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+      'status' => $status,
+      'message' => $message,
+      '_serialize' => ['status','message']
+    ]);
+  }
 
 
+  /** important  API will return skill and subskill of a subject
+        if find skill of subject then child_level=1 and parent_id= skill_id
+        if find subskill of subject then child_level=2 and parent_id
+        return_type defind return type =1/2 of function as as json=1 or array=2
+   **/
+   public function getChildCoursesOfSubject($parent_id=null, $child_level=1, $return_type=1){ // child_level is hierarchical
+      if(!empty($parent_id)){  // parent_id can be subject_id or skill_id.
+            $connection = ConnectionManager::get('default');
+           
+            /* ************************************ */
+            if($child_level==1){
+
+                $sql = "SELECT c.*, l.name as grade_name FROM courses as c, course_details as cd, levels as l 
+                        WHERE  c.id=cd.course_id AND c.level_id=l.id AND cd.parent_id = $parent_id ";          
+                $records = $connection->execute($sql)->fetchAll('assoc');
+                if(count($records) > 0) {
+                    foreach ($records as $record) {
+                        $data['child_courses'][] = $record;
+                        $data['childcourse_ids'][] = $record['id'];
+                    }
+                    $data['status'] = True;
+                }
+                else{
+                      $data['status']=False;
+                      $data['message']="No child courses are found.";
+                } 
+                         
+            }   
+           
+            /* ************************************ */
+            if($child_level==2){
+
+                $sql = "SELECT c.*, l.name as grade_name FROM courses as c, course_details as cd, levels as l 
+                        WHERE  c.id=cd.course_id AND c.level_id=l.id AND cd.parent_id = $parent_id ";        
+                $records = $connection->execute($sql)->fetchAll('assoc');
+                if(count($records) > 0) {
+                    foreach ($records as $record) {
+                        $cid = $record['id'];
+                        $data[]= $this->getChildCoursesOfSubject($record['id'],1,2);                                              
+                    }                    
+                    $data['status'] = True;
+                }
+                else{
+                      $data['status']=False;
+                      $data['message']="No child courses are found.";
+                }                
+
+            }    
+       }else{
+            $data['status'] =False;
+            $data['message']="Parent_id cannot be null.";
+        }
+
+
+        // check return type value
+        if($return_type==1){
+              $this->set([ 'response' => $data, '_serialize' => ['response','message','status','by'] ]);
+        }
+        if($return_type==2){                     
+            return $data;
+        }
+
+        
+    
+    }// end function
+  /**
+   * This api is used for getting standard.
+   **/
+   public function getStandard($type,$grade,$course_id){
+     try{
+       $message = '';
+       if($type == null || $type == ''){
+         $message = 'Select standard type';
+         throw new Exception('Select standard type');
+       }else if($grade == null || $grade == ''){
+         $message = 'Select grade';
+         throw new Exception('Select grade');
+       }else if($course_id == null || $course_id == ''){
+         $message = 'Select course';
+         throw new Exception('Select course.');
+       }else{
+         $connection = ConnectionManager::get('default');
+         $sql = "select * from standard where type = '$type' AND grade_id = $grade AND course_id = $course_id";
+         $standardList = $connection->execute($sql)->fetchAll('assoc');
+       }
+     }catch(Exception $e){
+       $this->log('Error in getStandard function in Courses Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+     }
+     $this->set([
+        'response' => $standardList,
+        'message' => $message,
+//        'status' => $status,
+        '_serialize' => ['response','message']
+    ]);
+   }
 }

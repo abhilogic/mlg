@@ -37,24 +37,18 @@ class PaymentController extends AppController {
         $url = "https://api.paypal.com/v1/oauth2/token";
         $credential = PAYPAL_LIVE_CREDENTIAL;
       }
-      $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, $url);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-      curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=client_credentials");
-      curl_setopt($ch, CURLOPT_POST, 1);
-      curl_setopt($ch, CURLOPT_USERPWD, $credential);
-
       $headers = array();
-      $headers[] = "Accept: application/json";
       $headers[] = "Accept-Language: en_US";
+      $headers[] = "Accept: application/json";
       $headers[] = "Content-Type: application/x-www-form-urlencoded";
-      curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-      $result = curl_exec($ch);
-      if (curl_errno($ch)) {
-        echo 'Error:' . curl_error($ch);
-      }
-      curl_close($ch);
+      $param['url'] = $url;
+      $param['return_transfer'] = 1;
+      $param['post_fields'] = 'grant_type=client_credentials';
+      $param['curl_post'] = 1;
+      $param['headers'] = $headers;
+      $param['user_password'] = $credential;
+      $curl_response = $this->sendCurl($param);
+      $result = $curl_response['curl_exec_result'];
       $result = json_decode($result, TRUE);
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
@@ -159,22 +153,17 @@ class PaymentController extends AppController {
       if (USE_SANDBOX_ACCOUNT == FALSE) {
         $url = "https://api.paypal.com/v1/vault/credit-cards/";
       }
-      $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, $url);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-      curl_setopt($ch, CURLOPT_POST, 1);
-      $headers = array();
-      $headers[] = "Content-Type: application/json";
-      $headers[] = "Authorization: Bearer $access_token";
-      curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-      $response = curl_exec($ch);
-      $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-      if (curl_errno($ch)) {
-        $message = 'Some error occured';
-        throw new Exception(curl_error($ch));
-      }
-      curl_close($ch);
+
+      $param['url'] = $url;
+      $param['return_transfer'] = 1;
+      $param['post_fields'] = $data;
+      $param['json_post_fields'] = TRUE;
+      $param['curl_post'] = 1;
+      $param['authorization'] = "Bearer $access_token";
+      $curl_response = $this->sendCurl($param);
+      $response = $curl_response['curl_exec_result'];
+      $httpCode = $curl_response['http_code'];
+
       switch ($httpCode) {
         case 401 : $message = 'Some error occured. Unable to proceed, Kindly contact to administrator';
           throw new Exception('Unauthorised Access');
@@ -213,6 +202,9 @@ class PaymentController extends AppController {
    */
   public function createBillingPlan($user_id = null, $access_token = null, $trial_period = TRUE) {
     try {
+      if (empty($user_id)) {
+        throw new Exception('user id can not be null');
+      }
       $user_controller = new UsersController();
       $response = $user_controller->getUserPurchaseDetails($user_id, TRUE, TRUE);
       $frequency = 'MONTH';
@@ -226,18 +218,14 @@ class PaymentController extends AppController {
 
       $fixed_payment_name = 'Regular payment defination';
       $fixed_payment_type = 'REGULAR';
-      //$fixed_payment_frequency = $frequency;
-      //omit
-      $fixed_payment_frequency = 'DAY';
+      $fixed_payment_frequency = $frequency;
       $fixed_payment_frequency_interval = 1;
 
       $fixed_amount_value = $response['package_amount'];
 
       $fixed_amount_currency = PAYPAL_CURRENCY;
 
-//      $fixed_cycles = $cycles;
-      //omit
-      $fixed_cycles = 2;
+      $fixed_cycles = $cycles;
 
       $fixed_charged_shipping_amount_value = 0;
       $fixed_charged_shipping_amount_currency = PAYPAL_CURRENCY;
@@ -310,6 +298,12 @@ class PaymentController extends AppController {
       );
 
       if ($trial_period == TRUE) {
+        $parent_response = $user_controller->getParentInfoByChildId($user_id);
+        if ($parent_response['parent_subscription_days_left'] > 0 && $parent_response['parent_subscription_days_left'] <= 30) {
+          $trial_frequency = 'DAY';
+          $trial_frequency_interval = 1;
+          $trial_cycles = $parent_response['parent_subscription_days_left'];
+        }
         $trial_payment_definitions = array(
           "name" => $trial_name,
           "type" => "TRIAL",
@@ -339,44 +333,37 @@ class PaymentController extends AppController {
         );
         $post_fields['payment_definitions'][] = $trial_payment_definitions;
       }
+      if ($access_token == null) {
+        $access_token = $this->paypalAccessToken();
+      }
       $url = 'https://api.sandbox.paypal.com/v1/payments/billing-plans/';
       if (USE_SANDBOX_ACCOUNT == FALSE) {
         $url = 'https://api.paypal.com/v1/payments/billing-plans/';
       }
-      if ($access_token == null) {
-        $access_token = $this->paypalAccessToken();
-      }
-      $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, $url);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_fields));
-      curl_setopt($ch, CURLOPT_POST, 1);
-
-      $headers = array();
-      $headers[] = "Content-Type: application/json";
-      $headers[] = "Authorization: Bearer $access_token";
-      curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-      $result = curl_exec($ch);
-      if (curl_errno($ch)) {
-        echo 'Error:' . curl_error($ch);
-      }
-      curl_close($ch);
-      $result = json_decode($result, TRUE);
+      $param['url'] = $url;
+      $param['return_transfer'] = 1;
+      $param['post_fields'] = $post_fields;
+      $param['json_post_fields'] = TRUE;
+      $param['curl_post'] = 1;
+      $param['authorization'] = "Bearer $access_token";
+      $curl_response = $this->sendCurl($param);
+      $result = json_decode($curl_response['curl_exec_result'], TRUE);
       $error = FALSE;
       $plan_id = isset($result['id']) ? $result['id'] : '';
       if (isset($result['name']) && ($result['name'] == 'VALIDATION_ERROR')) {
         $error = TRUE;
         throw new Exception('Exception occured: ' . json_encode($result));
       }
+      return
+        array('plan_id' => $plan_id,
+          'order_date' => $response['db_order_date'],
+          'order_timestamp' => $response['order_timestamp'],
+          'total_amount' => $response['package_amount'],
+          'error' => $error
+        );
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
-    return array('plan_id' => $plan_id,
-      'order_date' => $response['db_order_date'],
-      'order_timestamp' => $response['order_timestamp'],
-      'total_amount' => $response['package_amount'],
-      'error' => $error);
   }
 
   /*
@@ -402,29 +389,20 @@ class PaymentController extends AppController {
           )
         )
       );
-      $ch = curl_init();
 
       $url = "https://api.sandbox.paypal.com/v1/payments/billing-plans/$plan_id/";
       if (USE_SANDBOX_ACCOUNT == FALSE) {
         $url = "https://api.paypal.com/v1/payments/billing-plans/$plan_id/";
       }
-      curl_setopt($ch, CURLOPT_URL, $url);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_fields));
-      curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PATCH");
-
-      $headers = array();
-      $headers[] = "Content-Type: application/json";
-      $headers[] = "Authorization: Bearer $access_token";
-      curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-      $result = curl_exec($ch);
-      $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-      if (curl_errno($ch)) {
-        echo 'Error:' . curl_error($ch);
-      }
-      curl_close($ch);
-      if ($httpCode == 200) {
+      $param['url'] = $url;
+      $param['return_transfer'] = 1;
+      $param['post_fields'] = $post_fields;
+      $param['json_post_fields'] = TRUE;
+      $param['customer_request'] = 'PATCH';
+      $param['authorization'] = "Bearer $access_token";
+      $curl_response = $this->sendCurl($param);
+      $result = $curl_response['curl_exec_result'];
+      if ($curl_response['http_code'] == 200) {
         $status = 'ACTIVE';
       }
     } catch (Exception $ex) {
@@ -441,6 +419,7 @@ class PaymentController extends AppController {
   public function billingAgreementViaCreditCard($user_id = null, $card_details = null, $plan_id = null, $access_token = null) {
     try {
       $result = array();
+      $status = FALSE;
       $user_controller = new UsersController();
       if ($access_token == null) {
         $access_token = $this->paypalAccessToken();
@@ -449,6 +428,7 @@ class PaymentController extends AppController {
       $user_info = $user_controller->getUserDetails($user_id, TRUE);
       foreach ($user_info as $user) {
         $payer_email = $user['email'];
+        break;
       }
       $payment_method = 'credit_card';
 
@@ -482,32 +462,106 @@ class PaymentController extends AppController {
       if (USE_SANDBOX_ACCOUNT == FALSE) {
         $url = "https://api.paypal.com/v1/payments/billing-agreements/";
       }
-      $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, $url);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_fields));
-      curl_setopt($ch, CURLOPT_POST, 1);
-
-      $headers = array();
-      $headers[] = "Content-Type: application/json";
-      $headers[] = "Authorization: Bearer $access_token";
-      curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-      $result = curl_exec($ch);
-      $result = json_decode($result, TRUE);
-      if (curl_errno($ch)) {
-        echo 'Error:' . curl_error($ch);
+      $param['url'] = $url;
+      $param['return_transfer'] = 1;
+      $param['post_fields'] = $post_fields;
+      $param['json_post_fields'] = TRUE;
+      $param['curl_post'] = 1;
+      $param['authorization'] = "Bearer $access_token";
+      $curl_response = $this->sendCurl($param);
+      if ($curl_response['status'] == TRUE && !empty($curl_response['curl_exec_result'])) {
+        $result = json_decode($curl_response['curl_exec_result'], TRUE);
+      } else {
+        throw new Exception("unable to create billing Agreement. \nResponse: " . json_encode($curl_response));
       }
-      curl_close($ch);
-      $error = FALSE;
       if (isset($result['name'])) {
-        $error = TRUE;
+        $status = FALSE;
         throw new Exception('Exception occured: ' . json_encode($result));
+      }
+      $status = TRUE;
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return array('status' => $status, 'result' => $result);
+  }
+
+  /**
+   * function cancelBillingAgreement().
+   */
+  public function cancelBillingAgreement($billing_id) {
+    try {
+      $status = '';
+      $access_token = $this->paypalAccessToken();
+      $url = "https://api.sandbox.paypal.com/v1/payments/billing-agreements/$billing_id/cancel";
+      if (USE_SANDBOX_ACCOUNT == FALSE) {
+        $url = "https://api.paypal.com/v1/payments/billing-agreements/$billing_id/cancel";
+      }
+      $param['url'] = $url;
+      $param['json_post_fields'] = TRUE;
+      $param['post_fields'] = array('note' => 'Canceling the profile. billing id: ' . $billing_id);
+      $param['authorization'] = "Bearer $access_token";
+      $param['return_transfer'] = 1;
+      $param['curl_post'] = 1;
+      $curl_response = $this->sendCurl($param);
+      if ($curl_response['http_code'] == 204) {
+        $status = 'DEACTIVE';
       }
     } catch (Exception $ex) {
       $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
     }
-    return array('result' => $result, 'error' => $error);
+    return $status;
+  }
+
+  /*
+   * function sendCurl().
+   */
+  public function sendCurl($param = array()) {
+    try {
+      $response = array('status' => FALSE, 'message' => '', 'curl_exec_result' => '', 'http_code' => '');
+      $ch = curl_init();
+      $headers = array();
+      curl_setopt($ch, CURLOPT_URL, $param['url']);
+      if (isset($param['return_transfer'])) {
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, $param['return_transfer']);
+      }
+      if (isset($param['post_fields'])) {
+        if (isset($param['json_post_fields']) && $param['json_post_fields'] == TRUE) {
+          $headers[] = "Content-Type: application/json";
+          curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($param['post_fields']));
+        } else {
+          curl_setopt($ch, CURLOPT_POSTFIELDS, $param['post_fields']);
+        }
+      }
+      if (isset($param['curl_post'])) {
+        curl_setopt($ch, CURLOPT_POST, $param['curl_post']);
+      }
+      if (isset($param['authorization'])) {
+        $headers[] = "Authorization: " . $param['authorization'];
+      }
+      if (isset($param['headers'])) {
+        $param['headers'] = array_merge($headers, $param['headers']);
+      }
+      if (isset($param['customer_request'])) {
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $param['customer_request']);
+      }
+      if (isset($param['user_password'])) {
+        curl_setopt($ch, CURLOPT_USERPWD, $param['user_password']);
+      }
+      curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+      $response['curl_exec_result'] = curl_exec($ch);
+      $response['http_code'] = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      curl_close($ch);
+      $success_http_codes = [200, 201, 204];
+      if (in_array($response['http_code'], $success_http_codes)) {
+        $response['status'] = TRUE;
+      } else {
+        throw new Exception('curl response: ' . json_encode($response['curl_exec_result']));
+      }
+    } catch (Exception $ex) {
+      $this->log($ex->getMessage() . '(' . __METHOD__ . ')');
+    }
+    return $response;
   }
 
 }
