@@ -2690,7 +2690,8 @@ class TeachersController extends AppController {
               $data['trial_period'] = 1;
 
               $billing_response = $payment_controller->billingAgreementViaCreditCard($user_id, $data, $plan_id, $access_token);
-              if (!$billing_response['error']) {
+
+              if (!isset($billing_response['error']) || (!$billing_response['error'])) {               
                 $payment_status = TRUE;
                 $status = TRUE;
 
