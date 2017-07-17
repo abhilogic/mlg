@@ -5131,64 +5131,64 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
         $skill_query = "Select * from course_details where parent_id = $course ORDER BY course_id ASC $limit";
         $skill =  $connection->execute($skill_query)->fetchAll('assoc');
         $s = 0;
-        $skill_array = array();
-        foreach ($skill as $key => $value) {
-          $skill_array[$s] = $value['id'];
-          $s++;
-        }
-        $subskill_query = " Select * from course_details where parent_id "
-                . "IN(".  implode(',', $skill_array) .") ORDER BY parent_id ASC";
-        $subskill =  $connection->execute($subskill_query)->fetchAll('assoc');
-//        foreach($subskill as $key=>$value) {
-//          $sub_skill_array[$i] = $value['course_id'];
-//          $i++;
-//        }
-        $total_sub_skill = $i;
-        $p = 0;
-        $lack_subskill = array();
-        foreach ($skill as $key => $value) {
-          foreach($subskill as $ke=>$val) {
-            if($val['parent_id'] == $value['course_id']) {
-              $sub_skill_array[$i] = $val['course_id'];
-              $lack_subskill[$i]['sub_skill_id'] = $val['course_id'];
-              $lack_subskill[$i]['sub_skill_name'] = $val['name'];
-              $i++;
-            }
+        if(count($skill) > 0) {
+          $skill_array = array();
+          foreach ($skill as $key => $value) {
+            $skill_array[$s] = $value['id'];
+            $s++;
           }
-          $count = 0;
-          $temp = array();
-          $j= 0 ;
-          $master_temp = array();
-          if(!empty($sub_skill_array)){
-            $lsql = "select *  from user_quizes where user_id IN (".implode(',',$studentList) .") AND grade_id = $grade"
-                  . " AND course_id IN (". implode(',',$sub_skill_array).") AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
-            $quizAttempt = $connection->execute($lsql)->fetchAll('assoc');
-            foreach($studentList as $ky=>$valu){
-              if(!empty($quizAttempt)) {
-                foreach($quizAttempt as $ki => $val) {
-                  if(in_array($val['course_id'], $sub_skill_array)) {
-                    $marks = ($val['score']/$val['exam_marks'])*100;
-                    if($marks < QUIZ_PASS_SCORE) {
-                      if(!in_array($val['user_id'], $temp)){
-                        $temp[$j] = $val['user_id'];
-                        $j++;
-                        $count++;
+          $subskill_query = " Select * from course_details where parent_id "
+                  . "IN(".  implode(',', $skill_array) .") ORDER BY parent_id ASC";
+          $subskill =  $connection->execute($subskill_query)->fetchAll('assoc');
+          $total_sub_skill = $i;
+          $p = 0;
+          $lack_subskill = array();
+          foreach ($skill as $key => $value) {
+            foreach($subskill as $ke=>$val) {
+              if($val['parent_id'] == $value['course_id']) {
+                $sub_skill_array[$i] = $val['course_id'];
+                $lack_subskill[$i]['sub_skill_id'] = $val['course_id'];
+                $lack_subskill[$i]['sub_skill_name'] = $val['name'];
+                $i++;
+              }
+            }
+            $count = 0;
+            $temp = array();
+            $j= 0 ;
+            $master_temp = array();
+            if(!empty($sub_skill_array)){
+              $lsql = "select *  from user_quizes where user_id IN (".implode(',',$studentList) .") AND grade_id = $grade"
+                    . " AND course_id IN (". implode(',',$sub_skill_array).") AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
+              $quizAttempt = $connection->execute($lsql)->fetchAll('assoc');
+              foreach($studentList as $ky=>$valu){
+                if(!empty($quizAttempt)) {
+                  foreach($quizAttempt as $ki => $val) {
+                    if(in_array($val['course_id'], $sub_skill_array)) {
+                      $marks = ($val['score']/$val['exam_marks'])*100;
+                      if($marks < QUIZ_PASS_SCORE) {
+                        if(!in_array($val['user_id'], $temp)){
+                          $temp[$j] = $val['user_id'];
+                          $j++;
+                          $count++;
+                        }
                       }
                     }
                   }
                 }
               }
+              $lackingStudentList = array_diff($studentList,$temp);
+              $lackingStudent = count($lackingStudentList);
             }
-            $lackingStudentList = array_diff($studentList,$temp);
-            $lackingStudent = count($lackingStudentList);
+            $lacking[$p]['skill_id'] = $value['course_id'];
+            $lacking[$p]['skill_name'] = $value['name'];
+            $lacking[$p]['lack_student'] = $lackingStudent;
+            $lacking[$p]['sub_skill'] = $lack_subskill;
+            $p++;
+            $sub_skill_array = array();
+            $lack_subskill = array();
           }
-          $lacking[$p]['skill_id'] = $value['course_id'];
-          $lacking[$p]['skill_name'] = $value['name'];
-          $lacking[$p]['lack_student'] = $lackingStudent;
-          $lacking[$p]['sub_skill'] = $lack_subskill;
-          $p++;
-          $sub_skill_array = array();
-          $lack_subskill = array();
+        }else{
+          $message = 'Record Not Found.';
         }
       }
     }catch(Exception $e) {
