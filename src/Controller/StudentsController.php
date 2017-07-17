@@ -1210,142 +1210,151 @@ public function getStudentProgress($user_id=null){
 
 /***** API to get students of a teacher and their records  ***/
 public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,$skill_id=null,$subskill_id=null,$student_classification=null){
- 
-  $teacher_id = isset($_REQUEST['teacher_id']) ? $_REQUEST['teacher_id']:$teacher_id;
-  $subject_id = isset($_REQUEST['subject_id']) ? $_REQUEST['subject_id']:$subject_id;
-  $skill_id = isset($_REQUEST['skill_id']) ? $_REQUEST['skill_id']:$skill_id;
-  $subskill_id = isset($_REQUEST['subskill_id']) ? $_REQUEST['subskill_id']:$subskill_id;
-  $student_classification = isset($_REQUEST['student_classification']) ? $_REQUEST['student_classification']:$student_classification;
 
-   if(!empty($teacher_id) && !empty($subject_id)){
+      if ($this->request->is('post')) {
+          
+          $teacher_id = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id']:$teacher_id;
+
+          $subject_id = isset($this->request->data['subject_id']) ? $this->request->data['subject_id']:$subject_id;
+
+          $skill_id = isset($this->request->data['skill_id']) ? $this->request->data['skill_id']:$skill_id;
+          $subskill_id = isset($this->request->data['subskill_id']) ? $this->request->data['subskill_id']:$subskill_id;
+          $student_classification = isset($this->request->data['student_classification']) ? $this->request->data['student_classification']:$student_classification;
 
 
-      //get students
-      $connection = ConnectionManager::get('default');        
-      $sql ="SELECT u.*, ud.profile_pic FROM student_teachers as st INNER JOIN users as u ON u.id=st.student_id INNER JOIN user_details as ud ON ud.user_id=st.student_id INNER JOIN user_courses as uc ON uc.user_id=st.student_id INNER JOIN courses as c ON c.id=uc.course_id  WHERE st.teacher_id=$teacher_id AND uc.course_id = $subject_id ";
-     
 
-      $student_records = $connection->execute($sql)->fetchAll('assoc');
-      $studentcount = count($student_records);
-      $course_obj = new CoursesController(); 
+          if(!empty($teacher_id) && !empty($subject_id)){
 
-      if ($studentcount > 0) {
-        foreach ($student_records as $studentrow) {
-          if ($studentrow['profile_pic'] == NULL) {
-            $studentrow['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
-          } else {
-            $studentrow['profile_pic'] = $studentrow['profile_pic'];
-          }
+              //get students
+              $connection = ConnectionManager::get('default');        
+              $sql ="SELECT u.*, ud.profile_pic FROM student_teachers as st INNER JOIN users as u ON u.id=st.student_id INNER JOIN user_details as ud ON ud.user_id=st.student_id INNER JOIN user_courses as uc ON uc.user_id=st.student_id INNER JOIN courses as c ON c.id=uc.course_id  WHERE st.teacher_id=$teacher_id AND uc.course_id = $subject_id ";
+             
+              $student_records = $connection->execute($sql)->fetchAll('assoc');
+              $studentcount = count($student_records);
+              $course_obj = new CoursesController(); 
 
-          $stRecord = $studentrow;
-          $subskill_ids = array(); 
-          $subskill_counts = 1;
+              if ($studentcount > 0) {
+                  foreach ($student_records as $studentrow) {
+                      if ($studentrow['profile_pic'] == NULL) {
+                        $studentrow['profile_pic'] = '/upload/profile_img/default_studentAvtar.png';
+                      } else {
+                            $studentrow['profile_pic'] = $studentrow['profile_pic'];
+                      }
 
-            // get student records on subject, skill and subskill Filter
-            $where = "uq.user_id=".$studentrow['id'];
+                      $stRecord = $studentrow;
+                      $subskill_ids = array(); 
+                      $subskill_counts = 1;
 
-            if(!empty($subject_id) && empty($skill_id)){ //subject filter
+                      // get student records on subject, skill and subskill Filter
+                      $where = "uq.user_id=".$studentrow['id'];
+
+                      if(!empty($subject_id) && empty($skill_id)){ //subject filter
                 
-                $courses_info= $course_obj->getChildCoursesOfSubject($subject_id,2,2);
-                $subskill_ids = [$subject_id];
-                $subject_subskill_ids = array();
-                if(count($courses_info)>0){
-                foreach ($courses_info as $coursesinfo) {                                    
-                    if(isset($coursesinfo['status']) && ($coursesinfo['status']==1)){
-                      $subskill_ids = array_merge($subskill_ids, $coursesinfo['childcourse_ids'] );
-                    }
-                }
-              }
+                          $courses_info= $course_obj->getChildCoursesOfSubject($subject_id,2,2);
+                          $subskill_ids = [$subject_id];
+                          $subject_subskill_ids = array();
+                          if(count($courses_info)>0){
+                              foreach ($courses_info as $coursesinfo) {                                    
+                                  if(isset($coursesinfo['status']) && ($coursesinfo['status']==1)){
+                                    $subskill_ids = array_merge($subskill_ids, $coursesinfo['childcourse_ids'] );
+                                  }
+                              }
+                          }
                 
-                if(!empty($subskill_ids) ){
-                  $subskill_counts = count($subskill_ids);
-                  $course_subskillids = implode(',', $subskill_ids);
-                  $where .= " AND uq.course_id IN ($course_subskillids)";
-                }
-            }
+                          if(!empty($subskill_ids) ){
+                              $subskill_counts = count($subskill_ids);
+                              $course_subskillids = implode(',', $subskill_ids);
+                             $where .= " AND uq.course_id IN ($course_subskillids)";
+                          }
+                      }
 
-            elseif(!empty($skill_id) && empty($subskill_id)){ //skill filter
+                      elseif(!empty($skill_id) && empty($subskill_id)){ //skill filter
                
-                //get all subskill_ids            
-                $base_url = Router::url('/', true);                                                             
-                $array_subskillidsinfo =$course_obj->getChildCoursesOfSubject($skill_id,1,2);
-                $subskill_ids = [$skill_id];        
-                if(!empty($array_subskillidsinfo)){              
-                    if(isset($array_subskillidsinfo['childcourse_ids'])){
-                        $subskill_ids =array_merge($subskill_ids,$array_subskillidsinfo['childcourse_ids']) ;
-                    }                      
+                      //get all subskill_ids            
+                      $base_url = Router::url('/', true);                                                             
+                      $array_subskillidsinfo =$course_obj->getChildCoursesOfSubject($skill_id,1,2);
+                      $subskill_ids = [$skill_id];        
+                      if(!empty($array_subskillidsinfo)){              
+                          if(isset($array_subskillidsinfo['childcourse_ids'])){
+                            $subskill_ids =array_merge($subskill_ids,$array_subskillidsinfo['childcourse_ids']) ;
+                          }                      
+                      }
+                      if(!empty($subskill_ids) ){ 
+                        $subskill_counts = count($subskill_ids); 
+                        $subskillids = implode(',', $subskill_ids);
+                        $where .= " AND uq.course_id IN ($subskillids)";
+                      }            
+                    }
+
+                    elseif(!empty($subskill_id)){ //subskill filter
+                      $where .= " AND uq.course_id=$subskill_id ";
+                    }else{
+                        //$where = "uq.user_id=".$studentrow['id'];
+                    }
+
+                    $str= "SELECT max(score*100/exam_marks) as student_percentage FROM user_quizes as uq where $where GROUP BY course_id"; 
+                    $stquizrecords = $connection->execute($str)->fetchAll('assoc');
+                    $student_subskill_marks= 0;
+                    $stRecord['student_marks'] =0;
+                    $student_subskill_marks_avg =0;
+                    $stRecord['student_marks_status']='';
+                    $userquiz_count = count($stquizrecords);
+                    if ($userquiz_count > 0) {              
+                        foreach ($stquizrecords as $strow) {
+                            $student_subskill_marks= $student_subskill_marks+ $strow['student_percentage'];
+                        }
+                       $student_subskill_marks_avg = $student_subskill_marks/$subskill_counts ;           
+                       $stRecord['student_marks'] = $student_subskill_marks_avg;
+                    }
+
+                    if($student_subskill_marks_avg <= REMEDIAL){            
+                        $stRecord['student_marks_status'] = "REMEDIAL";
+                        $stRecord['style_class'] = "remedial";            
+                    }
+                    elseif($student_subskill_marks_avg >REMEDIAL && $student_subskill_marks_avg <= STRUGGLING ){
+                          $stRecord['student_marks_status'] = "STRUGGLING";
+                          $stRecord['style_class'] = "struggling";
+                    }
+                    elseif($student_subskill_marks_avg >STRUGGLING && $student_subskill_marks_avg <= ON_TARGET ){
+                          $stRecord['student_marks_status'] = "ON_TARGET";
+                          $stRecord['style_class'] = "ontarget";
+                    }
+                    elseif($student_subskill_marks_avg >ON_TARGET && $student_subskill_marks_avg <= OUTSTANDING ){
+                        $stRecord['student_marks_status'] = "OUTSTANDING";
+                        $stRecord['style_class'] = "outstanding";
+                   }
+                  elseif($student_subskill_marks_avg >OUTSTANDING && $student_subskill_marks_avg <= GIFTED ){
+                    $stRecord['student_marks_status'] = "GIFTED";
+                    $stRecord['style_class'] = "gifted";
+
+                  }
+                  else{
+                      $stRecord['student_marks_status'] = "NOT_ATTACK";
+                      $stRecord['style_class'] = "no_attack";
+                  }
+
+                //if API has skill_id and subskill_id filter
+                if(!empty($skill_id) || !empty($subskill_id) ){
+                  if($userquiz_count>0){  
+                      if(!empty($student_classification) ){  // third filter - student_classification is set
+                          if($student_classification==$stRecord['student_marks_status']){
+                              $data['students'][] = $stRecord;
+                              $data['status'] = True;
+                          }
+                      }else{  // third filter - student_classification is not set
+                            $data['students'][] = $stRecord;
+                            $data['status'] = True; 
+                       
+                        }
+                   }              
                 }
-                if(!empty($subskill_ids) ){ 
-                  $subskill_counts = count($subskill_ids); 
-                  $subskillids = implode(',', $subskill_ids);
-                  $where .= " AND uq.course_id IN ($subskillids)";
-                }            
-            }
+                else{  
 
-            elseif(!empty($subskill_id)){ //subskill filter
-              $where .= " AND uq.course_id=$subskill_id ";
-            }else{
-                //$where = "uq.user_id=".$studentrow['id'];
-            }
-
-
-
-        $str= "SELECT max(score*100/exam_marks) as student_percentage FROM user_quizes as uq where $where GROUP BY course_id"; 
-          $stquizrecords = $connection->execute($str)->fetchAll('assoc');
-          $student_subskill_marks= 0;
-          $stRecord['student_marks'] =0;
-          $student_subskill_marks_avg =0;
-          $stRecord['student_marks_status']='';
-          $userquiz_count = count($stquizrecords);
-          if ($userquiz_count > 0) {              
-            foreach ($stquizrecords as $strow) {
-              $student_subskill_marks= $student_subskill_marks+ $strow['student_percentage'];
-            }
-            $student_subskill_marks_avg = $student_subskill_marks/$subskill_counts ;           
-            $stRecord['student_marks'] = $student_subskill_marks_avg;
-          }
-
-          if($student_subskill_marks_avg <= REMEDIAL){            
-            $stRecord['student_marks_status'] = "REMEDIAL";
-            $stRecord['style_class'] = "remedial";            
-          }
-          elseif($student_subskill_marks_avg >REMEDIAL && $student_subskill_marks_avg <= STRUGGLING ){
-            $stRecord['student_marks_status'] = "STRUGGLING";
-            $stRecord['style_class'] = "struggling";
-          }
-          elseif($student_subskill_marks_avg >STRUGGLING && $student_subskill_marks_avg <= ON_TARGET ){
-              $stRecord['student_marks_status'] = "ON_TARGET";
-              $stRecord['style_class'] = "ontarget";
-          }
-          elseif($student_subskill_marks_avg >ON_TARGET && $student_subskill_marks_avg <= OUTSTANDING ){
-            $stRecord['student_marks_status'] = "OUTSTANDING";
-            $stRecord['style_class'] = "outstanding";
-          }
-          elseif($student_subskill_marks_avg >OUTSTANDING && $student_subskill_marks_avg <= GIFTED ){
-            $stRecord['student_marks_status'] = "GIFTED";
-            $stRecord['style_class'] = "gifted";
-
-          }
-          else{
-              $stRecord['student_marks_status'] = "NOT_ATTACK";
-              $stRecord['style_class'] = "no_attack";
-          }
-
-          //if API has skill_id and subskill_id filter
-          if(!empty($skill_id) || !empty($subskill_id) ){
-            
-            if($userquiz_count>0){                                          
-              $data['students'][] = $stRecord;
-              $data['status'] = True; 
-            }
-          }
-          else{  
-
-              $data['students'][] = $stRecord;
-              $data['status'] = True;  
-          }
+                    $data['students'][] = $stRecord;
+                    $data['status'] = True;  
+                }
   
-    } // end foreach of students of a teacher
+            } // end foreach of students of a teacher
         if(!isset($data['students'])){  //if no student list found
             $data['status'] =False;
             $data['message'] = "No student found for this seaching.";
@@ -1363,10 +1372,34 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
       $data['message'] = "The teacher_id and subject_id cannot be null.";
   }
 
-  $this->set([
-    'response' =>$data,
-    '_serialize'=>['response']
-  ]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      } // end if (post)
+      else{
+        $data['status'] = False;
+        $data['message'] ="No post data set.";
+      } 
+
+
+      $this->set([
+        'response' =>$data,
+        '_serialize'=>['response']
+      ]);
 
 }
 
