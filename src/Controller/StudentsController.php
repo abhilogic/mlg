@@ -1307,7 +1307,7 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
                        $stRecord['student_marks'] = $student_subskill_marks_avg;
                     }
 
-                    if($student_subskill_marks_avg <= REMEDIAL){            
+                    if($student_subskill_marks_avg >0 && $student_subskill_marks_avg <= REMEDIAL){            
                         $stRecord['student_marks_status'] = "REMEDIAL";
                         $stRecord['style_class'] = "remedial";            
                     }
@@ -1334,7 +1334,7 @@ public function getDashboardStudentsOfTeacher($teacher_id=null,$subject_id=null,
                   }
 
                 //if API has skill_id and subskill_id filter
-                if(!empty($skill_id) || !empty($subskill_id) ){
+                if(!empty($skill_id) || !empty($subskill_id) || !empty($student_classification) ){
                   if($userquiz_count>0){  
                       if(!empty($student_classification) ){  // third filter - student_classification is set
                           if($student_classification==$stRecord['student_marks_status']){
