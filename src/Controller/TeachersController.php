@@ -5259,4 +5259,37 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
         '_serialize' => ['response','message','status']
     ]);
   }
+  public function getTeacherPointsIndividual($user_id,$type){
+    try{
+      $status = FALSE;
+      $message = '';
+      $typ = '';
+      $sum = 0;
+      $connection = ConnectionManager::get('default');
+      if($type == 'lesson'){
+        $typ = ' AND course_content_id > 0';
+      }else if($type == 'question'){
+        $typ = ' AND question_id > 0';
+      }
+      if($typ != ''){
+        $sql = "Select SUM(points)as point from user_points where user_id = $user_id $typ  AND status = 1 ";
+        $sum = $connection->execute($sql)->fetchAll('assoc');
+        if(!empty($sum[0]['point'])){
+          $status = TRUE;
+        } 
+      }else{
+        $message = 'Type not defined.';
+      }
+      
+    }catch(Exception $e){
+      $this->log('Error in getTeacherPointsIndividual function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+        'response' => $sum,
+        'message' => $message,
+        'status' => $status,
+        '_serialize' => ['response','message','status']
+    ]);
+  }
 }
