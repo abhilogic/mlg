@@ -5121,7 +5121,9 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
             $m++;
           }
         }else if($id != null && $type == 'group') {
-          $sql = "select * from users where id IN(".explode(',',$id).") ORDER BY id DESC";
+          $qury = "select student_id from student_groups where id = $id";
+          $grp_std = $connection->execute($qury)->fetchAll('assoc');
+          $sql = "select * from users where id IN(".$grp_std[0]['student_id'].") ORDER BY id DESC";
           $studentDetail = $connection->execute($sql)->fetchAll('assoc');
           foreach ($studentDetail as $key => $value) {
             $studentList[$m] = $value['id'];
@@ -5160,12 +5162,12 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
               $lsql = "select *  from user_quizes where user_id IN (".implode(',',$studentList) .") AND grade_id = $grade"
                     . " AND course_id IN (". implode(',',$sub_skill_array).") AND quiz_type_id IN (2,5,6,7) GROUP BY course_id ";
               $quizAttempt = $connection->execute($lsql)->fetchAll('assoc');
-              foreach($studentList as $ky=>$valu){
+//              foreach($studentList as $ky=>$valu){
                 if(!empty($quizAttempt)) {
                   foreach($quizAttempt as $ki => $val) {
                     if(in_array($val['course_id'], $sub_skill_array)) {
                       $marks = ($val['score']/$val['exam_marks'])*100;
-                      if($marks < QUIZ_PASS_SCORE) {
+                      if($marks > QUIZ_PASS_SCORE) {
                         if(!in_array($val['user_id'], $temp)){
                           $temp[$j] = $val['user_id'];
                           $j++;
@@ -5175,8 +5177,9 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
                     }
                   }
                 }
-              }
+//              }
               $lackingStudentList = array_diff($studentList,$temp);
+//              $lackingStudentList = $count;
               $lackingStudent = count($lackingStudentList);
             }
             $lacking[$p]['skill_id'] = $value['course_id'];
