@@ -3018,9 +3018,14 @@ class UsersController extends AppController{
         }
 
         $user_details_table = TableRegistry::get('UserDetails');
+        $user_table = TableRegistry::get('Users');
         $user_details = $user_details_table->find()->where(['user_id' => $user['user_id']]);
         if ($user_details->count()) {
           $user_details_table->patchEntity($user_details->first(), $user, ['validate' => false]);
+          $query = $user_table->query();
+          $result = $query->update()->set([
+                      'mobile' => isset($user['mobile']) ? $user['mobile'] : '',
+                  ])->where(['id' => $user['user_id']])->execute();
           if(!$user_details_table->save($user_details->first())) {
             $message = 'Some Error Occured, Kindly contact the Administrator';
             throw new Exception('Unable to save data');
