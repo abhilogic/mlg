@@ -1377,7 +1377,7 @@ class TeachersController extends AppController {
           $data ['course_id'] = $gprecord['course_id'];
 
           if ($gprecord['group_icon'] == NULL) {
-            $data ['group_icon'] = "webroot/upload/group_images/default_group.png";
+            $data ['group_icon'] = "webroot/upload/default_group.png";
           } else {
             $data ['group_icon'] = 'webroot/upload/' . $gprecord['group_icon'];
           }
