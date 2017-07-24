@@ -814,7 +814,6 @@ class CoursesController extends AppController{
           $sql = "SELECT * FROM course_details WHERE parent_id = $parent_id";
           $course_details = $connection->execute($sql)->fetchAll('assoc');
           $course_info = $connection->execute("select * from courses where id=$parent_id")->fetchAll('assoc');
-//          $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id])-> contain(['CourseContents'])->toArray();
         } else {
           if($type == 'student') {
             $course_details = $course_details_table->find('all')->where(['parent_id' => $parent_id]);
@@ -874,8 +873,7 @@ class CoursesController extends AppController{
               $user_id = $course_content['created_by'];
               $user = $this->getUserRoleByid($user_id);
               if (strtoupper($user['role_name']) == 'TEACHER') {
-                $course_content['content'] = (strtoupper($course_content['type']) == 'DOC') ?
-                 '<a href = ' . $root_path . '/upload/' . $course_content['content'] . '></a>' : $course_content['content'];
+                $course_content['content'] = $course_content['content'];
                 $teacher_contents[] = array(
                   'lesson_name' =>  $course_content['lesson_name'],
                   'url' =>  $course_content['url'],
