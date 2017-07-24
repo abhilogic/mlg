@@ -939,7 +939,6 @@ class TeachersController extends AppController {
         } else {
           $data['message'][0] = "User Name is required to child login";
         }
-
         //email validation ********                           
         $postdata['email'] = isset($this->request->data['email']) ? $this->request->data['email'] : "";
         if (!empty($postdata['email'])) {
@@ -982,7 +981,7 @@ class TeachersController extends AppController {
         }
 
 
-        $postdata['teacher_id'] = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : $data['message'][4] = "The your has been expired. please Login Again";
+        $postdata['teacher_id'] = isset($this->request->data['teacher_id']) ? $this->request->data['teacher_id'] : $data['message'][4] = "Session has been expired. please Login Again";
 
 
         $postdata['school'] = isset($this->request->data['school']) ? $this->request->data['school'] : $data['message'][5] = "School Name is require";
@@ -5294,5 +5293,140 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
         'status' => $status,
         '_serialize' => ['response','message','status']
     ]);
+  }
+   /**
+   * This function is used for read csv for add student.
+   * 
+   * */
+  public function addStudentCsv() {
+    try {
+      $status = FALSE;
+      $message = '';
+      $users = TableRegistry::get('Users');
+      $user_details = TableRegistry::get('UserDetails');
+      $user_roles = TableRegistry::get('UserRoles');
+      $user_courses = TableRegistry::get('UserCourses');
+      $student_teachers = TableRegistry::get('StudentTeachers');
+      $user_purchase_items = TableRegistry::get('UserPurchaseItems');
+      $headers = array('teacher_userName','teacher_password','first_name','last_name',
+          'email','password','grade_id','mobile','course_id');
+      $teacher = array();
+//      if (!isset($this->request->data['csv']) || (@end(explode('/', $csv['type'])) == 'csv')) {
+//        $message = 'please upload CSV';
+//        throw new Exception('please upload CSV');
+//      }
+//      $csv = $this->request->data['csv'];
+      if ((@end(explode('/', $_FILES['myFile']['type'])) != 'csv')) {
+        $message = 'please upload CSV';
+        throw new Exception('please upload CSV');
+      }
+      $file = fopen($_FILES['myFile']['tmp_name'], 'r');
+      $first_row = TRUE;
+      while ($row = fgetcsv($file, '', ',')) {
+        if ($first_row) {
+          $first_row = FALSE;
+          continue;
+        }
+        $temp = array_combine($headers, $row);
+        $is_exixt = $users->find()->where(['username'=>$temp['teacher_userName']])->toArray();
+        if(!empty($is_exixt)){
+          foreach($is_exixt as $key=>$value){
+            $teacher['id'] = $value['id'];
+            $teacher['email'] = $value['email'];
+            $teacher['first_name'] = $value['first_name'];
+            $teacher['last_name'] = $value['last_name'];
+            $teacher['subscription_end_date'] = $value['subscription_end_date'];
+          }
+          $email_exist = $users->find()->where(['email' => $temp['email']])->count();
+          if ($email_exist) {
+            $message = 'Email is already exist';
+            throw new Exception('Email is already exist');
+            break;
+          }
+          $user_name = $temp['first_name'].$teacher['id'].date('is',time());
+          $username_exist = $users->find()->where(['username' => $user_name])->count();
+          if ($username_exist > 0) {
+            $user_name = $temp['first_name'].$temp['last_name'].$teacher['id'].date('his',time());
+            $username_exist2 = $users->find()->where(['username' => $user_name])->count();
+            if ($username_exist2 > 0) {
+              $message = " username already Exist";
+              throw new Exception(" username already Exist");
+              break;
+            }
+          }
+          $detail = $users->newEntity();
+          $detail->username = $user_name;
+          $detail->first_name = isset($temp['first_name']) ? $temp['first_name'] : '';
+          $detail->last_name = isset($temp['last_name']) ? $temp['last_name'] : '';
+          $detail->email = isset($temp['email']) ? $temp['email'] : '';
+          $detail->password = isset($temp['password']) ? $temp['password'] : '';
+          $detail->mobile = isset($temp['mobile']) ? $temp['mobile'] : '';
+          $detail->status = 0;
+          $detail->created = time();
+          $detail->subscription_end_date = $teacher['subscription_end_date'];
+          if ($users->save($detail)) {
+            $student_id = $detail->id;
+            $open_key = bin2hex($temp['password']);
+            $usr_detail = $user_details->newEntity();
+            $usr_detail->user_id = $student_id;
+            $usr_detail->open_key = $open_key;
+            if($user_details->save($usr_detail)){// save user detail
+              $new_user_roles = $user_roles->newEntity();
+              $new_user_roles->user_id = $student_id;
+              $new_user_roles->role_id = 4;
+              if($user_roles->save($new_user_roles)){ // save user role
+                $course_id = $temp['course_id'];
+                $new_user_courses = $user_courses->newEntity();
+                $new_user_courses->user_id = $student_id;
+                $new_user_courses->course_id = $course_id;
+                if ($user_courses->save($new_user_courses)) { // save user courses
+                   $new_student_teachers = $student_teachers->newEntity();
+                   $new_student_teachers->student_id = $student_id;
+                   $new_student_teachers->teacher_id = $teacher['id'];
+                   $new_student_teachers->grade_id = $temp['grade_id'];
+                   $new_student_teachers->course_id = $course_id;
+                   if($student_teachers->save($new_student_teachers)) {
+                     $status = TRUE;
+                     $from = 'logicdeveloper7@gmail.com';
+                     $subject = "Your Child authenticatation";
+                     $email_message = "Hello " . $teacher['first_name'] . $teacher['last_name'] .
+                      "
+                                  Your Child Login Credential in My Learning Guru is 
+                                  User Name :" . $user_name. " 
+                                  Password : " . $temp['password'];
+
+                     $to = $temp['email'];
+                     $message = 'data inserted successfully';
+                   }        
+                } else {
+                  $message = " Not able to save data in User Courses Table";
+                  throw new Exception("Not able to save data in User Courses Table");
+                }
+              }else{
+                $message = " Not able to save data in User role Table.";
+                throw new Exception("Not able to save data in User role Table.");
+              }
+            }else{
+              $message = " Not able to save data in User details Table.";
+              throw new Exception("Not able to save data in User details Table.");
+            }
+          }else{
+            $message = " Not able to save data in Users Table.";
+            throw new Exception("Not able to save data in Users Table.");
+          } 
+        }else{
+          $message = "User name not exist";
+          throw new Exception("User name not exist.");
+        }       
+      }
+    } catch (Exception $e) {
+      $this->log('Error in addStudentCsv function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set([
+         'status' => $status,
+         'message' => $message,
+         '_serialize' => ['status', 'message']
+       ]);
   }
 }
