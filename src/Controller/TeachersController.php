@@ -5429,4 +5429,79 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
          '_serialize' => ['status', 'message']
        ]);
   }
+  
+  /**
+   * this api is used for create and send email to student 
+   **/
+   public function sendEmailOfScopeToStudent() {
+    try{
+      if($this->request->is('POST')){
+        $user = TableRegistry::get('Users');
+        $courses = TableRegistry::get('courses');
+        $parent_id = '';
+        $courseName = '';
+        $message = '';
+        $status = '';
+        $student = isset($this->request->data['student'])?$this->request->data['student']:array() ;
+        $course = isset($this->request->data['course_scope'])?$this->request->data['course_scope']:array();
+        if(!empty($course)){
+          $msg = "<table>";
+          $msg .= "<thead>
+                          <tr>
+                              <th class='sr-no'>Serial Num #</th>
+                              <th class='skillName'>Skill Name</th>                             
+                          </tr>
+                        </thead><tbody>";
+
+          foreach ($course as $key => $value) {
+            $msg .= "<tr>";
+            $msg .="<td>" . $key+1 . "</td>";
+            $msg .= "<td>" . $value['name'] . "</td>";
+            $msg .= "</tr>";
+            $parent_id = $value['parent_id'];
+          }          
+          $msg .= "</tbody></table>";
+        }else{
+          $message = "Skill set not found";
+          $status = FALSE;
+          throw new Exception("Skill set not found");
+        }
+        if(!empty($student) && $message == ''){
+          if($parent_id != ''){
+            $courseName = $courses->find('all', ['fields' => ['course_name']])->where(['id'=>$parent_id])->toArray();
+          }
+          foreach ($student as $key => $value) {
+            $std = $user->find()->where(['id' => $value])->toArray();
+            $to= $std[0]['email'];
+            $from = "info@mylearninguru.com";
+            $subject = "Skill set for student.";
+            $email_message = "Hello  ".$std[0]['first_name']." " .$std[0]['last_name']." <br/><br/>
+                             <strong> Please find your skill set of lesson ".$courseName[0]['course_name']." </strong> <br/><br/>" . $msg;
+            $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);
+            if($sent_mail==TRUE){ 
+              $message = "Mail send";
+              $status = TRUE;
+            } else {
+              $message = "Mail is not send";
+              $status = FALSE;
+              throw new Exception("Mail is not send");
+            }
+          }
+        }else{
+          $message = "Students not found.";
+          $status = FALSE;
+          throw new Exception("Students not found.");
+        }
+      }
+    }catch(Exception $e){
+      $this->log('Error in sendEmailOfScopeToStudent function in Teachers Controller.'
+              . $e->getMessage() . '(' . __METHOD__ . ')');
+    }
+    $this->set(array(
+            'message' => $message,
+            'status' => $status,
+            '_serialize' => array('message','status')
+        ));
+  }
+
 }
