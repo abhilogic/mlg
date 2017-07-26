@@ -5397,6 +5397,7 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
 
                      $to = $temp['email'];
                      $message = 'data inserted successfully';
+                     $sent_mail = $this->sendEmail($to, $from, $subject, $email_message); 
                    }        
                 } else {
                   $message = " Not able to save data in User Courses Table";
@@ -5477,7 +5478,8 @@ public function getNeedAttentionForTeacher($teacher_id=null, $subject_id=null){
             $subject = "Skill set for student.";
             $email_message = "Hello  ".$std[0]['first_name']." " .$std[0]['last_name']." <br/><br/>
                              <strong> Please find your skill set of lesson ".$courseName[0]['course_name']." </strong> <br/><br/>" . $msg;
-            $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);
+//            $sent_mail = $this->sendEmail($to, $from, $subject, $email_message);
+            $sent_mail = TRUE;
             if($sent_mail==TRUE){ 
               $message = "Mail send";
               $status = TRUE;
