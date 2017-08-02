@@ -184,8 +184,8 @@ return [
             'host' => 'smtp.gmail.com',
             'port' => 587,
             'timeout' => 30,
-            'username' => 'anita@apparrant.com',
-            'password' => 'aniapparrant@246',
+            'username' => 'noreply.redash.saurabh.flip@gmail.com',
+            'password' => 'noreply.redash.saurabh.flip@123',
 
             'client' => null,
             'tls' => true,
@@ -231,7 +231,7 @@ return [
              */
             //'port' => 'non_standard_port_number',
             'username' => 'root',
-            'password' => 'redhat',
+            'password' => 'root',
             'database' => 'mlg',
             'encoding' => 'utf8',
             'timezone' => 'UTC',

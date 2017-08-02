@@ -17,7 +17,7 @@
 header("Access-Control-Allow-Origin: *");
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-   header('Access-Control-Allow-Headers: api_key, api-key, auth_key, content-type');
+   header('Access-Control-Allow-Headers: api_key, api-key, auth_key, content-type,token');
    exit;
 }
 // for built-in server

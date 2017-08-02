@@ -35,9 +35,113 @@ class UsersController extends AppController{
             '_serialize' => ['data']
         ));
       }
+      
+      
+    public function forgotPassword(){
+        
+        try{
+            
+            if ($this->request->is('post')) {
+            $user_email= isset($this->request->data['email'])? $this->request->data['email']:null;
+            
+            
+            $query_userexist = $this->Users->findAllByUsernameOrEmail($user_email, $user_email)->count();
+            
+            if($query_userexist !=1){
+                throw new Exception('User Email Not Found');
+            }
+            
+            $user_record = $this->Users->find('all', array('conditions'=>array('Users.email'=>$user_email)))->limit(1);
+            $_data=array();
+            foreach($user_record as $data){
+                
+                  $_data[]=$data;
+                
+            }
+                    
+            $_realPassword=$pass= rand(1, 1000000);
+            $password= (new DefaultPasswordHasher)->hash($_realPassword);
+       
+            $update=$this->Users->updateAll(
+                 array('password' => $_realPassword),
+                 array('email' => $user_email)
+             );
+            
+            
+            if($update==0){
+                throw new Exception('Something Went Wrong');
+            }
+            
 
 
-       /** site_landing method    */
+          
+            //$this->set('results',$query);
+            
+            
+            
+            //print_r($this->Users::get('id'));die;
+            
+            $user_email = filter_var($user_email, FILTER_SANITIZE_EMAIL);
+            
+            if (!filter_var($user_email, FILTER_VALIDATE_EMAIL) === false) {
+                    $to = $user_email;
+                    $subject = "MLG :: Forgot Passord :: $user_email";
+                    $headers = "From: info@mylearninguru.com" . "\r\n" .
+                            "CC: saurabh@apparrant.com";
+                   
+                    $userName=$data->username;
+                    $message="You told us you forgot your password. If you really did, click here to choose a new one:";
+                    
+                    $link=$password;
+                    
+                    $footermsg="If you didn't mean to reset your password, then you can just ignore this email; your password will not change.";
+                    
+                    $_company="MLG";
+                    
+                    $user_message=AppController::forgotTemplate($userName,$message,$link,$footermsg,$_company);
+                    
+
+                    // $sent_mail=mail($to,$subject,$user_message,$headers=null);
+                    
+                   $this->set('inputs',$userName);
+
+                   try {
+                        $status = FALSE;
+                        //send mail
+                        $email = new Email();
+                        $email->to($to)->from('info@mylearninguru.com');
+                        $email->subject($subject);
+                        if ($email->template('forgot')) {
+                            $status = TRUE;
+                        } else {
+                            $status = FALSE;
+                        }
+                    } catch (Exception $ex) {
+                        $this->log($ex->getMessage());
+                    }
+
+                    if ($status != TRUE) {
+                        throw new Exception('Something Went in Mailer System');
+                    } 
+                    
+                    
+                } else {
+                    throw new Exception('User Email Contains Non-Email Chars');
+                }
+                
+                $_response = array('response' => 'true', 'code' => 200, 'data' => 'Check Your Email', 'type' => 'Forgot password', 'errorMessage' => null);
+                AppController::returnJsonResponse($_response);
+                             
+            }
+        } catch (Exception $e) {
+            $_response = array('response' => 'true', 'code' => 403, 'type' => 'Forgot password', 'errorMessage' => $e->getMessage());
+            AppController::returnJsonResponse($_response);
+            exit;
+
+        }   
+    }
+    
+    /** site_landing method    */
     public function contactUs(){
 
         if ($this->request->is('post')) {
@@ -54,7 +158,7 @@ class UsersController extends AppController{
                 $user_email = filter_var($user_email, FILTER_SANITIZE_EMAIL);
                 // Validate e-mail
                     if (!filter_var($user_email, FILTER_VALIDATE_EMAIL) === false) {
-                        $to="anita@apparrant.com";
+                        $to="saurabh@apparrant.com";
                         $subject="Contact Us";
                         $headers = "From: info@mylearninguru.com" . "\r\n" .
                           "CC: $user_email";
@@ -361,7 +465,7 @@ class UsersController extends AppController{
     /** U8-registerUser
      * Request –  Strting <firstName>, String <lastName>, (Int <mobile / Null> , String <EmailID / Null>) , Int <roleID>
      */
-    public function registerUser() {
+    public function registerUser() { 
       try {
         $message = '';
         $data['response'] = FALSE;
@@ -408,7 +512,7 @@ class UsersController extends AppController{
             $message = 'Enter re-password';
             throw new Exception('Pregmatch not matched for Username');
           }
-
+         
           $password_hasher = new DefaultPasswordHasher();
 
           if ($password_hasher->check($user['repass'], $user['password'])!=1) {
